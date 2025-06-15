@@ -44,11 +44,57 @@ python app.py
 
 ## Security Notes
 
-- Files are stored temporarily in the `uploads` directory
+- Files are stored temporarily in the `uploads` directory or in S3, depending on configuration
 - Each file is assigned a unique UUID
 - Files are automatically deleted after the first download
 - File types are restricted to prevent malicious uploads
 - Maximum file size is limited to 16MB
+
+## AWS S3 Integration
+
+Buzzdrop supports storing uploaded files in an AWS S3 bucket as a private backend. Downloads are always proxied through the application (users never see S3 URLs).
+
+### Configuration
+
+1. Set the following environment variables (e.g., in your `.env` file):
+   ```
+   STORAGE_BACKEND=s3
+   S3_BUCKET=your-bucket-name
+   S3_ACCESS_KEY=your-access-key
+   S3_SECRET_KEY=your-secret-key
+   S3_REGION=your-region
+   ```
+   To use local storage, set `STORAGE_BACKEND=local` (default).
+
+2. The S3 bucket must exist and be private. The app will store files under the `uploads/` prefix in the bucket.
+
+### Required AWS IAM Permissions
+
+The IAM user or role used for Buzzdrop must have the following permissions for the target bucket:
+
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::your-bucket-name/uploads/*"
+    }
+  ]
+}
+```
+- Replace `your-bucket-name` with your actual S3 bucket name.
+- The above policy allows uploading, downloading, and deleting files under the `uploads/` prefix only.
+
+### Notes
+- The bucket should NOT be public.
+- All file downloads are proxied through the app for security and one-time access enforcement.
+- S3 credentials should be kept secret and never checked into version control.
 
 ## Development
 
