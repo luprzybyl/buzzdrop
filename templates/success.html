@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white shadow-md rounded-lg p-6">
+        <div class="text-center">
+            <svg class="mx-auto h-12 w-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <h2 class="mt-4 text-2xl font-bold text-gray-800">File Uploaded Successfully!</h2>
+            <p class="mt-2 text-gray-600">Share this link with others. The file will be deleted after the first download.</p>
+        </div>
+
+        <div class="mt-6">
+            <div class="flex items-center space-x-2">
+                <input type="text" value="{{ share_link }}" readonly class="flex-1 p-2 border rounded-md bg-gray-50" id="share-link">
+                <button onclick="copyLink()" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                    Copy
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-6">
+            <label class="block text-sm font-medium text-gray-700">Password</label>
+            <div class="flex items-center space-x-2">
+                <input type="password" id="password-display" readonly class="flex-1 mt-1 p-2 border rounded-md bg-gray-50">
+                <button id="toggle-password" onclick="togglePasswordVisibility()" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                    Show
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-6 text-center">
+            <a href="{{ url_for('index') }}" class="text-indigo-600 hover:text-indigo-500">Upload another file</a>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyLink() {
+    const shareLink = document.getElementById('share-link');
+    shareLink.select();
+    document.execCommand('copy');
+
+    const button = shareLink.nextElementSibling;
+    const originalText = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => {
+        button.textContent = originalText;
+    }, 2000);
+}
+
+function togglePasswordVisibility() {
+    const pwdInput = document.getElementById('password-display');
+    const toggleBtn = document.getElementById('toggle-password');
+    if (pwdInput.type === 'password') {
+        pwdInput.type = 'text';
+        toggleBtn.textContent = 'Hide';
+        setTimeout(() => {
+            pwdInput.type = 'password';
+            toggleBtn.textContent = 'Show';
+        }, 5000);
+    } else {
+        pwdInput.type = 'password';
+        toggleBtn.textContent = 'Show';
+    }
+}
+
+const pwd = sessionStorage.getItem('uploadPassword');
+if (pwd) {
+    document.getElementById('password-display').value = pwd;
+    sessionStorage.removeItem('uploadPassword');
+}
+</script>
+{% endblock %} 

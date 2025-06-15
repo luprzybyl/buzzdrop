@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: file-sharing-app
+    container_name: file-sharing-app
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./file_uploads:/app/uploads
+      - ./db_data:/app/data
+    environment:
+      - FLASK_USER_1=${FLASK_USER_1:-admin:admin123:true}
+      - FLASK_USER_2=${FLASK_USER_2:-user:password:false}
+      - UPLOAD_FOLDER=/app/uploads
+      - DATABASE_PATH=/app/data/db.json
+      - ALLOWED_EXTENSIONS=txt,pdf,png,jpg,jpeg,gif,doc,docx,xls,xlsx
+      - MAX_CONTENT_LENGTH=16777216  # 16MB max file size
+    networks:
+      - app-network
+
+  # Optional: Add Nginx as a reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: file-sharing-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - web
+    networks:
+      - app-network
+
+volumes:
+  file_uploads:
+    name: file-sharing-uploads
+  db_data:
+    name: file-sharing-db
+
+networks:
+  app-network:
+    driver: bridge

@@ -1,0 +1,6 @@
+Flask==3.0.2
+python-dotenv==1.0.1
+pytest
+pytest-flask
+Werkzeug==3.0.6
+tinydb==4.8.0 
