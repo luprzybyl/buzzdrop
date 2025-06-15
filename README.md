@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="static/logo.png" alt="Buzzdrop Logo" width="180" />
+</p>
+
 # One-Time File Sharing
 
 A simple web application that allows users to share files with one-time download links. Once a file is downloaded, the link becomes invalid and the file is automatically deleted.
