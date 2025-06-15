@@ -24,6 +24,21 @@ import boto3
 from botocore.exceptions import ClientError
 from io import BytesIO
 
+# Load environment variables
+load_dotenv()
+
+app = Flask(__name__)
+app.secret_key = os.urandom(24)
+
+# Configuration from environment variables
+app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
+app.config['ALLOWED_EXTENSIONS'] = set(
+    os.getenv('ALLOWED_EXTENSIONS', 'txt,pdf,png,jpg,jpeg,gif,doc,docx,xls,xlsx').split(',')
+)
+app.config['MAX_CONTENT_LENGTH'] = int(
+    os.getenv('MAX_CONTENT_LENGTH', 16 * 1024 * 1024)
+)
+
 # --- S3 CONFIG ---
 S3_BUCKET = os.getenv('S3_BUCKET')
 S3_ACCESS_KEY = os.getenv('S3_ACCESS_KEY')
@@ -40,21 +55,6 @@ if STORAGE_BACKEND == 's3':
         region_name=S3_REGION
     )
 
-# Load environment variables
-load_dotenv()
-
-app = Flask(__name__)
-app.secret_key = os.urandom(24)
-
-# Configuration from environment variables
-app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
-app.config['ALLOWED_EXTENSIONS'] = set(
-    os.getenv('ALLOWED_EXTENSIONS', 'txt,pdf,png,jpg,jpeg,gif,doc,docx,xls,xlsx').split(',')
-)
-app.config['MAX_CONTENT_LENGTH'] = int(
-    os.getenv('MAX_CONTENT_LENGTH', 16 * 1024 * 1024)
-)
-
 # Module level defaults for easy access when no app context is present
 UPLOAD_FOLDER = app.config['UPLOAD_FOLDER']
 ALLOWED_EXTENSIONS = app.config['ALLOWED_EXTENSIONS']
@@ -69,6 +69,21 @@ db = TinyDB(app.config['DATABASE_PATH'])
 app.db = db
 File = Query()
 
+def print_backend_info():
+    print(f"\n[Startup] STORAGE_BACKEND: {STORAGE_BACKEND}")
+    if STORAGE_BACKEND == 's3':
+        try:
+            # Try to list buckets as a connectivity test
+            buckets = s3_client.list_buckets()
+            print(f"[Startup] S3 Connection OK. Buckets: {[b['Name'] for b in buckets.get('Buckets', [])]}")
+            if S3_BUCKET:
+                print(f"[Startup] Using S3 bucket: {S3_BUCKET} (region: {S3_REGION})")
+        except Exception as e:
+            print(f"[Startup] S3 Connection FAILED: {e}")
+    else:
+        print(f"[Startup] Using local storage. Upload folder: {os.getenv('UPLOAD_FOLDER', 'uploads')}")
+
+print_backend_info()
 
 def get_db():
     """Return a TinyDB instance, reopening it if necessary."""
