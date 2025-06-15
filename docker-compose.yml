@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  buzzdrop:
+    build: .
+    container_name: buzzdrop_app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./db.json:/app/db.json
+    env_file:
+      - .env
+    restart: unless-stopped

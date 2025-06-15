@@ -29,6 +29,28 @@
    ```
 3. **Fly to**: [http://localhost:5000](http://localhost:5000)
 
+---
+
+## 🐳 Dockerized Buzz (The Fastest Flight!)
+
+Want to get buzzing in a single command? Docker’s your jetpack!
+
+```bash
+# Build the hive
+docker-compose build
+
+# Let the swarm fly
+docker-compose up
+```
+
+- Your files & database are safe—volumes are shared with your host.
+- App will buzz at [http://localhost:5000](http://localhost:5000)
+- Customize with your `.env` as usual!
+
+Stop the swarm with `docker-compose down`—no mess, no leftovers.
+
+---
+
 ## How to Use
 
 1. Log in (buzzers only!)
