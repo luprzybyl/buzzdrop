@@ -35,7 +35,7 @@ def test_index_anonymous_user(client, app):
     # For anonymous user, from index.html:
     # Anonymous visitors only see the humorous landing message, not the upload title
     assert b'Share Your File' not in response.data
-    assert b'BurntInk: secure, self-destructing file sharing.' in response.data
+    assert b'BuzzDrop: secure, self-destructing file sharing.' in response.data
     assert b'Login' in response.data # Login link in header
     assert b'Your Shared Files' not in response.data # Should not see this section title
 
