@@ -69,6 +69,7 @@ db = TinyDB(app.config['DATABASE_PATH'])
 app.db = db
 File = Query()
 
+
 def print_backend_info():
     print(f"\n[Startup] STORAGE_BACKEND: {STORAGE_BACKEND}")
     if STORAGE_BACKEND == 's3':
@@ -332,7 +333,9 @@ def upload_file():
         return {'error': 'File type not allowed'}, 400
     return redirect(url_for('index'))
 
-@app.route('/download/<file_id>')
+# Remove confirm_download route, logic moves to /view/<file_id> and /view/<file_id>/confirm
+
+@app.route('/download/<file_id>', methods=['GET'])
 def download_file(file_id):
     files_table = get_files_table()
     file_info = files_table.get(File.id == file_id)
@@ -425,14 +428,24 @@ def upload_success(file_id):
     return render_template('success.html', share_link=share_link)
 
 
-@app.route('/view/<file_id>')
+@app.route('/view/<file_id>', methods=['GET'])
 def view_file(file_id):
     files_table = get_files_table()
     file_info = files_table.get(File.id == file_id)
     if not file_info or file_info['downloaded_at'] is not None:
         flash('File not found')
         return redirect(url_for('index'))
+    return render_template('confirm_download.html', file_id=file_id, original_name=file_info['original_name'])
+
+@app.route('/view/<file_id>/confirm', methods=['POST'])
+def confirm_view_file(file_id):
+    files_table = get_files_table()
+    file_info = files_table.get(File.id == file_id)
+    if not file_info or file_info['downloaded_at'] is not None:
+        flash('File not found')
+        return redirect(url_for('index'))
     return render_template('view.html', file_id=file_id, original_name=file_info['original_name'])
+
 
 print("upload folder: " + app.config['UPLOAD_FOLDER'])
 print("database path: " + app.config['DATABASE_PATH'])
