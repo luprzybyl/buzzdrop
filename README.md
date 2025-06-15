@@ -2,61 +2,56 @@
   <img src="static/logo.png" alt="Buzzdrop Logo" width="180" />
 </p>
 
-# One-Time File Sharing
+# Buzzdrop: File Sharing That Stings—Just Once! 🐝
 
-A simple web application that allows users to share files with one-time download links. Once a file is downloaded, the link becomes invalid and the file is automatically deleted.
-Files are stored encrypted and the encryption happens in browser for maximum privacy (neither backend app nor storage admin can open them).
+**Buzzdrop** is a one-time, self-destructing file drop. Upload a file, get a link, and—BZZT!—the file vanishes after a single download. Your secrets are safe: files are encrypted right in your browser, so not even the server can peek.
 
-## Features
+## Why Buzzdrop?
 
-- One-time download links
-- Automatic file deletion after download
-- files are stored encrypted
-- in-browser enryption
-- Modern, responsive UI
-- file type support, maximum file size, user accounts configurable in .env
-- supporting local storage or S3
+- 🐝 **One-Time Download**: Each link is a mayfly—one click and it’s gone!
+- 🔒 **In-Browser Encryption**: Your file is locked tight before it ever leaves your device.
+- 💥 **Auto-Delete**: Downloaded? Boom, gone. No leftovers.
+- ☁️ **Local or S3 Storage**: Choose your hive—local or Amazon S3.
+- 👩‍💻 **Configurable**: File types, size limits, and users—tweak in `.env`.
+- 😎 **Modern UI**: Slick, responsive, and buzzing with style.
 
-## Setup
+## Getting Buzzing
 
-1. Create a virtual environment (recommended):
-```bash
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
+1. **Install the buzz**:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+2. **Start the hive**:
+   ```bash
+   python app.py
+   ```
+3. **Fly to**: [http://localhost:5000](http://localhost:5000)
 
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+## How to Use
 
-3. Run the application:
-```bash
-python app.py
-```
+1. Log in (buzzers only!)
+2. Upload your file and set a password.
+3. Share the magic link + password (use two channels for max stealth).
+4. First download zaps the file from existence.
+5. Want another? Rinse and repeat!
 
-4. Open your browser and navigate to `http://localhost:5000`
+## Security Buzz
 
-## Usage
+- Files are stored encrypted—no snooping, even by admins.
+- Each file has a unique UUID (no guesswork).
+- File types and sizes are configurable for extra sting.
+- S3 support: files never exposed, always routed through Buzzdrop.
 
-1. Authenticate
-2. upload file giving your password
-3. file will be encrypted before upload
-4. share download link and password to recipient, preferably via 2 different communication channels
-5. When someone downloads the file using the link, it will be automatically deleted and the link will become invalid
+## S3? No Problem!
 
-## Security Notes
+Just fill out your `.env` with your S3 details. Buzzdrop will handle the swarm.
 
-- Files are stored temporarily in the `uploads` directory or in S3, depending on configuration
-- Each file is assigned a unique UUID
-- Files are automatically deleted after the first download
-- File types can be  restricted to prevent malicious uploads
-- Maximum file size can be set as parameter
+---
 
-## AWS S3 Integration
-
-Buzzdrop supports storing uploaded files in an AWS S3 bucket as a private backend. Downloads are always proxied through the application (users never see S3 URLs).
-see .env file for example configuration
+Ready to buzz? Drop a file and watch it fly—then disappear!  
+_Powered by caffeine, code, and a little bit of sting._
 
 ## Development
 
