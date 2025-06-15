@@ -1,5 +1,5 @@
 # Simple Dockerfile for buzzdrop Flask app
-FROM python:3.11-slim
+FROM python:3.13.5-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
