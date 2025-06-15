@@ -2,6 +2,10 @@ import os
 import sys
 import tempfile
 import pytest
+from dotenv import load_dotenv
+
+# Load .env.example for all test runs
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env.example'), override=True)
 
 # Add parent directory to sys.path to allow direct import of 'app'
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
