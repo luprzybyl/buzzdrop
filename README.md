@@ -2,6 +2,12 @@
   <img src="static/logo.png" alt="Buzzdrop Logo" width="180" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/luprzybyl/buzzdrop/actions/workflows/ci.yml">
+    <img src="https://github.com/luprzybyl/buzzdrop/actions/workflows/ci.yml/badge.svg" alt="Build Status" />
+  </a>
+</p>
+
 # Buzzdrop: File Sharing That Stings—Just Once! 🐝
 
 **Buzzdrop** is a one-time, self-destructing file drop. Upload a file, get a link, and—BZZT!—the file vanishes after a single download. Your secrets are safe: files are encrypted right in your browser, so not even the server can peek.
