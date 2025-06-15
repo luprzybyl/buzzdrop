@@ -20,6 +20,25 @@ from tinydb import TinyDB, Query
 from functools import wraps
 from dotenv import load_dotenv
 import hashlib
+import boto3
+from botocore.exceptions import ClientError
+from io import BytesIO
+
+# --- S3 CONFIG ---
+S3_BUCKET = os.getenv('S3_BUCKET')
+S3_ACCESS_KEY = os.getenv('S3_ACCESS_KEY')
+S3_SECRET_KEY = os.getenv('S3_SECRET_KEY')
+S3_REGION = os.getenv('S3_REGION', 'us-east-1')
+STORAGE_BACKEND = os.getenv('STORAGE_BACKEND', 'local')  # 'local' or 's3'
+
+s3_client = None
+if STORAGE_BACKEND == 's3':
+    s3_client = boto3.client(
+        's3',
+        aws_access_key_id=S3_ACCESS_KEY,
+        aws_secret_access_key=S3_SECRET_KEY,
+        region_name=S3_REGION
+    )
 
 # Load environment variables
 load_dotenv()
@@ -260,23 +279,24 @@ def upload_file():
     if 'file' not in request.files:
         flash('No file part')
         return redirect(url_for('index'))
-    
     file = request.files['file']
     if file.filename == '':
         flash('No selected file')
         return redirect(url_for('index'))
-    
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         unique_id = str(uuid.uuid4())
-        upload_dir = current_app.config.get('UPLOAD_FOLDER', UPLOAD_FOLDER)
-        file_path = os.path.join(upload_dir, unique_id)
-        
-        # Save file
-        file.save(file_path)
-        
-        # Store file information in database
         files_table = get_files_table()
+        if STORAGE_BACKEND == 's3':
+            s3_key = f"uploads/{unique_id}"
+            # Upload to S3
+            s3_client.upload_fileobj(file, S3_BUCKET, s3_key)
+            file_path = s3_key
+        else:
+            upload_dir = current_app.config.get('UPLOAD_FOLDER', UPLOAD_FOLDER)
+            os.makedirs(upload_dir, exist_ok=True)
+            file_path = os.path.join(upload_dir, unique_id)
+            file.save(file_path)
         files_table.insert({
             'id': unique_id,
             'original_name': filename,
@@ -285,7 +305,6 @@ def upload_file():
             'downloaded_at': None,
             'uploaded_by': session['username']
         })
-        
         share_link = url_for('view_file', file_id=unique_id, _external=True)
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return {
@@ -293,7 +312,6 @@ def upload_file():
                 'share_link': share_link
             }
         return render_template('success.html', share_link=share_link)
-    
     flash('File type not allowed')
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return {'error': 'File type not allowed'}, 400
@@ -306,35 +324,54 @@ def download_file(file_id):
     if not file_info:
         flash('File not found')
         return redirect(url_for('index'))
-    
     if 'downloaded_at' in file_info and file_info['downloaded_at'] is not None:
         flash('This file has already been downloaded at {}'.format(file_info['downloaded_at']))
         return redirect(url_for('index'))
-    
     # Mark file as downloaded (set timestamp)
     files_table.update({'downloaded_at': datetime.now().isoformat()}, File.id == file_id)
-    
-    def generate():
-        with open(file_info['path'], 'rb') as file_handle:
-            while True:
-                chunk = file_handle.read(8192)
-                if not chunk:
-                    break
-                yield chunk
+    if STORAGE_BACKEND == 's3':
+        s3_key = file_info['path']
         try:
-            os.remove(file_info['path'])
-        except Exception:
-            pass
-
-    response = current_app.response_class(
-        generate(),
-        headers={
-            'Content-Disposition': f"attachment; filename={file_info['original_name']}"
-        },
-        mimetype='application/octet-stream'
-    )
-
-    return response
+            s3_obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+            def generate():
+                for chunk in iter(lambda: s3_obj['Body'].read(8192), b''):
+                    yield chunk
+            response = current_app.response_class(
+                generate(),
+                headers={
+                    'Content-Disposition': f"attachment; filename={file_info['original_name']}"
+                },
+                mimetype='application/octet-stream'
+            )
+            # Optionally, delete from S3 after download (for one-time download)
+            try:
+                s3_client.delete_object(Bucket=S3_BUCKET, Key=s3_key)
+            except Exception:
+                pass
+            return response
+        except ClientError:
+            flash('File not found in S3')
+            return redirect(url_for('index'))
+    else:
+        def generate():
+            with open(file_info['path'], 'rb') as file_handle:
+                while True:
+                    chunk = file_handle.read(8192)
+                    if not chunk:
+                        break
+                    yield chunk
+            try:
+                os.remove(file_info['path'])
+            except Exception:
+                pass
+        response = current_app.response_class(
+            generate(),
+            headers={
+                'Content-Disposition': f"attachment; filename={file_info['original_name']}"
+            },
+            mimetype='application/octet-stream'
+        )
+        return response
 
 
 @app.route('/delete/<file_id>', methods=['POST'])
@@ -348,12 +385,18 @@ def delete_file(file_id):
         flash('File not found')
         return redirect(url_for('index'))
 
-    # Remove the file from disk if it hasn't been downloaded yet
+    # Remove the file from disk or S3 if it hasn't been downloaded yet
     if not file_info.get('downloaded_at'):
-        try:
-            os.remove(file_info['path'])
-        except FileNotFoundError:
-            pass
+        if STORAGE_BACKEND == 's3':
+            try:
+                s3_client.delete_object(Bucket=S3_BUCKET, Key=file_info['path'])
+            except Exception:
+                pass
+        else:
+            try:
+                os.remove(file_info['path'])
+            except FileNotFoundError:
+                pass
 
     files_table.remove(File.id == file_id)
     flash('File deleted successfully')
