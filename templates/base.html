@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BuzzDrop: Secure, One-Time File Sharing</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -14,8 +14,8 @@
                 <div class="flex space-x-7">
                     <div>
                         <a href="{{ url_for('index') }}" class="flex items-center py-4">
-                            <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="h-10 w-26 mr-2 inline"/>
-<span class="font-semibold text-gray-500 text-lg">BuzzDrop</span>
+                            <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="h-18 mr-2 inline"/>
+<span class="font-semibold text-gray-500 text-lg">- secure, one-time file sharing</span>
                         </a>
                     </div>
                     {% if session.get('is_admin') %}
