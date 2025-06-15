@@ -33,5 +33,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build Docker image
         run: docker build -t buzzdrop-test .
+      - name: Ensure db.json exists
+        run: touch db.json
       - name: Run pytest in Docker container
         run: docker run --rm -v ${{ github.workspace }}/uploads:/app/uploads -v ${{ github.workspace }}/db.json:/app/db.json buzzdrop-test pytest
