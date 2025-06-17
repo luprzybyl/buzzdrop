@@ -56,6 +56,7 @@
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">File Name</th>
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Uploaded At</th>
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Downloaded</th>
+                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Decryption</th>
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
             </thead>
@@ -70,6 +71,9 @@
                         {% else %}
                             <span class="text-gray-500">No</span>
                         {% endif %}
+                    </td>
+                    <td class="px-4 py-2">
+                        {{ file.decryption_status }}
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap">
                         <form method="post" action="{{ url_for('delete_file', file_id=file.id) }}" class="inline-block">
