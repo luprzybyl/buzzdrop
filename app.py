@@ -263,6 +263,13 @@ def index():
                     f['downloaded_at'] = datetime.fromisoformat(f['downloaded_at']).strftime('%Y-%m-%d %H-%M-%S')
                 except Exception:
                     pass
+            status = f.get('decryption_success')
+            if status is True:
+                f['decryption_status'] = 'Success'
+            elif status is False:
+                f['decryption_status'] = 'Failed'
+            else:
+                f['decryption_status'] = 'Pending'
 
         # Get files shared with the current user
         shared_files = files_table.search(
@@ -364,7 +371,8 @@ def upload_file():
             'downloaded_at': None,
             'uploaded_by': session['username'],
             'expiry_at': expiry_iso,
-            'status': 'active'
+            'status': 'active',
+            'decryption_success': None
         })
         share_link = url_for('view_file', file_id=unique_id, _external=True)
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -499,6 +507,23 @@ def confirm_view_file(file_id):
         flash('File has expired')
         return redirect(url_for('index'))
     return render_template('view.html', file_id=file_id, original_name=file_info['original_name'])
+
+
+@app.route('/report_decryption/<file_id>', methods=['POST'])
+def report_decryption(file_id):
+    """Record whether the downloaded file was decrypted successfully."""
+    files_table = get_files_table()
+    file_info = files_table.get(File.id == file_id)
+    if not file_info:
+        return {'error': 'File not found'}, 404
+
+    data = request.get_json(silent=True) or {}
+    if 'success' not in data:
+        return {'error': 'Invalid request'}, 400
+
+    if file_info.get('decryption_success') is None:
+        files_table.update({'decryption_success': bool(data['success'])}, File.id == file_id)
+    return {'status': 'recorded'}
 
 
 print("upload folder: " + app.config['UPLOAD_FOLDER'])

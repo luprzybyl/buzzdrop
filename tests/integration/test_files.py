@@ -215,3 +215,22 @@ def test_view_file_expired(client, app, files_table):
     updated = files_table.get(File.id == file_id)
     assert updated['status'] == 'expired'
     assert not os.path.exists(updated['path'])
+
+def test_report_decryption_success(client, app, files_table):
+    login_user(client, 'testuser', 'password')
+
+    file_id = upload_file_for_user(client, app, files_table, 'dec.txt', 'content', 'testuser')
+
+    client.get(url_for('download_file', file_id=file_id))
+
+    res = client.post(url_for('report_decryption', file_id=file_id), json={'success': True})
+    assert res.status_code == 200
+
+    File = Query()
+    info = files_table.get(File.id == file_id)
+    assert info['decryption_success'] is True
+
+
+def test_report_decryption_file_not_found(client):
+    res = client.post(url_for('report_decryption', file_id='missing'), json={'success': False})
+    assert res.status_code == 404

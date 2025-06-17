@@ -53,10 +53,20 @@
             a.remove();
             URL.revokeObjectURL(a.href);
             document.getElementById('status').textContent = 'Download complete.';
+            fetch("{{ url_for('report_decryption', file_id=file_id) }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ success: true })
+            }).catch(() => {});
             decBytes.fill(0);
             fileBytes.fill(0);
         } catch (err) {
             document.getElementById('status').textContent = 'Incorrect password or corrupted file. The file was deleted from the server to avoid attempted password breaking. Ask author to upload the file again.';
+            fetch("{{ url_for('report_decryption', file_id=file_id) }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ success: false })
+            }).catch(() => {});
         } finally {
             encData.fill(0);
             salt.fill(0);
