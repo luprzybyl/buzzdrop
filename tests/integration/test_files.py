@@ -3,6 +3,7 @@ import os
 from flask import url_for, session, current_app
 from tinydb import Query
 import io # For creating dummy file content for uploads
+from datetime import datetime, timedelta
 # Fixtures: 'app', 'client', 'db_instance', 'files_table' from conftest.py
 # Test users from conftest.py: 'testuser:password:false', 'adminuser:adminpass:true'
 
@@ -194,6 +195,26 @@ def test_delete_file_after_download(client, app, files_table):
     assert b'File deleted successfully' in response.data
     assert files_table.get(File.id == file_id) is None
 
+
+def test_view_file_expired(client, app, files_table):
+    login_user(client, 'testuser', 'password')
+
+    expiry = (datetime.now() - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M')
+    file_data = {
+        'file': (io.BytesIO(b'expired'), 'exp.txt'),
+        'expiry': expiry
+    }
+    client.post(url_for('upload_file'), data=file_data, content_type='multipart/form-data')
+
+    File = Query()
+    file_info = files_table.get(File.original_name == 'exp.txt')
+    file_id = file_info['id']
+
+    response = client.get(url_for('view_file', file_id=file_id), follow_redirects=True)
+    assert b'File has expired' in response.data
+    updated = files_table.get(File.id == file_id)
+    assert updated['status'] == 'expired'
+    assert not os.path.exists(updated['path'])
 
 def test_report_decryption_success(client, app, files_table):
     login_user(client, 'testuser', 'password')

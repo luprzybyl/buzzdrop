@@ -202,6 +202,41 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed
 
 
+def check_and_handle_expiry(file_info):
+    """Check if the given file has expired and handle cleanup."""
+    if not file_info:
+        return False
+
+    expiry_at = file_info.get('expiry_at')
+    status = file_info.get('status')
+    if not expiry_at or status == 'expired':
+        return status == 'expired'
+
+    try:
+        expiry_dt = datetime.fromisoformat(expiry_at)
+    except ValueError:
+        return False
+
+    if datetime.now() >= expiry_dt:
+        # Remove file from storage
+        if STORAGE_BACKEND == 's3':
+            try:
+                s3_client.delete_object(Bucket=S3_BUCKET, Key=file_info['path'])
+            except Exception:
+                pass
+        else:
+            try:
+                os.remove(file_info['path'])
+            except FileNotFoundError:
+                pass
+        files_table = get_files_table()
+        files_table.update({'status': 'expired'}, File.id == file_info['id'])
+        file_info['status'] = 'expired'
+        return True
+
+    return False
+
+
 @app.errorhandler(RequestEntityTooLarge)
 def handle_large_file(error):
     """Return a user-friendly message when the uploaded file exceeds the limit."""
@@ -320,6 +355,14 @@ def upload_file():
             os.makedirs(upload_dir, exist_ok=True)
             file_path = os.path.join(upload_dir, unique_id)
             file.save(file_path)
+        expiry_raw = request.form.get('expiry')
+        expiry_iso = None
+        if expiry_raw:
+            try:
+                expiry_iso = datetime.fromisoformat(expiry_raw).isoformat()
+            except ValueError:
+                expiry_iso = None
+
         files_table.insert({
             'id': unique_id,
             'original_name': filename,
@@ -327,6 +370,8 @@ def upload_file():
             'created_at': datetime.now().isoformat(),
             'downloaded_at': None,
             'uploaded_by': session['username'],
+            'expiry_at': expiry_iso,
+            'status': 'active',
             'decryption_success': None
         })
         share_link = url_for('view_file', file_id=unique_id, _external=True)
@@ -352,6 +397,9 @@ def download_file(file_id):
         return redirect(url_for('index'))
     if 'downloaded_at' in file_info and file_info['downloaded_at'] is not None:
         flash('This file has already been downloaded at {}'.format(file_info['downloaded_at']))
+        return redirect(url_for('index'))
+    if check_and_handle_expiry(file_info):
+        flash('File has expired')
         return redirect(url_for('index'))
     # Mark file as downloaded (set timestamp)
     files_table.update({'downloaded_at': datetime.now().isoformat()}, File.id == file_id)
@@ -443,6 +491,9 @@ def view_file(file_id):
     if not file_info or file_info['downloaded_at'] is not None:
         flash('File not found')
         return redirect(url_for('index'))
+    if check_and_handle_expiry(file_info):
+        flash('File has expired')
+        return redirect(url_for('index'))
     return render_template('confirm_download.html', file_id=file_id, original_name=file_info['original_name'])
 
 @app.route('/view/<file_id>/confirm', methods=['POST'])
@@ -451,6 +502,9 @@ def confirm_view_file(file_id):
     file_info = files_table.get(File.id == file_id)
     if not file_info or file_info['downloaded_at'] is not None:
         flash('File not found')
+        return redirect(url_for('index'))
+    if check_and_handle_expiry(file_info):
+        flash('File has expired')
         return redirect(url_for('index'))
     return render_template('view.html', file_id=file_id, original_name=file_info['original_name'])
 
