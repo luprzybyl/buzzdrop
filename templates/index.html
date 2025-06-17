@@ -32,6 +32,11 @@
                     <input id="password" type="password" class="mt-1 p-2 border rounded-md w-full" required>
                 </div>
 
+                <div>
+                    <label for="expiry" class="block text-sm font-medium text-gray-700">Expiry Date (optional)</label>
+                    <input id="expiry" name="expiry" type="datetime-local" class="mt-1 p-2 border rounded-md w-full">
+                </div>
+
                 <div class="flex justify-center">
                     <button type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                         Upload File
@@ -133,6 +138,10 @@ if (document.querySelector('form')) {
         const encBlob = new Blob([total], { type: 'application/octet-stream' });
         const formData = new FormData();
         formData.append('file', new File([encBlob], file.name));
+        const expiryInput = document.getElementById('expiry');
+        if (expiryInput && expiryInput.value) {
+            formData.append('expiry', expiryInput.value);
+        }
 
         const res = await fetch("{{ url_for('upload_file') }}", {
             method: 'POST',
