@@ -254,6 +254,7 @@ def index():
         user_files = files_table.search(File.uploaded_by == session['username'])
         # Format timestamps so table columns remain narrow
         for f in user_files:
+            check_and_handle_expiry(f)
             try:
                 dt = datetime.fromisoformat(f['created_at'])
                 try:
@@ -288,13 +289,33 @@ def index():
                     f['downloaded_at'] = dt.strftime('%Y-%m-%d %H:%M:%S %Z')
                 except Exception:
                     pass
-            status = f.get('decryption_success')
-            if status is True:
-                f['decryption_status'] = 'Success'
-            elif status is False:
-                f['decryption_status'] = 'Failed'
+            if f.get('expiry_at'):
+                try:
+                    dt = datetime.fromisoformat(f['expiry_at'])
+                    try:
+                        from zoneinfo import ZoneInfo
+                        local_tz = ZoneInfo('Europe/Warsaw')
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=local_tz)
+                        else:
+                            dt = dt.astimezone(local_tz)
+                    except Exception:
+                        from datetime import timezone
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                    f['expiry_at'] = dt.strftime('%Y-%m-%d %H:%M:%S %Z')
+                except Exception:
+                    pass
+
+            dec_status = f.get('decryption_success')
+            if f.get('status') == 'expired':
+                f['status_display'] = 'Expired'
+            elif dec_status is True:
+                f['status_display'] = 'Success'
+            elif dec_status is False:
+                f['status_display'] = 'Failed'
             else:
-                f['decryption_status'] = 'Pending'
+                f['status_display'] = ''
 
         # Get files shared with the current user
         shared_files = files_table.search(
