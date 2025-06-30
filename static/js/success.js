@@ -1,3 +1,10 @@
+// --- Success Page Logic ---
+// This file controls the UI for the upload success page:
+// - Copying the share link to clipboard
+// - Toggling password visibility
+// - Auto-filling the password from sessionStorage
+
+// Copy the share link to clipboard and show a temporary message
 function copyLink() {
     const shareLink = document.getElementById('share-link');
     shareLink.select();
@@ -11,6 +18,7 @@ function copyLink() {
     }, 2000);
 }
 
+// Toggle password field between 'password' and 'text' for user convenience
 function togglePasswordVisibility() {
     const pwdInput = document.getElementById('password-display');
     const toggleBtn = document.getElementById('toggle-password');
@@ -27,6 +35,8 @@ function togglePasswordVisibility() {
     }
 }
 
+// On page load, auto-fill password from sessionStorage if present
+// (This helps the user copy/share the password after upload)
 document.addEventListener('DOMContentLoaded', function() {
     const pwd = sessionStorage.getItem('uploadPassword');
     if (pwd) {
