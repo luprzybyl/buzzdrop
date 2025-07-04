@@ -16,6 +16,9 @@ if (document.querySelector('form')) {
 
     // Handle form submission: encrypt file client-side, then upload
     document.querySelector('form').addEventListener('submit', async (e) => {
+        // --- DEBUG LOG: Upload timing ---
+        const uploadStartTime = new Date();
+        console.log(`[DEBUG] Upload started at: ${uploadStartTime.toISOString()}`);
         e.preventDefault();
         const fileInput = document.getElementById('file');
         const passInput = document.getElementById('password');
@@ -28,6 +31,8 @@ if (document.querySelector('form')) {
         const enc = new TextEncoder();
         const salt = window.crypto.getRandomValues(new Uint8Array(16)); // For PBKDF2 key derivation
         const iv = window.crypto.getRandomValues(new Uint8Array(12));   // For AES-GCM
+        tick = new Date()
+        console.log(`[DEBUG] Encoder set: ${tick.toISOString()} (elapsed: ${((tick - uploadStartTime)/1000).toFixed(3)}s)`);
 
         // 2. Derive encryption key from password using PBKDF2
         const keyMaterial = await window.crypto.subtle.importKey(
@@ -40,6 +45,8 @@ if (document.querySelector('form')) {
             true,
             ['encrypt', 'decrypt']
         );
+        tick = new Date()
+        console.log(`[DEBUG] key derived: ${tick.toISOString()} (elapsed: ${((tick - uploadStartTime)/1000).toFixed(3)}s)`);
 
         // 3. Prepare file data: prepend a header for integrity check
         const header = enc.encode('BKP-FILE'); // Magic bytes for later validation
@@ -47,11 +54,15 @@ if (document.querySelector('form')) {
         const plain = new Uint8Array(header.length + fileData.length);
         plain.set(header);
         plain.set(fileData, header.length);
+        tick = new Date()
+        console.log(`[DEBUG] Data prepared for encryption: ${tick.toISOString()} (elapsed: ${((tick - uploadStartTime)/1000).toFixed(3)}s)`);
 
         // 4. Encrypt the file using AES-GCM
         const encrypted = await window.crypto.subtle.encrypt(
             { name: 'AES-GCM', iv }, key, plain
         );
+        tick = new Date()
+        console.log(`[DEBUG] File encrypted: ${tick.toISOString()} (elapsed: ${((tick - uploadStartTime)/1000).toFixed(3)}s)`);
 
         // 5. Concatenate salt + iv + encrypted data for upload
         const total = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
@@ -69,24 +80,65 @@ if (document.querySelector('form')) {
         }
 
         // 7. Upload the encrypted file to the server
-        const res = await fetch(window.uploadUrl, {
-            method: 'POST',
-            body: formData,
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        });
-        if (!res.ok) {
-            let msg = 'Upload failed';
-            try {
-                const err = await res.json();
-                if (err.error) msg = err.error;
-            } catch (e) {}
-            alert(msg);
-            return;
-        }
-        // 8. On success, store password for later and redirect
-        const json = await res.json();
-        sessionStorage.setItem('uploadPassword', password);
-        window.location.href = `/success/${json.file_id}`;
+        // --- PROGRESS BAR LOGIC ---
+        const uploadBtn = document.getElementById('upload-btn');
+        const progressContainer = document.getElementById('upload-progress-container');
+        const progressBar = document.getElementById('upload-progress-bar');
+        const progressText = document.getElementById('upload-progress-text');
+
+        uploadBtn.style.display = 'none';
+        progressContainer.style.display = 'flex';
+        progressBar.style.width = '0%';
+        progressText.textContent = '0%';
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', window.uploadUrl, true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                progressBar.style.width = percent + '%';
+                progressText.textContent = percent + '%';
+            }
+        };
+
+        xhr.onload = async function() {
+            const afterUploadTime = new Date();
+            console.log(`[DEBUG] Upload finished at: ${afterUploadTime.toISOString()} (elapsed: ${((afterUploadTime - uploadStartTime)/1000).toFixed(3)}s)`);
+            if (xhr.status >= 200 && xhr.status < 300) {
+                let json = {};
+                try {
+                    json = JSON.parse(xhr.responseText);
+                } catch (e) {
+                    alert('Upload succeeded but server returned invalid JSON');
+                    uploadBtn.style.display = '';
+                    progressContainer.style.display = 'none';
+                    return;
+                }
+                sessionStorage.setItem('uploadPassword', password);
+                window.location.href = `/success/${json.file_id}`;
+            } else {
+                let msg = 'Upload failed';
+                try {
+                    const err = JSON.parse(xhr.responseText);
+                    if (err.error) msg = err.error;
+                } catch (e) {}
+                alert(msg);
+                uploadBtn.style.display = '';
+                progressContainer.style.display = 'none';
+            }
+        };
+
+        xhr.onerror = function() {
+            alert('Network error during upload');
+            uploadBtn.style.display = '';
+            progressContainer.style.display = 'none';
+        };
+
+        const beforeUploadTime = new Date();
+        console.log(`[DEBUG] Time before upload: ${beforeUploadTime.toISOString()} (elapsed: ${((beforeUploadTime - uploadStartTime)/1000).toFixed(3)}s)`);
+        xhr.send(formData);
     });
 }
 
