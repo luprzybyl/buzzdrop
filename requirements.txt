@@ -1,4 +1,4 @@
-Flask==3.1.1
+Flask==3.1.2
 python-dotenv==1.1.0
 pytest
 pytest-flask
