@@ -1,5 +1,5 @@
 Flask==3.1.2
-python-dotenv==1.1.0
+python-dotenv==1.1.1
 pytest
 pytest-flask
 Werkzeug==3.1.3
