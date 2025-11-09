@@ -576,4 +576,4 @@ print("upload folder: " + app.config['UPLOAD_FOLDER'])
 print("database path: " + app.config['DATABASE_PATH'])
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
