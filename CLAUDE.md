@@ -65,7 +65,9 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 - `id` (UUID), `original_name`, `path` (local or S3 key)
 - `created_at`, `downloaded_at`, `expiry_at` timestamps
 - `uploaded_by` (username), `status` (active/expired)
+- `downloaded_by_ip` (IP address of client who downloaded the file)
 - `decryption_success` (bool, tracked after client-side decryption)
+- `type` (`'file'` or `'text'` for text notes)
 
 **Database Helper Functions**:
 - `get_db()`: Returns TinyDB instance, handles reopening if closed (important for tests)

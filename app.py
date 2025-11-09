@@ -513,8 +513,18 @@ def download_file(file_id):
     if check_and_handle_expiry(file_info):
         flash('File has expired')
         return redirect(url_for('index'))
-    # Mark file as downloaded (set timestamp)
-    files_table.update({'downloaded_at': datetime.now().isoformat()}, File.id == file_id)
+
+    # Get client IP address (handle proxies)
+    if request.headers.get('X-Forwarded-For'):
+        client_ip = request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    else:
+        client_ip = request.remote_addr
+
+    # Mark file as downloaded (set timestamp and IP)
+    files_table.update({
+        'downloaded_at': datetime.now().isoformat(),
+        'downloaded_by_ip': client_ip
+    }, File.id == file_id)
     if STORAGE_BACKEND == 's3':
         s3_key = file_info['path']
         try:
