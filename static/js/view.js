@@ -84,6 +84,12 @@ const cryptoService = new CryptoService();
             }).catch(() => {});
         } catch (err) {
             document.getElementById('status').textContent = 'Incorrect password or corrupted file. The file was deleted from the server to avoid attempted password breaking. Ask author to upload the file again.';
+            // Notify server that decryption failed
+            fetch(window.reportDecryptionUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ success: false })
+            }).catch(() => {});
         }
     });
 })();
