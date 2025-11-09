@@ -1,11 +1,11 @@
 import os
 import uuid
 from datetime import datetime
+from io import BytesIO
 from flask import (
     Flask,
     request,
     render_template,
-    send_file,
     send_from_directory,
     redirect,
     url_for,
@@ -16,85 +16,70 @@ from flask import (
 )
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
-from werkzeug.security import generate_password_hash, check_password_hash
 from tinydb import TinyDB, Query
-from functools import wraps
 from dotenv import load_dotenv
-import boto3
-from botocore.exceptions import ClientError
-from io import BytesIO
+import base64
+
+# Import new modules
+from config import get_config
+from storage import get_storage_backend, print_backend_info, StorageError
+from auth import login_required, admin_required, get_users, login_user, logout_user
+from utils import (
+    format_file_timestamps,
+    enhance_file_display,
+    allowed_file,
+    get_client_ip,
+    cleanup_orphaned_files,
+)
+from models import FileRepository
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 
-# Use persistent secret key from environment
-app.secret_key = os.getenv('FLASK_SECRET_KEY')
-if not app.secret_key:
-    # For development only - raise error in production
+# Load configuration
+config_class = get_config()
+app.config.from_object(config_class)
+
+# Validate configuration
+try:
+    config_class.validate()
+except ValueError as e:
+    print(f"Configuration error: {e}")
+    # Generate temporary secret key for development
+    if not app.config.get('SECRET_KEY') and os.getenv('FLASK_ENV') != 'production':
+        import secrets
+        app.config['SECRET_KEY'] = secrets.token_hex(32)
+        print("WARNING: Using temporary session key. Set FLASK_SECRET_KEY in .env for production!")
+    else:
+        raise
+
+# Generate temporary secret key for development if not set
+if not app.config.get('SECRET_KEY'):
     if os.getenv('FLASK_ENV') == 'production':
         raise ValueError("FLASK_SECRET_KEY must be set in production environment")
-    # Generate a temporary key for development (will warn)
     import secrets
-    app.secret_key = secrets.token_hex(32)
+    app.config['SECRET_KEY'] = secrets.token_hex(32)
     print("WARNING: Using temporary session key. Set FLASK_SECRET_KEY in .env for production!")
 
-# Configuration from environment variables
-app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
-app.config['ALLOWED_EXTENSIONS'] = set(
-    os.getenv('ALLOWED_EXTENSIONS', 'txt,pdf,png,jpg,jpeg,gif,doc,docx,xls,xlsx').split(',')
-)
-app.config['MAX_CONTENT_LENGTH'] = int(
-    os.getenv('MAX_CONTENT_LENGTH', 16 * 1024 * 1024)
-)
+app.secret_key = app.config['SECRET_KEY']
 
-# --- S3 CONFIG ---
-S3_BUCKET = os.getenv('S3_BUCKET')
-S3_ACCESS_KEY = os.getenv('S3_ACCESS_KEY')
-S3_SECRET_KEY = os.getenv('S3_SECRET_KEY')
-S3_REGION = os.getenv('S3_REGION', 'us-east-1')
-STORAGE_BACKEND = os.getenv('STORAGE_BACKEND', 'local')  # 'local' or 's3'
-
-s3_client = None
-if STORAGE_BACKEND == 's3':
-    s3_client = boto3.client(
-        's3',
-        aws_access_key_id=S3_ACCESS_KEY,
-        aws_secret_access_key=S3_SECRET_KEY,
-        region_name=S3_REGION
-    )
-
-# Module level defaults for easy access when no app context is present
-UPLOAD_FOLDER = app.config['UPLOAD_FOLDER']
-ALLOWED_EXTENSIONS = app.config['ALLOWED_EXTENSIONS']
-MAX_CONTENT_LENGTH = app.config['MAX_CONTENT_LENGTH']
-
-# Ensure upload directory exists
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Ensure upload directory exists (for local storage)
+if app.config['STORAGE_BACKEND'] == 'local':
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Initialize TinyDB
-app.config['DATABASE_PATH'] = os.getenv('DATABASE_PATH', 'db.json')
 db = TinyDB(app.config['DATABASE_PATH'])
 app.db = db
 File = Query()
 
+# Initialize storage backend
+storage = get_storage_backend(app.config)
+print_backend_info(storage)
 
-def print_backend_info():
-    print(f"\n[Startup] STORAGE_BACKEND: {STORAGE_BACKEND}")
-    if STORAGE_BACKEND == 's3':
-        try:
-            # Try to list buckets as a connectivity test
-            buckets = s3_client.list_buckets()
-            print(f"[Startup] S3 Connection OK. Buckets: {[b['Name'] for b in buckets.get('Buckets', [])]}")
-            if S3_BUCKET:
-                print(f"[Startup] Using S3 bucket: {S3_BUCKET} (region: {S3_REGION})")
-        except Exception as e:
-            print(f"[Startup] S3 Connection FAILED: {e}")
-    else:
-        print(f"[Startup] Using local storage. Upload folder: {os.getenv('UPLOAD_FOLDER', 'uploads')}")
-
-print_backend_info()
+# Initialize file repository
+file_repo = FileRepository()
 
 def get_db():
     """Return a TinyDB instance, reopening it if necessary."""
@@ -118,82 +103,13 @@ def get_files_table():
     database = get_db()
     return database.table('files')
 
-def hash_password(password):
-    """Hash a password using PBKDF2-SHA256 with salt."""
-    return generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
-
-def get_users():
-    """Get all users from environment variables."""
-    users = {}
-    for key, value in os.environ.items():
-        if key.startswith('FLASK_USER_'):
-            try:
-                # Extract parts from the value
-                username, password, is_admin_str = value.split(':', 2)
-                users[username] = {
-                    'password': hash_password(password),
-                    'is_admin': is_admin_str.lower() == 'true'
-                }
-            except ValueError:
-                # Handle cases where the value might not have enough parts
-                print(f"Warning: Invalid user format in environment variable {key}")
-    return users
-
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'username' not in session:
-            flash('Please log in to access this page')
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'username' not in session:
-            flash('Please log in to access this page')
-            return redirect(url_for('login'))
-        
-        users = get_users()
-        user = users.get(session['username'])
-        if not user or not user['is_admin']:
-            flash('Admin access required')
-            return redirect(url_for('index'))
-        
-        return f(*args, **kwargs)
-    return decorated_function
-
-def cleanup_orphaned_files():
-    """Remove any files in the uploads directory that are not tracked in the database."""
-    config = current_app.config if has_app_context() else app.config
-    upload_dir = config.get('UPLOAD_FOLDER', UPLOAD_FOLDER)
-    if not os.path.exists(upload_dir):
-        return
-
-    # Get list of files in uploads directory
-    uploaded_files = set(os.listdir(upload_dir))
-
-    # Get list of files we're tracking
+# Clean up orphaned files on startup (local storage only)
+if app.config['STORAGE_BACKEND'] == 'local':
     files_table = get_files_table()
     tracked_files = set(
         file_info['path'].split(os.sep)[-1] for file_info in files_table.all()
     )
-    
-    # Find orphaned files
-    orphaned_files = uploaded_files - tracked_files
-    
-    # Remove orphaned files
-    for orphaned_file in orphaned_files:
-        try:
-            file_path = os.path.join(upload_dir, orphaned_file)
-            os.remove(file_path)
-            print(f"Removed orphaned file: {orphaned_file}")
-        except Exception as e:
-            print(f"Error removing orphaned file {orphaned_file}: {str(e)}")
-
-# Clean up orphaned files on startup
-cleanup_orphaned_files()
+    cleanup_orphaned_files(app.config['UPLOAD_FOLDER'], tracked_files)
 
 @app.route('/favicon.ico')
 def favicon():
@@ -203,14 +119,6 @@ def favicon():
         'favicon.ico',
         mimetype='image/vnd.microsoft.icon'
     )
-
-def allowed_file(filename):
-    if has_app_context():
-        allowed = current_app.config.get('ALLOWED_EXTENSIONS', ALLOWED_EXTENSIONS)
-    else:
-        allowed = ALLOWED_EXTENSIONS
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed
-
 
 def check_and_handle_expiry(file_info):
     """Check if the given file has expired and handle cleanup."""
@@ -229,18 +137,13 @@ def check_and_handle_expiry(file_info):
 
     if datetime.now() >= expiry_dt:
         # Remove file from storage
-        if STORAGE_BACKEND == 's3':
-            try:
-                s3_client.delete_object(Bucket=S3_BUCKET, Key=file_info['path'])
-            except Exception:
-                pass
-        else:
-            try:
-                os.remove(file_info['path'])
-            except FileNotFoundError:
-                pass
-        files_table = get_files_table()
-        files_table.update({'status': 'expired'}, File.id == file_info['id'])
+        try:
+            storage.delete(file_info['path'])
+        except Exception:
+            pass
+        
+        # Mark as expired in database
+        file_repo.mark_expired(file_info['id'])
         file_info['status'] = 'expired'
         return True
 
@@ -259,101 +162,29 @@ def handle_large_file(error):
 def index():
     """Home page route."""
     if 'username' in session:
-        files_table = get_files_table()
         # Get files uploaded by the current user
-        user_files = files_table.search(File.uploaded_by == session['username'])
-        # Format timestamps so table columns remain narrow
+        user_files = file_repo.get_user_files(session['username'])
+        
+        # Check expiry and format for display
         for f in user_files:
             check_and_handle_expiry(f)
-            try:
-                dt = datetime.fromisoformat(f['created_at'])
-                try:
-                    from zoneinfo import ZoneInfo
-                    local_tz = ZoneInfo('Europe/Warsaw')
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=local_tz)
-                    else:
-                        dt = dt.astimezone(local_tz)
-                except Exception:
-                    # fallback to UTC if zoneinfo is not available
-                    from datetime import timezone
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
-                f['created_at'] = dt.strftime('%Y-%m-%d %H:%M:%S %Z')
-            except Exception:
-                pass
-            if f.get('downloaded_at'):
-                try:
-                    dt = datetime.fromisoformat(f['downloaded_at'])
-                    try:
-                        from zoneinfo import ZoneInfo
-                        local_tz = ZoneInfo('Europe/Warsaw')
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=local_tz)
-                        else:
-                            dt = dt.astimezone(local_tz)
-                    except Exception:
-                        from datetime import timezone
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=timezone.utc)
-                    f['downloaded_at'] = dt.strftime('%Y-%m-%d %H:%M:%S %Z')
-                except Exception:
-                    pass
-            if f.get('expiry_at'):
-                try:
-                    dt = datetime.fromisoformat(f['expiry_at'])
-                    try:
-                        from zoneinfo import ZoneInfo
-                        local_tz = ZoneInfo('Europe/Warsaw')
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=local_tz)
-                        else:
-                            dt = dt.astimezone(local_tz)
-                    except Exception:
-                        from datetime import timezone
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=timezone.utc)
-                    f['expiry_at'] = dt.strftime('%Y-%m-%d %H:%M:%S %Z')
-                except Exception:
-                    pass
-
-            dec_status = f.get('decryption_success')
-            if f.get('status') == 'expired':
-                f['status_display'] = 'Expired'
-            elif dec_status is True:
-                f['status_display'] = 'Success'
-            elif dec_status is False:
-                f['status_display'] = 'Failed'
-            else:
-                f['status_display'] = ''
+            enhance_file_display(f)
 
         # Get files shared with the current user
-        shared_files = files_table.search(
-            (File.shared_with.any([session['username']]))
-            & (File.uploaded_by != session['username'])
-        )
-
-        print("user_files: ", user_files)
+        shared_files = file_repo.get_shared_files(session['username'])
         
         return render_template(
             'index.html', 
             user_files=user_files, 
             shared_files=shared_files,
-            allowed_extensions=list(
-                current_app.config.get('ALLOWED_EXTENSIONS', ALLOWED_EXTENSIONS)
-            ),
-            max_content_length=current_app.config.get(
-                'MAX_CONTENT_LENGTH', MAX_CONTENT_LENGTH
-            )
+            allowed_extensions=list(current_app.config.get('ALLOWED_EXTENSIONS')),
+            max_content_length=current_app.config.get('MAX_CONTENT_LENGTH')
         )
+    
     return render_template(
         'index.html',
-        allowed_extensions=list(
-            current_app.config.get('ALLOWED_EXTENSIONS', ALLOWED_EXTENSIONS)
-        ),
-        max_content_length=current_app.config.get(
-            'MAX_CONTENT_LENGTH', MAX_CONTENT_LENGTH
-        ),
+        allowed_extensions=list(current_app.config.get('ALLOWED_EXTENSIONS')),
+        max_content_length=current_app.config.get('MAX_CONTENT_LENGTH'),
     )
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -362,11 +193,7 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
 
-        users = get_users()
-        user = users.get(username)
-        if user and check_password_hash(user['password'], password):
-            session['username'] = username
-            session['is_admin'] = user['is_admin']
+        if login_user(username, password):
             flash('Logged in successfully')
             return redirect(url_for('index'))
         else:
@@ -376,8 +203,7 @@ def login():
 
 @app.route('/logout')
 def logout():
-    session.pop('username', None)
-    session.pop('is_admin', None)
+    logout_user()
     flash('Logged out successfully')
     return redirect(url_for('index'))
 
@@ -396,24 +222,10 @@ def upload_file():
 
     if upload_type == 'text' and note_text:
         # Handle text note upload
-        unique_id = str(uuid.uuid4())
-        files_table = get_files_table()
-
         # Decode base64 encrypted data
-        import base64
         text_bytes = base64.b64decode(note_text)
-
-        if STORAGE_BACKEND == 's3':
-            s3_key = f"uploads/{unique_id}"
-            s3_client.upload_fileobj(BytesIO(text_bytes), S3_BUCKET, s3_key)
-            file_path = s3_key
-        else:
-            upload_dir = current_app.config.get('UPLOAD_FOLDER', UPLOAD_FOLDER)
-            os.makedirs(upload_dir, exist_ok=True)
-            file_path = os.path.join(upload_dir, unique_id)
-            with open(file_path, 'wb') as f:
-                f.write(text_bytes)
-
+        
+        # Parse expiry date
         expiry_raw = request.form.get('expiry')
         expiry_iso = None
         if expiry_raw:
@@ -422,18 +234,21 @@ def upload_file():
             except ValueError:
                 expiry_iso = None
 
-        files_table.insert({
-            'id': unique_id,
+        # Generate unique ID
+        unique_id = str(uuid.uuid4())
+        
+        # Save to storage
+        file_path = storage.save(unique_id, text_bytes)
+
+        # Create database entry
+        file_repo.create({
             'original_name': 'Secret Note',
             'path': file_path,
-            'created_at': datetime.now().isoformat(),
-            'downloaded_at': None,
             'uploaded_by': session['username'],
             'expiry_at': expiry_iso,
-            'status': 'active',
-            'decryption_success': None,
             'type': 'text'
-        })
+        }, file_id=unique_id)
+        
         share_link = url_for('view_file', file_id=unique_id, _external=True)
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return {
@@ -447,24 +262,20 @@ def upload_file():
     if 'file' not in request.files:
         flash('No file part')
         return redirect(url_for('index'))
+    
     file = request.files['file']
     if file.filename == '':
         flash('No selected file')
         return redirect(url_for('index'))
+    
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
+        
+        # Generate unique ID and save to storage
         unique_id = str(uuid.uuid4())
-        files_table = get_files_table()
-        if STORAGE_BACKEND == 's3':
-            s3_key = f"uploads/{unique_id}"
-            # Upload to S3
-            s3_client.upload_fileobj(file, S3_BUCKET, s3_key)
-            file_path = s3_key
-        else:
-            upload_dir = current_app.config.get('UPLOAD_FOLDER', UPLOAD_FOLDER)
-            os.makedirs(upload_dir, exist_ok=True)
-            file_path = os.path.join(upload_dir, unique_id)
-            file.save(file_path)
+        file_path = storage.save(unique_id, file)
+        
+        # Parse expiry date
         expiry_raw = request.form.get('expiry')
         expiry_iso = None
         if expiry_raw:
@@ -473,18 +284,15 @@ def upload_file():
             except ValueError:
                 expiry_iso = None
 
-        files_table.insert({
-            'id': unique_id,
+        # Create database entry
+        file_repo.create({
             'original_name': filename,
             'path': file_path,
-            'created_at': datetime.now().isoformat(),
-            'downloaded_at': None,
             'uploaded_by': session['username'],
             'expiry_at': expiry_iso,
-            'status': 'active',
-            'decryption_success': None,
             'type': 'file'
-        })
+        }, file_id=unique_id)
+        
         share_link = url_for('view_file', file_id=unique_id, _external=True)
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return {
@@ -493,6 +301,7 @@ def upload_file():
                 'type': 'file'
             }
         return render_template('success.html', share_link=share_link, file_type='file')
+    
     flash('File type not allowed')
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return {'error': 'File type not allowed'}, 400
@@ -502,8 +311,7 @@ def upload_file():
 
 @app.route('/download/<file_id>', methods=['GET'])
 def download_file(file_id):
-    files_table = get_files_table()
-    file_info = files_table.get(File.id == file_id)
+    file_info = file_repo.get_by_id(file_id)
     if not file_info:
         flash('File not found')
         return redirect(url_for('index'))
@@ -514,87 +322,50 @@ def download_file(file_id):
         flash('File has expired')
         return redirect(url_for('index'))
 
-    # Get client IP address (handle proxies)
-    if request.headers.get('X-Forwarded-For'):
-        client_ip = request.headers.get('X-Forwarded-For').split(',')[0].strip()
-    else:
-        client_ip = request.remote_addr
+    # Get client IP address
+    client_ip = get_client_ip()
 
-    # Mark file as downloaded (set timestamp and IP)
-    files_table.update({
-        'downloaded_at': datetime.now().isoformat(),
-        'downloaded_by_ip': client_ip
-    }, File.id == file_id)
-    if STORAGE_BACKEND == 's3':
-        s3_key = file_info['path']
+    # Mark file as downloaded
+    file_repo.mark_downloaded(file_id, client_ip)
+    
+    # Stream file from storage
+    def generate():
+        for chunk in storage.retrieve(file_info['path']):
+            yield chunk
+        # Delete file after streaming completes
         try:
-            s3_obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
-            def generate():
-                for chunk in iter(lambda: s3_obj['Body'].read(8192), b''):
-                    yield chunk
-            response = current_app.response_class(
-                generate(),
-                headers={
-                    'Content-Disposition': f"attachment; filename={file_info['original_name']}"
-                },
-                mimetype='application/octet-stream'
-            )
-            # Optionally, delete from S3 after download (for one-time download)
-            try:
-                s3_client.delete_object(Bucket=S3_BUCKET, Key=s3_key)
-            except Exception:
-                pass
-            return response
-        except ClientError:
-            flash('File not found in S3')
-            return redirect(url_for('index'))
-    else:
-        def generate():
-            with open(file_info['path'], 'rb') as file_handle:
-                while True:
-                    chunk = file_handle.read(8192)
-                    if not chunk:
-                        break
-                    yield chunk
-            try:
-                os.remove(file_info['path'])
-            except Exception:
-                pass
-        response = current_app.response_class(
-            generate(),
-            headers={
-                'Content-Disposition': f"attachment; filename={file_info['original_name']}"
-            },
-            mimetype='application/octet-stream'
-        )
-        return response
+            storage.delete(file_info['path'])
+        except Exception:
+            pass
+    
+    response = current_app.response_class(
+        generate(),
+        headers={
+            'Content-Disposition': f"attachment; filename={file_info['original_name']}"
+        },
+        mimetype='application/octet-stream'
+    )
+    return response
 
 
 @app.route('/delete/<file_id>', methods=['POST'])
 @login_required
 def delete_file(file_id):
     """Delete a file entry and remove the file if it still exists."""
-    files_table = get_files_table()
-    file_info = files_table.get(File.id == file_id)
+    file_info = file_repo.get_by_id(file_id)
 
     if not file_info or file_info.get('uploaded_by') != session['username']:
         flash('File not found')
         return redirect(url_for('index'))
 
-    # Remove the file from disk or S3 if it hasn't been downloaded yet
+    # Remove the file from storage if it hasn't been downloaded yet
     if not file_info.get('downloaded_at'):
-        if STORAGE_BACKEND == 's3':
-            try:
-                s3_client.delete_object(Bucket=S3_BUCKET, Key=file_info['path'])
-            except Exception:
-                pass
-        else:
-            try:
-                os.remove(file_info['path'])
-            except FileNotFoundError:
-                pass
+        try:
+            storage.delete(file_info['path'])
+        except Exception:
+            pass
 
-    files_table.remove(File.id == file_id)
+    file_repo.delete(file_id)
     flash('File deleted successfully')
     return redirect(url_for('index'))
 
@@ -608,8 +379,7 @@ def upload_success(file_id):
 
 @app.route('/view/<file_id>', methods=['GET'])
 def view_file(file_id):
-    files_table = get_files_table()
-    file_info = files_table.get(File.id == file_id)
+    file_info = file_repo.get_by_id(file_id)
     if not file_info or file_info['downloaded_at'] is not None:
         flash('File not found')
         return redirect(url_for('index'))
@@ -621,8 +391,7 @@ def view_file(file_id):
 
 @app.route('/view/<file_id>/confirm', methods=['POST'])
 def confirm_view_file(file_id):
-    files_table = get_files_table()
-    file_info = files_table.get(File.id == file_id)
+    file_info = file_repo.get_by_id(file_id)
     if not file_info or file_info['downloaded_at'] is not None:
         flash('File not found')
         return redirect(url_for('index'))
@@ -636,8 +405,7 @@ def confirm_view_file(file_id):
 @app.route('/report_decryption/<file_id>', methods=['POST'])
 def report_decryption(file_id):
     """Record whether the downloaded file was decrypted successfully."""
-    files_table = get_files_table()
-    file_info = files_table.get(File.id == file_id)
+    file_info = file_repo.get_by_id(file_id)
     if not file_info:
         return {'error': 'File not found'}, 404
 
@@ -646,12 +414,15 @@ def report_decryption(file_id):
         return {'error': 'Invalid request'}, 400
 
     if file_info.get('decryption_success') is None:
-        files_table.update({'decryption_success': bool(data['success'])}, File.id == file_id)
+        file_repo.update_decryption_status(file_id, bool(data['success']))
     return {'status': 'recorded'}
 
 
-print("upload folder: " + app.config['UPLOAD_FOLDER'])
-print("database path: " + app.config['DATABASE_PATH'])
+# Print configuration info on startup
+config_info = config_class.get_display_info()
+print("\n[Configuration]")
+for key, value in config_info.items():
+    print(f"  {key}: {value}")
 
 if __name__ == '__main__':
     app.run()

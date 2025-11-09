@@ -1,9 +1,10 @@
 import pytest
 import os
 import shutil # For file operations in cleanup test setup
-from unittest import mock
+from app import get_files_table
+from utils import cleanup_orphaned_files
 from tinydb import Query
-from app import get_files_table, cleanup_orphaned_files # Functions to test
+from unittest import mock
 # Fixtures 'app', 'db_instance', 'files_table' will be injected from conftest.py
 
 def test_add_and_get_file_record(files_table):
@@ -51,8 +52,11 @@ def test_cleanup_orphaned_files_no_orphans(app, files_table):
 
     files_table.insert({'id': '1', 'path': tracked_file_on_disk_path, 'original_name': 'tracked_file.txt'})
 
+    # Get tracked files from database
+    tracked_files = set(f['path'].split(os.sep)[-1] for f in files_table.all())
+    
     with mock.patch('os.remove') as mock_remove:
-        cleanup_orphaned_files() # Call within app context if it relies on current_app directly
+        cleanup_orphaned_files(upload_dir, tracked_files)
         mock_remove.assert_not_called() # No files should be removed
 
     # Ensure the tracked file is still there (optional, os.remove is mocked)
@@ -83,6 +87,9 @@ def test_cleanup_orphaned_files_with_orphans(app, files_table):
     # File in DB, NOT on disk (should be ignored by cleanup_orphaned_files)
     files_table.insert({'id': 'db_only', 'path': os.path.join(upload_dir, "db_only_missing_on_disk.txt"), 'original_name': 'db_only.txt'})
 
+    # Get tracked files from database
+    tracked_files = set(f['path'].split(os.sep)[-1] for f in files_table.all())
+    
     # Mock os.remove to check it's called on the correct file
     # os.listdir and os.path.exists will operate on the actual temp test upload folder
     removed_paths = []
@@ -92,11 +99,8 @@ def test_cleanup_orphaned_files_with_orphans(app, files_table):
         original_os_remove(path) # actually remove for post-condition check
 
     with mock.patch('os.remove', side_effect=mock_os_remove) as mocked_remove:
-        # cleanup_orphaned_files uses current_app if has_app_context() is true
-        # The 'app' fixture should provide this context implicitly.
-        # If not, explicitly use with app.app_context():
         with app.app_context():
-             cleanup_orphaned_files()
+             cleanup_orphaned_files(upload_dir, tracked_files)
 
         # Assertions
         assert orphaned_file_path in removed_paths
@@ -125,8 +129,11 @@ def test_cleanup_orphaned_files_empty_uploads_dir(app, files_table):
 
     files_table.insert({'id': 'db_only', 'path': os.path.join(upload_dir, "some_file_in_db.txt")})
 
+    # Get tracked files from database
+    tracked_files = set(f['path'].split(os.sep)[-1] for f in files_table.all())
+    
     with mock.patch('os.remove') as mock_remove:
-        cleanup_orphaned_files()
+        cleanup_orphaned_files(upload_dir, tracked_files)
         mock_remove.assert_not_called()
 
 def test_cleanup_orphaned_files_uploads_dir_does_not_exist(app, files_table):
@@ -149,7 +156,10 @@ def test_cleanup_orphaned_files_uploads_dir_does_not_exist(app, files_table):
             return os.path.exists(path) # Call original for other paths
         mock_path_exists.side_effect = side_effect_exists
 
-        cleanup_orphaned_files()
+        # Get tracked files from database  
+        tracked_files = set(f['path'].split(os.sep)[-1] for f in files_table.all())
+        
+        cleanup_orphaned_files(upload_dir, tracked_files)
 
         mock_listdir.assert_not_called() # Should not attempt to listdir if path doesn't exist
         mock_remove.assert_not_called() # No removal attempts

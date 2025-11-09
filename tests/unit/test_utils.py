@@ -1,8 +1,17 @@
 import pytest
-from app import hash_password, allowed_file, get_users # Assuming these are directly importable from app.py
+from auth import hash_password, get_users
+from utils import allowed_file
 from werkzeug.security import check_password_hash
 import os # For mocking
 from unittest import mock # For mocking
+
+# Fixture to clear get_users cache before each test that uses it
+@pytest.fixture(autouse=True)
+def clear_user_cache():
+    """Clear the LRU cache on get_users before each test."""
+    get_users.cache_clear()
+    yield
+    get_users.cache_clear()
 
 def test_hash_password():
     password = "testpassword"
