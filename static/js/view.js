@@ -1,23 +1,19 @@
 // --- Secure File Download & Decryption Logic ---
 // This script handles the process of downloading, decrypting, and saving the file client-side
 // Steps:
-// 1. Download the encrypted file (salt + iv + ciphertext) from the server
+// 1. Download the encrypted file from the server
 // 2. Wait for user to enter password and click 'Decrypt'
-// 3. Derive key from password using PBKDF2 and the salt
-// 4. Decrypt using AES-GCM and IV
-// 5. Validate the decrypted data (check for header)
-// 6. Save file to disk and notify server
+// 3. Use CryptoService to decrypt
+// 4. Save file to disk and notify server
+
+import { CryptoService } from './crypto.js';
+
+const cryptoService = new CryptoService();
 
 (async () => {
     // Download the encrypted file as a single Uint8Array
     const res = await fetch(window.downloadUrl);
-    const allData = new Uint8Array(await res.arrayBuffer());
-    // Extract salt (first 16 bytes), IV (next 12 bytes), and encrypted data (rest)
-    const salt = allData.slice(0, 16);
-    const iv = allData.slice(16, 28);
-    const encData = allData.slice(28);
-    const enc = new TextEncoder();
-    const header = enc.encode('BKP-FILE'); // Magic bytes for integrity check
+    const encryptedData = new Uint8Array(await res.arrayBuffer());
     const decryptBtn = document.getElementById('decrypt-btn');
     const passInput = document.getElementById('password-input');
 
@@ -41,34 +37,10 @@
         if (!password) return;
         decryptBtn.disabled = true;
         passInput.disabled = true;
-        // Derive key from password using PBKDF2 and salt
-        const keyMaterial = await window.crypto.subtle.importKey(
-            'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
-        );
-        const key = await window.crypto.subtle.deriveKey(
-            { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-            keyMaterial,
-            { name: 'AES-GCM', length: 256 },
-            false,
-            ['decrypt']
-        );
+        
         try {
-            // Attempt to decrypt using AES-GCM and IV
-            const decrypted = await window.crypto.subtle.decrypt(
-                { name: 'AES-GCM', iv }, key, encData
-            );
-            const decBytes = new Uint8Array(decrypted);
-            // Validate magic header to check integrity
-            let valid = header.length <= decBytes.length;
-            for (let i = 0; i < header.length && valid; i++) {
-                if (decBytes[i] !== header[i]) valid = false;
-            }
-            if (!valid) {
-                document.getElementById('status').textContent = 'Incorrect password or corrupted file. The file was deleted from the server to avoid attempted password breaking. Ask author to upload the file again.';
-                return;
-            }
-            // If valid, extract file content
-            const fileBytes = decBytes.slice(header.length);
+            // Decrypt using CryptoService
+            const fileBytes = await cryptoService.decrypt(encryptedData, password);
 
             // Check if this is a text note or file
             if (window.fileType === 'text') {

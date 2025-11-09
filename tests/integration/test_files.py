@@ -47,7 +47,8 @@ def test_upload_file_success(client, app, files_table):
     assert file_info is not None
     assert file_info['uploaded_by'] == 'testuser'
 
-    file_path_on_disk = os.path.join(app.config['UPLOAD_FOLDER'], file_info['id'])
+    # Use the path from file_info which is set by storage backend
+    file_path_on_disk = file_info['path']
     assert os.path.exists(file_path_on_disk)
     with open(file_path_on_disk, 'rb') as f:
         assert f.read() == file_content
@@ -96,12 +97,10 @@ def test_download_file_success(client, app, files_table):
     file_info = files_table.get(File.original_name == file_name)
     assert file_info is not None
     file_id = file_info['id']
-    file_path_on_disk = file_info['path'] # In the test setup, 'path' is the unique_id in upload_folder
-                                        # So, need to join with app.config['UPLOAD_FOLDER']
-
-    # Corrected file_path_on_disk for test environment
-    actual_file_path_on_disk = os.path.join(app.config['UPLOAD_FOLDER'], file_info['id'])
-    assert os.path.exists(actual_file_path_on_disk)
+    
+    # Use the path from file_info which is set by storage backend
+    file_path_on_disk = file_info['path']
+    assert os.path.exists(file_path_on_disk)
 
     response = client.get(url_for('download_file', file_id=file_id))
     assert response.status_code == 200
@@ -111,7 +110,8 @@ def test_download_file_success(client, app, files_table):
     updated_file_info = files_table.get(File.id == file_id)
     assert updated_file_info is not None
     assert updated_file_info['downloaded_at'] is not None
-    assert not os.path.exists(actual_file_path_on_disk)
+    # File should be deleted after download
+    assert not os.path.exists(file_path_on_disk)
 
 def test_download_file_not_found(client):
     login_user(client, 'testuser', 'password')

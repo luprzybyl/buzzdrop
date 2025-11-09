@@ -1,3 +1,8 @@
+// Import CryptoService for encryption
+import { CryptoService } from './crypto.js';
+
+const cryptoService = new CryptoService();
+
 // Parse allowed file extensions from a hidden JSON element injected by the server
 const allowedExtensions = JSON.parse(document.getElementById('allowed-extensions-json').textContent);
 
@@ -15,6 +20,10 @@ function showTextNote() {
     document.getElementById('file-tab').className = 'px-4 py-2 font-medium text-gray-500 hover:text-gray-700';
     document.getElementById('text-tab').className = 'px-4 py-2 font-medium text-indigo-600 border-b-2 border-indigo-600';
 }
+
+// Make functions globally accessible for inline onclick handlers
+window.showFileUpload = showFileUpload;
+window.showTextNote = showTextNote;
 
 // --- File Upload Logic ---
 if (document.querySelector('form')) {
@@ -42,50 +51,17 @@ if (document.querySelector('form')) {
         if (!file || !password) return;
 
         // --- ENCRYPTION WORKFLOW ---
-        // 1. Setup encoder, salt, and IV for crypto
-        const enc = new TextEncoder();
-        const salt = window.crypto.getRandomValues(new Uint8Array(16)); // For PBKDF2 key derivation
-        const iv = window.crypto.getRandomValues(new Uint8Array(12));   // For AES-GCM
-        tick = new Date()
-        console.log(`[DEBUG] Encoder set: ${tick.toISOString()} (elapsed: ${((tick - uploadStartTime)/1000).toFixed(3)}s)`);
-
-        // 2. Derive encryption key from password using PBKDF2
-        const keyMaterial = await window.crypto.subtle.importKey(
-            'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
-        );
-        const key = await window.crypto.subtle.deriveKey(
-            { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-            keyMaterial,
-            { name: 'AES-GCM', length: 256 },
-            true,
-            ['encrypt', 'decrypt']
-        );
-        tick = new Date()
-        console.log(`[DEBUG] key derived: ${tick.toISOString()} (elapsed: ${((tick - uploadStartTime)/1000).toFixed(3)}s)`);
-
-        // 3. Prepare file data: prepend a header for integrity check
-        const header = enc.encode('BKP-FILE'); // Magic bytes for later validation
+        // 1. Read file data
         const fileData = new Uint8Array(await file.arrayBuffer());
-        const plain = new Uint8Array(header.length + fileData.length);
-        plain.set(header);
-        plain.set(fileData, header.length);
-        tick = new Date()
-        console.log(`[DEBUG] Data prepared for encryption: ${tick.toISOString()} (elapsed: ${((tick - uploadStartTime)/1000).toFixed(3)}s)`);
+        let tick = new Date()
+        console.log(`[DEBUG] File data loaded: ${tick.toISOString()} (elapsed: ${((tick - uploadStartTime)/1000).toFixed(3)}s)`);
 
-        // 4. Encrypt the file using AES-GCM
-        const encrypted = await window.crypto.subtle.encrypt(
-            { name: 'AES-GCM', iv }, key, plain
-        );
+        // 2. Encrypt using CryptoService
+        const total = await cryptoService.encrypt(fileData, password);
         tick = new Date()
         console.log(`[DEBUG] File encrypted: ${tick.toISOString()} (elapsed: ${((tick - uploadStartTime)/1000).toFixed(3)}s)`);
 
-        // 5. Concatenate salt + iv + encrypted data for upload
-        const total = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
-        total.set(salt); // First 16 bytes: salt
-        total.set(iv, salt.length); // Next 12 bytes: IV
-        total.set(new Uint8Array(encrypted), salt.length + iv.length); // Remainder: encrypted file
-
-        // 6. Prepare the upload as a FormData POST
+        // 3. Prepare the upload as a FormData POST
         const encBlob = new Blob([total], { type: 'application/octet-stream' });
         const formData = new FormData();
         formData.append('file', new File([encBlob], file.name));
@@ -171,40 +147,11 @@ async function uploadNote() {
         return;
     }
 
-    // --- ENCRYPTION WORKFLOW (same as file) ---
+    // --- ENCRYPTION WORKFLOW ---
+    // Prepare text data and encrypt using CryptoService
     const enc = new TextEncoder();
-    const salt = window.crypto.getRandomValues(new Uint8Array(16));
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-
-    // Derive encryption key from password
-    const keyMaterial = await window.crypto.subtle.importKey(
-        'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
-    );
-    const key = await window.crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-        keyMaterial,
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['encrypt']
-    );
-
-    // Prepare data: prepend header for integrity check
-    const header = enc.encode('BKP-FILE');
     const textData = enc.encode(noteText);
-    const plain = new Uint8Array(header.length + textData.length);
-    plain.set(header);
-    plain.set(textData, header.length);
-
-    // Encrypt the text
-    const encrypted = await window.crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv }, key, plain
-    );
-
-    // Concatenate salt + iv + encrypted data
-    const total = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
-    total.set(salt);
-    total.set(iv, salt.length);
-    total.set(new Uint8Array(encrypted), salt.length + iv.length);
+    const total = await cryptoService.encrypt(textData, password);
 
     // Prepare FormData for upload
     // Convert encrypted data to base64 for easy transport
@@ -274,6 +221,9 @@ async function uploadNote() {
 
     xhr.send(formData);
 }
+
+// Make uploadNote globally accessible for inline onclick handlers
+window.uploadNote = uploadNote;
 
 // --- Copy URL to Clipboard Logic ---
 document.querySelectorAll('.copy-url').forEach(el => {
