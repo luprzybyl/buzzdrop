@@ -16,10 +16,10 @@ from flask import (
 )
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from tinydb import TinyDB, Query
 from functools import wraps
 from dotenv import load_dotenv
-import hashlib
 import boto3
 from botocore.exceptions import ClientError
 from io import BytesIO
@@ -28,7 +28,17 @@ from io import BytesIO
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+
+# Use persistent secret key from environment
+app.secret_key = os.getenv('FLASK_SECRET_KEY')
+if not app.secret_key:
+    # For development only - raise error in production
+    if os.getenv('FLASK_ENV') == 'production':
+        raise ValueError("FLASK_SECRET_KEY must be set in production environment")
+    # Generate a temporary key for development (will warn)
+    import secrets
+    app.secret_key = secrets.token_hex(32)
+    print("WARNING: Using temporary session key. Set FLASK_SECRET_KEY in .env for production!")
 
 # Configuration from environment variables
 app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
@@ -109,8 +119,8 @@ def get_files_table():
     return database.table('files')
 
 def hash_password(password):
-    """Hash a password using SHA-256."""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash a password using PBKDF2-SHA256 with salt."""
+    return generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
 
 def get_users():
     """Get all users from environment variables."""
@@ -351,17 +361,17 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        
+
         users = get_users()
         user = users.get(username)
-        if user and user['password'] == hash_password(password):
+        if user and check_password_hash(user['password'], password):
             session['username'] = username
             session['is_admin'] = user['is_admin']
             flash('Logged in successfully')
             return redirect(url_for('index'))
         else:
             flash('Invalid username or password')
-    
+
     return render_template('login.html')
 
 @app.route('/logout')

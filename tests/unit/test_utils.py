@@ -1,5 +1,6 @@
 import pytest
 from app import hash_password, allowed_file, get_users # Assuming these are directly importable from app.py
+from werkzeug.security import check_password_hash
 import os # For mocking
 from unittest import mock # For mocking
 
@@ -8,8 +9,13 @@ def test_hash_password():
     hashed = hash_password(password)
     assert hashed is not None
     assert isinstance(hashed, str)
-    assert hashed == hash_password(password) # Should be deterministic
+    # With PBKDF2, each hash is different due to random salt (secure behavior)
+    # So we check if the hash can verify the original password
+    assert check_password_hash(hashed, password)
     assert hashed != password # Ensure it's not returning the plain password
+    # Verify hashes are different each time (random salt)
+    hashed2 = hash_password(password)
+    assert hashed != hashed2  # Different salt = different hash
 
 def test_hash_password_different_passwords():
     password_a = "testpasswordA"
@@ -42,7 +48,8 @@ def test_get_users_no_users():
 def test_get_users_single_user():
     users = get_users()
     assert "user1" in users
-    assert users["user1"]["password"] == hash_password("pass1")
+    # Check password can verify the original plaintext (hashes differ due to salt)
+    assert check_password_hash(users["user1"]["password"], "pass1")
     assert users["user1"]["is_admin"] == False
 
 @mock.patch.dict(os.environ, {
@@ -55,7 +62,8 @@ def test_get_users_multiple_users():
     assert "admin" in users
     assert users["user1"]["is_admin"] == False
     assert users["admin"]["is_admin"] == True
-    assert users["admin"]["password"] == hash_password("adminpass")
+    # Check password can verify the original plaintext
+    assert check_password_hash(users["admin"]["password"], "adminpass")
 
 @mock.patch.dict(os.environ, {"FLASK_USER_1": "user1:pass1:invalid_bool"}, clear=True)
 def test_get_users_invalid_admin_flag():

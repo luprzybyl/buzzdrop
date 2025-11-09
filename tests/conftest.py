@@ -4,8 +4,13 @@ import tempfile
 import pytest
 from dotenv import load_dotenv
 
+# Set required environment variables before loading app
+os.environ['FLASK_SECRET_KEY'] = 'test-secret-key-for-testing-only'
+os.environ['FLASK_USER_1'] = 'testuser:password:false'
+os.environ['FLASK_USER_2'] = 'adminuser:adminpass:true'
+
 # Load .env.example for all test runs
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env.example'), override=True)
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env.example'), override=False)
 
 # Add parent directory to sys.path to allow direct import of 'app'
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -27,18 +32,9 @@ def app():
         'DATABASE_PATH': db_path,
         'UPLOAD_FOLDER': temp_upload_folder,
         'WTF_CSRF_ENABLED': False, # Disable CSRF for easier testing of forms
-        'SECRET_KEY': 'test-secret-key', # Use a fixed secret key for tests
-        # Define test users directly in config for simplicity, or use environment variables
-        # Ensure these users match what your tests might expect.
-        'FLASK_USER_1': 'testuser:password:false',
-        'FLASK_USER_2': 'adminuser:adminpass:true',
     })
 
-    # Set environment variables that get_users() relies on
-    # Note: app.config is preferred for test configurations if possible,
-    # but get_users() directly reads os.getenv.
-    os.environ['FLASK_USER_1'] = 'testuser:password:false'
-    os.environ['FLASK_USER_2'] = 'adminuser:adminpass:true'
+    # Environment variables for test users are already set at module level
     # Clear any other FLASK_USER_ variables that might interfere
     i = 3
     while os.getenv(f'FLASK_USER_{i}'):
