@@ -3,12 +3,12 @@
 {% block content %}
 <div class="max-w-xl mx-auto mt-8">
     <div class="bg-white shadow-md rounded-lg p-6 text-center">
-        <p class="mb-2 text-lg font-semibold text-gray-700">File: {{ original_name }}</p>
-        <h2 class="text-2xl font-bold mb-4">Ready to Download?</h2>
-        <p class="mb-4 text-red-600 font-semibold">Warning: Downloading will immediately delete this file from the server. Make sure you are ready and have entered the correct decryption password.</p>
+        <p class="mb-2 text-lg font-semibold text-gray-700">{% if file_type == 'text' %}Secret Note{% else %}File: {{ original_name }}{% endif %}</p>
+        <h2 class="text-2xl font-bold mb-4">Ready to {% if file_type == 'text' %}View{% else %}Download{% endif %}?</h2>
+        <p class="mb-4 text-red-600 font-semibold">Warning: {% if file_type == 'text' %}Viewing{% else %}Downloading{% endif %} will immediately delete this {% if file_type == 'text' %}note{% else %}file{% endif %} from the server. Make sure you are ready and have the correct decryption password.</p>
         <form id="confirm-form" method="POST" action="/view/{{ file_id }}/confirm">
             <button type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                Proceed to download and decryption
+                Proceed to {% if file_type == 'text' %}view{% else %}download{% endif %} and decryption
             </button>
         </form>
         <script>
@@ -20,7 +20,7 @@
                 }
             }
         </script>
-        <p class="mt-4 text-gray-500">This is a one-time download. You will not be able to access this file again.</p>
+        <p class="mt-4 text-gray-500">This is a one-time {% if file_type == 'text' %}view{% else %}download{% endif %}. You will not be able to access this {% if file_type == 'text' %}note{% else %}file{% endif %} again.</p>
     </div>
 </div>
 {% endblock %}

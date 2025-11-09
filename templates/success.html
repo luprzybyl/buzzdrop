@@ -7,8 +7,8 @@
             <svg class="mx-auto h-12 w-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
-            <h2 class="mt-4 text-2xl font-bold text-gray-800">File Uploaded Successfully!</h2>
-            <p class="mt-2 text-gray-600">Share this link with others. The file will be deleted after the first download.</p>
+            <h2 class="mt-4 text-2xl font-bold text-gray-800">{% if file_type == 'text' %}Text Note{% else %}File{% endif %} Shared Successfully!</h2>
+            <p class="mt-2 text-gray-600">Share this link with others. The {% if file_type == 'text' %}note{% else %}file{% endif %} will be deleted after the first view.</p>
         </div>
 
         <div class="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">

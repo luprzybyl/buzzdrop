@@ -44,7 +44,7 @@ def test_index_logged_in_user_no_files(client, app):
     response = client.get(url_for('index'))
     assert response.status_code == 200
     assert b'Welcome, testuser' in response.data
-    assert b'Share Your File' in response.data # Title for upload form
+    assert b'Share Securely' in response.data # Title for upload form
     # Check that "Your Shared Files" section is not present if no files
     # The template has: {% if session.get('username') and user_files %}
     assert b'Your Shared Files' not in response.data

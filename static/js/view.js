@@ -67,17 +67,43 @@
                 document.getElementById('status').textContent = 'Incorrect password or corrupted file. The file was deleted from the server to avoid attempted password breaking. Ask author to upload the file again.';
                 return;
             }
-            // If valid, extract file content and trigger download
+            // If valid, extract file content
             const fileBytes = decBytes.slice(header.length);
-            const blob = new Blob([fileBytes], { type: 'application/octet-stream' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = window.originalName;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(a.href);
-            document.getElementById('status').textContent = 'Download complete.';
+
+            // Check if this is a text note or file
+            if (window.fileType === 'text') {
+                // Display text in the page
+                const text = new TextDecoder().decode(fileBytes);
+                document.getElementById('text-content').textContent = text;
+                document.getElementById('text-display').style.display = 'block';
+                document.getElementById('status').textContent = 'Text decrypted successfully.';
+                document.getElementById('password-input').style.display = 'none';
+                document.getElementById('decrypt-btn').style.display = 'none';
+
+                // Add copy functionality
+                document.getElementById('copy-text-btn').addEventListener('click', () => {
+                    navigator.clipboard.writeText(text).then(() => {
+                        const btn = document.getElementById('copy-text-btn');
+                        const originalText = btn.textContent;
+                        btn.textContent = 'Copied!';
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                        }, 2000);
+                    });
+                });
+            } else {
+                // Trigger file download
+                const blob = new Blob([fileBytes], { type: 'application/octet-stream' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = window.originalName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(a.href);
+                document.getElementById('status').textContent = 'Download complete.';
+            }
+
             // Notify server that decryption was successful
             fetch(window.reportDecryptionUrl, {
                 method: 'POST',

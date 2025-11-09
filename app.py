@@ -380,6 +380,60 @@ def manage_users():
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload_file():
+    # Check if this is a text note upload
+    note_text = request.form.get('note_text')
+    upload_type = request.form.get('type', 'file')
+
+    if upload_type == 'text' and note_text:
+        # Handle text note upload
+        unique_id = str(uuid.uuid4())
+        files_table = get_files_table()
+
+        # Decode base64 encrypted data
+        import base64
+        text_bytes = base64.b64decode(note_text)
+
+        if STORAGE_BACKEND == 's3':
+            s3_key = f"uploads/{unique_id}"
+            s3_client.upload_fileobj(BytesIO(text_bytes), S3_BUCKET, s3_key)
+            file_path = s3_key
+        else:
+            upload_dir = current_app.config.get('UPLOAD_FOLDER', UPLOAD_FOLDER)
+            os.makedirs(upload_dir, exist_ok=True)
+            file_path = os.path.join(upload_dir, unique_id)
+            with open(file_path, 'wb') as f:
+                f.write(text_bytes)
+
+        expiry_raw = request.form.get('expiry')
+        expiry_iso = None
+        if expiry_raw:
+            try:
+                expiry_iso = datetime.fromisoformat(expiry_raw).isoformat()
+            except ValueError:
+                expiry_iso = None
+
+        files_table.insert({
+            'id': unique_id,
+            'original_name': 'Secret Note',
+            'path': file_path,
+            'created_at': datetime.now().isoformat(),
+            'downloaded_at': None,
+            'uploaded_by': session['username'],
+            'expiry_at': expiry_iso,
+            'status': 'active',
+            'decryption_success': None,
+            'type': 'text'
+        })
+        share_link = url_for('view_file', file_id=unique_id, _external=True)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return {
+                'file_id': unique_id,
+                'share_link': share_link,
+                'type': 'text'
+            }
+        return render_template('success.html', share_link=share_link, file_type='text')
+
+    # Handle regular file upload
     if 'file' not in request.files:
         flash('No file part')
         return redirect(url_for('index'))
@@ -418,15 +472,17 @@ def upload_file():
             'uploaded_by': session['username'],
             'expiry_at': expiry_iso,
             'status': 'active',
-            'decryption_success': None
+            'decryption_success': None,
+            'type': 'file'
         })
         share_link = url_for('view_file', file_id=unique_id, _external=True)
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return {
                 'file_id': unique_id,
-                'share_link': share_link
+                'share_link': share_link,
+                'type': 'file'
             }
-        return render_template('success.html', share_link=share_link)
+        return render_template('success.html', share_link=share_link, file_type='file')
     flash('File type not allowed')
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return {'error': 'File type not allowed'}, 400
@@ -540,7 +596,8 @@ def view_file(file_id):
     if check_and_handle_expiry(file_info):
         flash('File has expired')
         return redirect(url_for('index'))
-    return render_template('confirm_download.html', file_id=file_id, original_name=file_info['original_name'])
+    file_type = file_info.get('type', 'file')
+    return render_template('confirm_download.html', file_id=file_id, original_name=file_info['original_name'], file_type=file_type)
 
 @app.route('/view/<file_id>/confirm', methods=['POST'])
 def confirm_view_file(file_id):
@@ -552,7 +609,8 @@ def confirm_view_file(file_id):
     if check_and_handle_expiry(file_info):
         flash('File has expired')
         return redirect(url_for('index'))
-    return render_template('view.html', file_id=file_id, original_name=file_info['original_name'])
+    file_type = file_info.get('type', 'file')
+    return render_template('view.html', file_id=file_id, original_name=file_info['original_name'], file_type=file_type)
 
 
 @app.route('/report_decryption/<file_id>', methods=['POST'])
