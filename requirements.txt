@@ -5,3 +5,4 @@ pytest-flask
 Werkzeug==3.1.3
 tinydb==4.8.2
 boto3==1.40.64
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
