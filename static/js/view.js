@@ -21,6 +21,20 @@
     const decryptBtn = document.getElementById('decrypt-btn');
     const passInput = document.getElementById('password-input');
 
+    // Auto-fill password from sessionStorage if available (from URL fragment)
+    const savedPassword = sessionStorage.getItem('downloadPassword');
+    if (savedPassword) {
+        passInput.value = savedPassword;
+        sessionStorage.removeItem('downloadPassword');
+        // Show status message
+        const statusMsg = document.getElementById('password-status');
+        if (statusMsg) {
+            statusMsg.style.display = 'block';
+        }
+        // Focus the decrypt button so user can easily press Enter to proceed
+        decryptBtn.focus();
+    }
+
     // When user clicks 'Decrypt', attempt to decrypt the file
     decryptBtn.addEventListener('click', async () => {
         const password = passInput.value;

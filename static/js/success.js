@@ -18,6 +18,20 @@ function copyLink() {
     }, 2000);
 }
 
+// Copy the share link with password to clipboard
+function copyLinkWithPassword() {
+    const shareLinkWithPassword = document.getElementById('share-link-with-password');
+    shareLinkWithPassword.select();
+    document.execCommand('copy');
+
+    const button = shareLinkWithPassword.nextElementSibling;
+    const originalText = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => {
+        button.textContent = originalText;
+    }, 2000);
+}
+
 // Toggle password field between 'password' and 'text' for user convenience
 function togglePasswordVisibility() {
     const pwdInput = document.getElementById('password-display');
@@ -41,6 +55,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const pwd = sessionStorage.getItem('uploadPassword');
     if (pwd) {
         document.getElementById('password-display').value = pwd;
+
+        // Generate link with password in URL fragment
+        const shareLink = document.getElementById('share-link').value;
+        const linkWithPassword = shareLink + '#' + encodeURIComponent(pwd);
+        document.getElementById('share-link-with-password').value = linkWithPassword;
+
         sessionStorage.removeItem('uploadPassword');
     }
 });

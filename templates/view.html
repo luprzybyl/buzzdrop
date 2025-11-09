@@ -3,9 +3,11 @@
 {% block content %}
 <div class="max-w-2xl mx-auto">
     <div class="bg-white shadow-md rounded-lg p-6 text-center">
-        <p id="status" class="text-gray-600 mb-4">Enter password to download.</p>
-        <input id="password-input" type="password" class="border p-2 rounded-md w-full mb-4">
-        <button id="decrypt-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-md">Decrypt</button>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">{{ original_name }}</h2>
+        <p id="status" class="text-gray-600 mb-4">Enter password to download and decrypt.</p>
+        <input id="password-input" type="password" placeholder="Enter password" class="border p-2 rounded-md w-full mb-4">
+        <button id="decrypt-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Decrypt and Download</button>
+        <p id="password-status" class="mt-2 text-sm text-green-600" style="display: none;">Password auto-filled. Click "Decrypt and Download" to proceed.</p>
     </div>
 </div>
 <script>

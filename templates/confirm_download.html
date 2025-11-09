@@ -11,6 +11,15 @@
                 Proceed to download and decryption
             </button>
         </form>
+        <script>
+            // Preserve password from URL fragment if present
+            if (window.location.hash) {
+                const password = decodeURIComponent(window.location.hash.substring(1));
+                if (password) {
+                    sessionStorage.setItem('downloadPassword', password);
+                }
+            }
+        </script>
         <p class="mt-4 text-gray-500">This is a one-time download. You will not be able to access this file again.</p>
     </div>
 </div>
