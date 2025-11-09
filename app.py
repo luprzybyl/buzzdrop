@@ -23,11 +23,34 @@ from dotenv import load_dotenv
 import boto3
 from botocore.exceptions import ClientError
 from io import BytesIO
+import hashlib
+import base64
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
+
+# --- SRI HASH HELPER ---
+@app.context_processor
+def sri_hash_processor():
+    def sri_hash(filename):
+        try:
+            # Construct the full path to the static file
+            filepath = os.path.join(app.static_folder, filename)
+            with open(filepath, 'rb') as f:
+                # Read the file content
+                file_content = f.read()
+                # Calculate SHA-384 hash
+                hashed = hashlib.sha384(file_content).digest()
+                # Encode it in Base64
+                return 'sha384-' + base64.b64encode(hashed).decode()
+        except FileNotFoundError:
+            # In case the file doesn't exist, return an empty string
+            # or handle the error as you see fit
+            return ""
+    return dict(sri_hash=sri_hash)
+
 
 # Use persistent secret key from environment
 app.secret_key = os.getenv('FLASK_SECRET_KEY')
