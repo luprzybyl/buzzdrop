@@ -41,7 +41,9 @@ pytest tests/unit/test_db.py::test_function_name -v
 
 ### Core Components
 
-**Single-File Flask Application** (`app.py`): All backend logic is in one file (~580 lines) handling routes, authentication, file storage, and database operations.
+**Single-File Flask Application** (`app.py`): All backend logic is in one file handling routes, authentication, file storage, database operations, and security features.
+
+**Subresource Integrity (SRI)**: Flask context processor (`sri_hash_processor`) generates SHA-384 hashes for JavaScript files at runtime. All `<script>` tags include `integrity` and `crossorigin` attributes to verify file integrity before execution.
 
 **Client-Side Encryption** (`static/js/main.js`): Files are encrypted in the browser using Web Crypto API (AES-GCM with PBKDF2 key derivation) before upload. The encryption workflow:
 1. Derives key from password using PBKDF2 (100k iterations)
@@ -115,8 +117,8 @@ Tests use `conftest.py` fixtures:
 - Database tables truncated per test function for isolation
 
 Test structure:
-- `tests/unit/`: Unit tests for utilities and database functions
-- `tests/integration/`: Integration tests for routes and workflows
+- `tests/unit/`: Unit tests for utilities, database functions, and SRI hash generation
+- `tests/integration/`: Integration tests for routes, workflows, and SRI HTML attributes
 
 ### Environment Configuration
 

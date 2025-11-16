@@ -113,6 +113,11 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 - `Strict-Transport-Security` (HSTS) - Forces HTTPS in production
 - `Referrer-Policy: no-referrer` - Prevents information leakage
 
+### Subresource Integrity (SRI):
+- **Runtime Hash Verification**: All JavaScript files include SHA-384 integrity checks.
+- **Tamper Detection**: Browser verifies file integrity before execution—blocks modified or compromised scripts.
+- **Zero Trust**: Protects against CDN compromises and man-in-the-middle attacks on static assets.
+
 ### Audit & Accountability:
 - **IP Tracking**: Records client IP addresses for all downloads (displayed in your dashboard).
 - **Download Timestamps**: Track exactly when files were accessed.
@@ -148,9 +153,9 @@ The application is built with:
 - **Web Crypto API** (client-side AES-GCM encryption)
 
 ### Test Coverage:
-The project includes comprehensive test coverage with **59 passing tests**:
-- Unit tests for password hashing, utilities, and database operations
-- Integration tests for authentication, file uploads, downloads, and text notes
+The project includes comprehensive test coverage with **72 passing tests**:
+- Unit tests for password hashing, utilities, database operations, and SRI hash generation
+- Integration tests for authentication, file uploads, downloads, text notes, and SRI attributes
 - All security features validated through automated testing
 
 ## Production Deployment
