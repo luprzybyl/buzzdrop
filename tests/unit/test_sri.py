@@ -34,7 +34,7 @@ def test_sri_hash_function_available_in_templates():
             try:
                 result = render_template_string("{{ sri_hash }}")
                 assert True, "sri_hash should be accessible in templates"
-            except:
+            except Exception:
                 pytest.fail("sri_hash function not available in templates")
 
 
