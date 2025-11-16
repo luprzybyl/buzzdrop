@@ -46,9 +46,14 @@ def sri_hash_processor():
                 # Encode it in Base64
                 return 'sha384-' + base64.b64encode(hashed).decode()
         except FileNotFoundError:
-            # In case the file doesn't exist, return an empty string
-            # or handle the error as you see fit
-            return ""
+            # In case the file doesn't exist, raise error in development or log warning in production
+            import logging
+            env = os.getenv('FLASK_ENV', 'production')
+            if env == 'development':
+                raise FileNotFoundError(f"SRI hash requested for missing static file: {filename}")
+            else:
+                logging.warning(f"SRI hash requested for missing static file: {filename}")
+                return None
     return dict(sri_hash=sri_hash)
 
 
