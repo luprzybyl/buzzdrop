@@ -27,5 +27,5 @@ window.reportDecryptionUrl = "{{ url_for('report_decryption', file_id=file_id) }
 window.originalName = "{{ original_name }}";
 window.fileType = "{{ file_type }}";
 </script>
-<script type="module" src="{{ url_for('static', filename='js/view.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/view.js') }}" integrity="{{ sri_hash('js/view.js') }}" crossorigin="anonymous"></script>
 {% endblock %}
