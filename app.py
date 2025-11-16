@@ -19,6 +19,7 @@ from werkzeug.utils import secure_filename
 from tinydb import TinyDB, Query
 from dotenv import load_dotenv
 import base64
+import hashlib
 
 # Import new modules
 from config import get_config
@@ -64,6 +65,41 @@ if not app.config.get('SECRET_KEY'):
     print("WARNING: Using temporary session key. Set FLASK_SECRET_KEY in .env for production!")
 
 app.secret_key = app.config['SECRET_KEY']
+
+# --- SRI HASH HELPER ---
+@app.context_processor
+def sri_hash_processor():
+    """Context processor to generate SRI hashes for static files."""
+    def sri_hash(filename):
+        """
+        Generate SHA-384 SRI hash for a static file.
+        
+        Args:
+            filename: Relative path to the static file (e.g., 'js/main.js')
+            
+        Returns:
+            str: SRI hash in format 'sha384-<base64-hash>' or empty string if file not found
+        """
+        try:
+            # Construct the full path to the static file
+            filepath = os.path.join(app.static_folder, filename)
+            with open(filepath, 'rb') as f:
+                # Read the file content
+                file_content = f.read()
+                # Calculate SHA-384 hash
+                hashed = hashlib.sha384(file_content).digest()
+                # Encode it in Base64
+                return 'sha384-' + base64.b64encode(hashed).decode()
+        except FileNotFoundError:
+            # In case the file doesn't exist, raise error in development or log warning in production
+            import logging
+            env = os.getenv('FLASK_ENV', 'production')
+            if env == 'development':
+                raise FileNotFoundError(f"SRI hash requested for missing static file: {filename}")
+            else:
+                logging.warning(f"SRI hash requested for missing static file: {filename}")
+                return ""
+    return dict(sri_hash=sri_hash)
 
 # Ensure upload directory exists (for local storage)
 if app.config['STORAGE_BACKEND'] == 'local':
