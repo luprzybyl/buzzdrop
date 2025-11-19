@@ -35,7 +35,11 @@ from utils import (
 from models import FileRepository
 
 # Load environment variables
-load_dotenv()
+env_loaded = load_dotenv()
+print(f"[APP.PY] .env file loaded: {env_loaded}")
+print(f"[APP.PY] Current working directory: {os.getcwd()}")
+print(f"[APP.PY] FLASK_SECRET_KEY present: {bool(os.getenv('FLASK_SECRET_KEY'))}")
+print(f"[APP.PY] FLASK_USER_1 present: {bool(os.getenv('FLASK_USER_1'))}")
 
 app = Flask(__name__)
 
