@@ -21,7 +21,18 @@ from dotenv import load_dotenv
 import base64
 import hashlib
 
-# Import new modules
+# Load environment variables FIRST, before any other imports that read env vars
+env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+env_loaded = load_dotenv(dotenv_path=env_path)
+print(f"[APP.PY] .env path: {env_path}")
+print(f"[APP.PY] .env file loaded: {env_loaded}")
+print(f"[APP.PY] .env exists: {os.path.exists(env_path)}")
+print(f"[APP.PY] Current working directory: {os.getcwd()}")
+print(f"[APP.PY] FLASK_SECRET_KEY present: {bool(os.getenv('FLASK_SECRET_KEY'))}")
+print(f"[APP.PY] FLASK_USER_1 present: {bool(os.getenv('FLASK_USER_1'))}")
+print(f"[APP.PY] STORAGE_BACKEND: {os.getenv('STORAGE_BACKEND', 'NOT SET')}")
+
+# Import new modules AFTER loading .env
 from config import get_config
 from storage import get_storage_backend, print_backend_info, StorageError
 from auth import login_required, admin_required, get_users, login_user, logout_user
@@ -33,17 +44,6 @@ from utils import (
     cleanup_orphaned_files,
 )
 from models import FileRepository
-
-# Load environment variables with explicit path
-env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
-env_loaded = load_dotenv(dotenv_path=env_path)
-print(f"[APP.PY] .env path: {env_path}")
-print(f"[APP.PY] .env file loaded: {env_loaded}")
-print(f"[APP.PY] .env exists: {os.path.exists(env_path)}")
-print(f"[APP.PY] Current working directory: {os.getcwd()}")
-print(f"[APP.PY] FLASK_SECRET_KEY present: {bool(os.getenv('FLASK_SECRET_KEY'))}")
-print(f"[APP.PY] FLASK_USER_1 present: {bool(os.getenv('FLASK_USER_1'))}")
-print(f"[APP.PY] STORAGE_BACKEND: {os.getenv('STORAGE_BACKEND', 'NOT SET')}")
 
 app = Flask(__name__)
 
