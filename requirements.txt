@@ -2,7 +2,7 @@ Flask==3.1.2
 python-dotenv==1.2.1
 pytest==9.0.1
 pytest-flask==1.3.0
-Werkzeug==3.1.3
+Werkzeug==3.1.5
 tinydb==4.8.2
 boto3==1.40.74
 Flask-Limiter==4.0.0
