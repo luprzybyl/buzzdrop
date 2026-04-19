@@ -36,6 +36,22 @@ def test_upload_file_ajax_success_and_invalid_expiry(client, files_table):
     assert file_row["expiry_at"] is None
 
 
+def test_upload_file_ajax_success_and_valid_expiry(client, files_table):
+    login_user(client)
+    response = client.post(
+        url_for("upload_file"),
+        data={"file": (io.BytesIO(b"hello"), "ajax-valid.txt"), "expiry": "2030-12-31T23:59"},
+        content_type="multipart/form-data",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert response.status_code == 200
+
+    payload = response.get_json()
+    file_row = files_table.get(Query().id == payload["file_id"])
+    assert file_row["expiry_at"] is not None
+    assert file_row["expiry_at"].startswith("2030-12-31T23:59")
+
+
 def test_upload_file_disallowed_extension_ajax_returns_json_error(client):
     login_user(client)
     response = client.post(

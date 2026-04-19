@@ -15,7 +15,7 @@ from storage import (
 
 
 def make_client_error(code="NoSuchKey"):
-    return ClientError({"Error": {"Code": code, "Message": "boom"}}, "TestOperation")
+    return ClientError({"Error": {"Code": code, "Message": "Simulated error"}}, "TestOperation")
 
 
 def test_local_storage_save_retrieve_exists_delete_and_list(tmp_path):
