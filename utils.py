@@ -77,29 +77,6 @@ def format_file_timestamps(file_dict: dict, tz_name: str = DEFAULT_TIMEZONE) -> 
     return file_dict
 
 
-def get_status_display(file_dict: dict) -> str:
-    """
-    Get human-readable status display for a file.
-    
-    Args:
-        file_dict: File information dictionary
-    
-    Returns:
-        Status string: 'Expired', 'Success', 'Failed', or empty string
-    """
-    if file_dict.get('status') == 'expired':
-        return 'Expired'
-    
-    decryption_success = file_dict.get('decryption_success')
-    
-    if decryption_success is True:
-        return 'Success'
-    elif decryption_success is False:
-        return 'Failed'
-    else:
-        return ''
-
-
 def enhance_file_display(file_dict: dict, tz_name: str = DEFAULT_TIMEZONE) -> dict:
     """
     Enhance file dictionary with formatted timestamps and status display.
@@ -110,13 +87,22 @@ def enhance_file_display(file_dict: dict, tz_name: str = DEFAULT_TIMEZONE) -> di
         tz_name: Timezone name for formatting timestamps
     
     Returns:
-        Enhanced file_dict
+        Enhanced file_dict with:
+        - Formatted timestamp fields (created_at, downloaded_at, expiry_at)
+        - status_display field ('Expired', 'Success', 'Failed', or empty string)
     """
     # Format timestamps
     format_file_timestamps(file_dict, tz_name)
     
-    # Add status display
-    file_dict['status_display'] = get_status_display(file_dict)
+    # Determine status display inline (previously get_status_display)
+    if file_dict.get('status') == 'expired':
+        file_dict['status_display'] = 'Expired'
+    elif file_dict.get('decryption_success') is True:
+        file_dict['status_display'] = 'Success'
+    elif file_dict.get('decryption_success') is False:
+        file_dict['status_display'] = 'Failed'
+    else:
+        file_dict['status_display'] = ''
     
     return file_dict
 
