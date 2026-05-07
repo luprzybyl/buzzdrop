@@ -54,6 +54,7 @@ if not app.config.get('SECRET_KEY'):
     logging.warning("Using temporary session key. Set FLASK_SECRET_KEY in .env for production!")
 
 # Validate remaining configuration (S3 settings, etc.)
+# Note: Validation errors are intentionally fatal - the app should not start with invalid config
 config_class.validate()
 
 app.secret_key = app.config['SECRET_KEY']
