@@ -1,0 +1,28 @@
+# Dagger Engine - Add this to your VPS docker-compose.yml
+# or run separately with: docker-compose -f docker-compose.engine.yml up -d
+
+services:
+  dagger-engine:
+    image: registry.dagger.io/engine:latest
+    container_name: dagger-engine
+    restart: unless-stopped
+    privileged: true
+    ports:
+      # Bind to VPN IP so it's accessible from your laptop
+      - "10.10.0.1:8080:8080"
+    volumes:
+      # Persistent cache for faster builds
+      - dagger-engine-cache:/var/lib/dagger
+    environment:
+      # Optional: enable debug logging
+      # - _EXPERIMENTAL_DAGGER_DEBUG=1
+    # Optional: resource limits (adjust based on VPS specs)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '4'
+    #       memory: 8G
+
+volumes:
+  dagger-engine-cache:
+    driver: local

@@ -84,3 +84,5 @@ dmypy.json
 .pytest_cache/
 
 db.json
+/**/__pycache__
+/sdk
