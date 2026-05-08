@@ -1,0 +1,16 @@
+# Examples of selective build steps
+
+# Run only tests (fast feedback)
+.dagger/build.sh local --test
+
+# Build image without tests (tests already passed)
+.dagger/build.sh remote --build --skip-tests
+
+# Full build but don't publish (test the build)
+.dagger/build.sh local --skip-publish
+
+# Build and publish only (skip tests)
+.dagger/build.sh remote --skip-tests
+
+# Just tests on VPS
+.dagger/build.sh remote --test
