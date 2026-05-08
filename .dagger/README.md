@@ -1,183 +1,98 @@
-# Dagger CI/CD Configuration
+# Dagger Python CI/CD Pipeline
 
-This directory contains a reusable Dagger pipeline for Python projects with self-hosted remote execution support.
+Universal CI/CD pipeline for Python projects: test → build → push to GHCR.
 
-## 📁 Directory Structure
+## How It Works
 
-```
-.dagger/
-├── main.py                      # Main pipeline script (tests, build, publish)
-├── config.toml                  # Project-specific configuration
-├── build.sh                     # Wrapper script (local/remote/auto modes)
-├── README.md                    # This file
-├── SECRETS.md                   # Secret management guide
-├── STEPS.md                     # Selective build steps reference
-├── GHCR.md                      # GitHub Container Registry setup
-└── REUSABLE.md                  # Guide for using in other projects
-```
+**Local mode:** Dagger runs on your laptop using Docker.
 
-## 🚀 Quick Start
-
-### Basic Usage
+**Remote mode:** Dagger connects to a remote engine on your VPS (via VPN at `10.10.0.1:8080`). The engine only runs containers - no config files, no secrets stored there.
 
 ```bash
-# Run full pipeline locally
+# Local build
 .dagger/build.sh local
 
-# Run full pipeline on VPS (via VPN)
+# Remote build (connects to VPS engine)
+export _EXPERIMENTAL_DAGGER_RUNNER_HOST=tcp://10.10.0.1:8080
 .dagger/build.sh remote
-
-# Auto-detect (VPS if available, else local)
-.dagger/build.sh auto
 ```
 
-### Selective Steps
+## Secrets
 
-```bash
-# Only run tests (fast feedback)
-.dagger/build.sh local --test
-
-# Build without tests
-.dagger/build.sh remote --skip-tests
-
-# Build locally without publishing
-.dagger/build.sh local --skip-publish
-```
-
-See [STEPS.md](STEPS.md) for all step combinations.
-
-## 📚 Documentation
-
-| File | Description |
-|------|-------------|
-| [README.md](README.md) | This overview (start here) |
-| [SECRETS.md](SECRETS.md) | How secrets work and are managed |
-| [STEPS.md](STEPS.md) | Selective build steps guide |
-| [GHCR.md](GHCR.md) | GitHub Container Registry setup |
-| [REUSABLE.md](REUSABLE.md) | Using this config in other projects |
-
-## ⚙️ Configuration
-
-### config.toml
-
-Project-specific settings (optional - auto-detects if missing):
-
-```toml
-[project]
-name = "buzzdrop"
-owner = "luprzybyl"
-
-[python]
-version = "3.15-rc-alpine3.22"
-test_command = ["pytest", "-v"]
-
-[docker]
-port = 5000
-entrypoint = ["flask", "run"]
-
-[registry]
-url = "ghcr.io"
-token_env = "GITHUB_TOKEN"
-```
-
-See [config.toml](config.toml) for full configuration options.
-
-## 🔐 Secrets
-
-Set `GITHUB_TOKEN` environment variable:
+Secrets live on your laptop, not on VPS:
 
 ```bash
 export GITHUB_TOKEN="ghp_your_token_here"
 ```
 
-For **remote builds from laptop**, secrets stay on your laptop and are sent encrypted to the VPS engine. See [SECRETS.md](SECRETS.md) for details.
+When running remote builds from laptop, secrets are sent **encrypted** to the VPS engine for that build only. Never stored on VPS disk.
 
-## 🏷️ Image Tagging
+## Pipeline Steps
 
-Images are tagged as: `ghcr.io/owner/repo:YYYYMMDD-N`
+1. **Test** - Run pytest in container
+2. **Build** - Create Docker image
+3. **Push** - Publish to `ghcr.io/owner/repo:YYYYMMDD-N`
 
-- `YYYYMMDD` = Build date
-- `N` = Build number for that day (1, 2, 3...)
-- Counter resets daily
-
-Examples:
-- `ghcr.io/luprzybyl/buzzdrop:20260508-1`
-- `ghcr.io/luprzybyl/buzzdrop:20260508-2`
-
-## 🔄 Using in Other Projects
-
-This configuration is designed to be portable. To use in another Python project:
-
+Run selectively:
 ```bash
-# Copy the .dagger folder
-cp -r ~/git/buzzdrop/.dagger ~/git/my-other-project/
-
-# Optionally customize config.toml
-# Or let it auto-detect everything!
-
-cd ~/git/my-other-project
-.dagger/build.sh local
+.dagger/build.sh local --test         # Only tests
+.dagger/build.sh remote --skip-tests  # Build + push only
 ```
 
-See [REUSABLE.md](REUSABLE.md) for detailed instructions.
+## Setup in New Project
 
-## 🎯 Features
+This config is managed via git subtree for easy syncing across projects.
 
-- ✅ **Local or remote execution** - Build on laptop or VPS
-- ✅ **Auto-detection** - Project name, owner, Python version
-- ✅ **Selective steps** - Run only tests, build, or publish
-- ✅ **Secure secrets** - Never logged or cached
-- ✅ **Daily build counters** - Per-project versioning
-- ✅ **Multiple registries** - GHCR, Docker Hub, GitLab
-- ✅ **Framework agnostic** - Flask, Django, FastAPI, etc.
-
-## 📖 Full Documentation
-
-1. **Start here**: [README.md](README.md) ← You are here
-2. **Setup secrets**: [SECRETS.md](SECRETS.md)
-3. **Learn selective steps**: [STEPS.md](STEPS.md)
-4. **Configure GHCR**: [GHCR.md](GHCR.md)
-5. **Use in other projects**: [REUSABLE.md](REUSABLE.md)
-
-## 🐛 Troubleshooting
-
-**Cannot connect to remote engine:**
+**First time:**
 ```bash
-# Check VPS engine is running
-ssh vps 'docker ps | grep dagger'
-
-# Test connectivity
-nc -zv 10.10.0.1 8080
+cd your-project
+git subtree add --prefix .dagger \
+  https://github.com/luprzybyl/dagger-python-template.git main --squash
 ```
 
-**Tests failing:**
+**Update later:**
 ```bash
-# Run tests only to debug
-.dagger/build.sh local --test
+git subtree pull --prefix .dagger \
+  https://github.com/luprzybyl/dagger-python-template.git main --squash
 ```
 
-**No GitHub token:**
+**Customize:**
+Edit `.dagger/config.toml` for project-specific settings (Python version, ports, etc.). This file stays in your project repo, not the template.
+
+## VPS Engine Setup
+
+**On VPS** (one-time):
 ```bash
-# Check if set
-echo $GITHUB_TOKEN
-
-# Set temporarily
-export GITHUB_TOKEN="ghp_xxx"
-
-# Set permanently in ~/.bashrc
-echo 'export GITHUB_TOKEN="ghp_xxx"' >> ~/.bashrc
+docker run -d --name dagger-engine --privileged \
+  -v dagger-cache:/var/lib/dagger \
+  -p 10.10.0.1:8080:8080 \
+  --restart unless-stopped \
+  registry.dagger.io/engine:latest
 ```
 
-## 🔧 Requirements
+**Access via socat** (if engine only listens on Unix socket):
+```bash
+docker run -d --name dagger-tcp-proxy \
+  --volumes-from dagger-engine \
+  -p 10.10.0.1:8080:8080 \
+  alpine/socat:latest \
+  TCP-LISTEN:8080,fork,reuseaddr UNIX-CONNECT:/var/run/dagger/engine.sock
+```
 
-- **Dagger CLI** installed (`brew install dagger` or download from dagger.io)
-- **Docker** or compatible container runtime
-- **Python 3.11+** (for tomllib) or install `tomli` package
-- **Git** repository (for auto-detection)
+## Requirements
 
-## 📝 Notes
+- Dagger CLI installed
+- Docker (or compatible runtime)
+- `config.toml` with project settings (or relies on auto-detection)
+- GITHUB_TOKEN env var for publishing
 
-- Build counters stored in `~/.dagger/build-counters/{project}.txt`
-- Engine cache in VPS: `/var/lib/dagger` (persistent volume)
-- Secrets never written to disk or logs
-- VPN connection required for remote builds (10.10.0.1:8080)
+## Files
+
+```
+.dagger/
+├── main.py        # Pipeline implementation
+├── build.sh       # Wrapper script
+└── config.toml    # Project settings (customize per-project)
+```
+
+Build counters stored in `~/.dagger/build-counters/{project}.txt`, reset daily.
