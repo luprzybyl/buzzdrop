@@ -23,14 +23,7 @@ import hashlib
 
 # Load environment variables FIRST, before any other imports that read env vars
 env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
-env_loaded = load_dotenv(dotenv_path=env_path)
-print(f"[APP.PY] .env path: {env_path}")
-print(f"[APP.PY] .env file loaded: {env_loaded}")
-print(f"[APP.PY] .env exists: {os.path.exists(env_path)}")
-print(f"[APP.PY] Current working directory: {os.getcwd()}")
-print(f"[APP.PY] FLASK_SECRET_KEY present: {bool(os.getenv('FLASK_SECRET_KEY'))}")
-print(f"[APP.PY] FLASK_USER_1 present: {bool(os.getenv('FLASK_USER_1'))}")
-print(f"[APP.PY] STORAGE_BACKEND: {os.getenv('STORAGE_BACKEND', 'NOT SET')}")
+load_dotenv(dotenv_path=env_path)
 
 # Import new modules AFTER loading .env
 from config import get_config
@@ -51,26 +44,18 @@ app = Flask(__name__)
 config_class = get_config()
 app.config.from_object(config_class)
 
-# Validate configuration
-try:
-    config_class.validate()
-except ValueError as e:
-    print(f"Configuration error: {e}")
-    # Generate temporary secret key for development
-    if not app.config.get('SECRET_KEY') and os.getenv('FLASK_ENV') != 'production':
-        import secrets
-        app.config['SECRET_KEY'] = secrets.token_hex(32)
-        print("WARNING: Using temporary session key. Set FLASK_SECRET_KEY in .env for production!")
-    else:
-        raise
-
-# Generate temporary secret key for development if not set
+# Handle SECRET_KEY: require in production, generate temporary one for development
 if not app.config.get('SECRET_KEY'):
     if os.getenv('FLASK_ENV') == 'production':
         raise ValueError("FLASK_SECRET_KEY must be set in production environment")
     import secrets
     app.config['SECRET_KEY'] = secrets.token_hex(32)
-    print("WARNING: Using temporary session key. Set FLASK_SECRET_KEY in .env for production!")
+    import logging
+    logging.warning("Using temporary session key. Set FLASK_SECRET_KEY in .env for production!")
+
+# Validate remaining configuration (S3 settings, etc.)
+# Note: Validation errors are intentionally fatal - the app should not start with invalid config
+config_class.validate()
 
 app.secret_key = app.config['SECRET_KEY']
 
@@ -126,7 +111,19 @@ print_backend_info(storage)
 file_repo = FileRepository()
 
 def get_db():
-    """Return a TinyDB instance, reopening it if necessary."""
+    """
+    Return a TinyDB instance, reopening it if necessary.
+    
+    This function handles the complexity of TinyDB connections across Flask app contexts.
+    It checks if the database handle is still open and reconnects if needed. This is
+    particularly important for:
+    - Test scenarios where the database file may be recreated between tests
+    - Long-running applications where file handles may become stale
+    - Multiple app contexts accessing the same database
+    
+    Returns:
+        TinyDB: Active database instance for the current app context
+    """
     if has_app_context():
         database = getattr(current_app, 'db', None)
         path = current_app.config.get('DATABASE_PATH', app.config['DATABASE_PATH'])
