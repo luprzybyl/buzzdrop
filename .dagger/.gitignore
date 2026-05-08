@@ -1,8 +1,0 @@
-# Backup files
-*.backup
-*.old
-*.bak
-
-# Temporary files
-*.tmp
-steps-example.txt
