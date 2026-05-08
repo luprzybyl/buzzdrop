@@ -1,159 +1,183 @@
-# Dagger Pipeline Setup
+# Dagger CI/CD Configuration
 
-## Quick Start
+This directory contains a reusable Dagger pipeline for Python projects with self-hosted remote execution support.
 
-### Using the build script (recommended)
+## 📁 Directory Structure
+
+```
+.dagger/
+├── main.py                      # Main pipeline script (tests, build, publish)
+├── config.toml                  # Project-specific configuration
+├── build.sh                     # Wrapper script (local/remote/auto modes)
+├── README.md                    # This file
+├── SECRETS.md                   # Secret management guide
+├── STEPS.md                     # Selective build steps reference
+├── GHCR.md                      # GitHub Container Registry setup
+└── REUSABLE.md                  # Guide for using in other projects
+```
+
+## 🚀 Quick Start
+
+### Basic Usage
 
 ```bash
-# Local build (on your laptop)
+# Run full pipeline locally
 .dagger/build.sh local
 
-# Remote build (on VPS)
+# Run full pipeline on VPS (via VPN)
 .dagger/build.sh remote
 
-# Auto-detect (uses VPS if VPN is connected)
+# Auto-detect (VPS if available, else local)
 .dagger/build.sh auto
 ```
 
-### Using shell helpers (alternative)
-
-Add to your `~/.bashrc` or `~/.zshrc`:
-```bash
-source ~/git/buzzdrop/.dagger/shell-helpers.sh
-```
-
-Then use:
-```bash
-dagger-local    # Switch to local mode
-dagger-remote   # Switch to remote mode
-dagger-auto     # Auto-detect and switch
-dagger-status   # Show current mode
-
-# Then run builds normally
-dagger run python .dagger/main.py
-```
-
-### Manual execution
-
-Run the pipeline locally (uses local Docker):
+### Selective Steps
 
 ```bash
-dagger run python .dagger/main.py
+# Only run tests (fast feedback)
+.dagger/build.sh local --test
+
+# Build without tests
+.dagger/build.sh remote --skip-tests
+
+# Build locally without publishing
+.dagger/build.sh local --skip-publish
 ```
 
-## Remote Execution on VPS
+See [STEPS.md](STEPS.md) for all step combinations.
 
-### 1. Setup Dagger Engine on VPS
+## 📚 Documentation
 
-Deploy the Dagger engine container on your VPS (10.10.0.1):
+| File | Description |
+|------|-------------|
+| [README.md](README.md) | This overview (start here) |
+| [SECRETS.md](SECRETS.md) | How secrets work and are managed |
+| [STEPS.md](STEPS.md) | Selective build steps guide |
+| [GHCR.md](GHCR.md) | GitHub Container Registry setup |
+| [REUSABLE.md](REUSABLE.md) | Using this config in other projects |
+
+## ⚙️ Configuration
+
+### config.toml
+
+Project-specific settings (optional - auto-detects if missing):
+
+```toml
+[project]
+name = "buzzdrop"
+owner = "luprzybyl"
+
+[python]
+version = "3.15-rc-alpine3.22"
+test_command = ["pytest", "-v"]
+
+[docker]
+port = 5000
+entrypoint = ["flask", "run"]
+
+[registry]
+url = "ghcr.io"
+token_env = "GITHUB_TOKEN"
+```
+
+See [config.toml](config.toml) for full configuration options.
+
+## 🔐 Secrets
+
+Set `GITHUB_TOKEN` environment variable:
 
 ```bash
-# On VPS - using the provided docker-compose config
-docker-compose -f .dagger/docker-compose.engine.yml up -d
-
-# Verify it's running
-docker ps | grep dagger-engine
-docker logs dagger-engine
+export GITHUB_TOKEN="ghp_your_token_here"
 ```
 
-### 2. Connect from Laptop
+For **remote builds from laptop**, secrets stay on your laptop and are sent encrypted to the VPS engine. See [SECRETS.md](SECRETS.md) for details.
 
-Set the environment variable to point to your VPS engine:
+## 🏷️ Image Tagging
+
+Images are tagged as: `ghcr.io/owner/repo:YYYYMMDD-N`
+
+- `YYYYMMDD` = Build date
+- `N` = Build number for that day (1, 2, 3...)
+- Counter resets daily
+
+Examples:
+- `ghcr.io/luprzybyl/buzzdrop:20260508-1`
+- `ghcr.io/luprzybyl/buzzdrop:20260508-2`
+
+## 🔄 Using in Other Projects
+
+This configuration is designed to be portable. To use in another Python project:
 
 ```bash
-# On your laptop (connected to VPN)
-export _EXPERIMENTAL_DAGGER_RUNNER_HOST=tcp://10.10.0.1:8080
+# Copy the .dagger folder
+cp -r ~/git/buzzdrop/.dagger ~/git/my-other-project/
 
-# Run the pipeline - it executes on VPS!
-dagger run python .dagger/main.py
+# Optionally customize config.toml
+# Or let it auto-detect everything!
+
+cd ~/git/my-other-project
+.dagger/build.sh local
 ```
 
-**Benefits:**
-- Pipeline runs on VPS hardware
-- Can disconnect during build (it continues on VPS)
-- Persistent cache on VPS speeds up subsequent builds
-- All traffic over VPN (secure)
+See [REUSABLE.md](REUSABLE.md) for detailed instructions.
 
-### 3. Optional: Add to your shell profile
+## 🎯 Features
 
-Add to `~/.bashrc` or `~/.zshrc` for automatic VPS execution:
+- ✅ **Local or remote execution** - Build on laptop or VPS
+- ✅ **Auto-detection** - Project name, owner, Python version
+- ✅ **Selective steps** - Run only tests, build, or publish
+- ✅ **Secure secrets** - Never logged or cached
+- ✅ **Daily build counters** - Per-project versioning
+- ✅ **Multiple registries** - GHCR, Docker Hub, GitLab
+- ✅ **Framework agnostic** - Flask, Django, FastAPI, etc.
 
+## 📖 Full Documentation
+
+1. **Start here**: [README.md](README.md) ← You are here
+2. **Setup secrets**: [SECRETS.md](SECRETS.md)
+3. **Learn selective steps**: [STEPS.md](STEPS.md)
+4. **Configure GHCR**: [GHCR.md](GHCR.md)
+5. **Use in other projects**: [REUSABLE.md](REUSABLE.md)
+
+## 🐛 Troubleshooting
+
+**Cannot connect to remote engine:**
 ```bash
-# Use VPS Dagger engine by default when on VPN
-export _EXPERIMENTAL_DAGGER_RUNNER_HOST=tcp://10.10.0.1:8080
-```
+# Check VPS engine is running
+ssh vps 'docker ps | grep dagger'
 
-### 4. Check build status
-
-Since builds continue running on VPS even after disconnecting:
-
-```bash
-# On VPS - check running containers
-docker ps | grep -E 'dagger|buildkit'
-
-# View Dagger engine logs
-docker logs -f dagger-engine
-
-# Check recent builds in cache
-docker exec dagger-engine du -sh /var/lib/dagger
-```
-
-## Pipeline Stages
-
-The pipeline in `main.py` performs:
-
-1. **Test** - Runs pytest in Python container
-2. **Build** - Creates production Docker image
-3. **Publish** - Pushes to registry (currently ttl.sh)
-
-## Customization
-
-### Change Registry
-
-Edit `main.py` line ~63 to use your registry:
-
-```python
-# Replace ttl.sh with your registry
-image_name = "your-registry.com/buzzdrop:latest"
-
-# Add authentication if needed
-image_ref = await docker_image.with_registry_auth(
-    "your-registry.com",
-    "username",
-    client.set_secret("registry-password", "your-password")
-).publish(image_name)
-```
-
-### Adjust Python Version
-
-Edit line 28 in `main.py` to change Python version:
-
-```python
-python_version = "3.13-alpine"  # or any other version
-```
-
-## Troubleshooting
-
-**Connection refused:**
-```bash
-# Check if engine is running on VPS
-ssh vps-user@10.10.0.1 'docker ps | grep dagger-engine'
-
-# Check if port is accessible from laptop
+# Test connectivity
 nc -zv 10.10.0.1 8080
 ```
 
-**Slow builds:**
-- Ensure VPS has sufficient resources
-- Check cache volume: `docker volume inspect dagger-engine-cache`
-- Verify `/var/lib/dagger` is mounted correctly
-
-**Version mismatch:**
+**Tests failing:**
 ```bash
-# Check CLI version
-dagger version
-
-# Use matching engine version on VPS
-# Edit docker-compose.engine.yml to use specific tag:
-# image: registry.dagger.io/engine:v0.14.0
+# Run tests only to debug
+.dagger/build.sh local --test
 ```
+
+**No GitHub token:**
+```bash
+# Check if set
+echo $GITHUB_TOKEN
+
+# Set temporarily
+export GITHUB_TOKEN="ghp_xxx"
+
+# Set permanently in ~/.bashrc
+echo 'export GITHUB_TOKEN="ghp_xxx"' >> ~/.bashrc
+```
+
+## 🔧 Requirements
+
+- **Dagger CLI** installed (`brew install dagger` or download from dagger.io)
+- **Docker** or compatible container runtime
+- **Python 3.11+** (for tomllib) or install `tomli` package
+- **Git** repository (for auto-detection)
+
+## 📝 Notes
+
+- Build counters stored in `~/.dagger/build-counters/{project}.txt`
+- Engine cache in VPS: `/var/lib/dagger` (persistent volume)
+- Secrets never written to disk or logs
+- VPN connection required for remote builds (10.10.0.1:8080)
