@@ -1,0 +1,59 @@
+# Dagger Configuration
+# Project-specific settings for the Dagger pipeline
+
+[project]
+# Project/repository name (used for Docker image naming)
+# If not set, will auto-detect from git remote
+name = "buzzdrop"
+
+# GitHub/GitLab username or organization
+# Used for image registry path: ghcr.io/{owner}/{name}
+owner = "luprzybyl"
+
+[python]
+# Python version for builds and tests
+version = "3.15-rc-alpine3.22"
+
+# Test command (default: pytest -v)
+test_command = ["pytest", "-v"]
+
+[docker]
+# Port to expose in the container
+port = 5000
+
+# Application entry point
+# For Flask apps: ["flask", "run"]
+# For Django: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# For FastAPI: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+entrypoint = ["flask", "run"]
+
+# Additional environment variables for runtime
+[docker.env]
+FLASK_APP = "app.py"
+FLASK_RUN_HOST = "0.0.0.0"
+
+# Additional build steps (run after pip install)
+# Example: ["mkdir", "-p", "uploads"]
+[docker.build_steps]
+commands = [
+    ["mkdir", "-p", "uploads"]
+]
+
+[registry]
+# Registry to push images to
+# Supported: ghcr.io, docker.io, registry.gitlab.com
+url = "ghcr.io"
+
+# Secret environment variable name for authentication
+# For GHCR: GITHUB_TOKEN
+# For Docker Hub: DOCKER_PASSWORD
+# For GitLab: GITLAB_TOKEN
+token_env = "GITHUB_TOKEN"
+
+[exclude]
+# Files and directories to exclude from Docker context
+# These are added to the default excludes (.venv, .git, etc.)
+patterns = [
+    "uploads/",
+    "db.json",
+]
