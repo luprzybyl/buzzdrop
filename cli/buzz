@@ -10,6 +10,7 @@ Usage:
     buzz file.pdf
     buzz file.pdf -p my-passphrase
     buzz file.pdf --expiry 2025-12-31T23:59
+    buzz database.sqlite -z          # zip before upload (bypasses extension block)
 """
 
 import argparse
@@ -17,6 +18,7 @@ import json
 import os
 import random
 import sys
+import zipfile
 from io import BytesIO
 
 # ---------------------------------------------------------------------------
@@ -115,6 +117,42 @@ _WORDS = [
 ]
 
 TOKEN_FILE = os.path.expanduser('~/.buzz_token')
+
+
+# ---------------------------------------------------------------------------
+# Helpers: human-readable sizes, progress bar, zip.
+# ---------------------------------------------------------------------------
+
+def _format_size(n: int) -> str:
+    """Return a human-readable file size string (e.g. '4.2 MB')."""
+    size = float(n)
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+
+def _render_progress(done: int, total: int, label: str = "") -> None:
+    """Overwrite the current line with a progress bar."""
+    bar_width = 28
+    pct = done / total if total > 0 else 1.0
+    filled = int(bar_width * pct)
+    bar = '█' * filled + '░' * (bar_width - filled)
+    print(
+        f"\r{label}  [{bar}]  {pct * 100:5.1f}%  "
+        f"{_format_size(done)} / {_format_size(total)}",
+        end='',
+        flush=True,
+    )
+
+
+def _zip_file(path: str) -> bytes:
+    """Return an in-memory ZIP archive containing the given file."""
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.write(path, os.path.basename(path))
+    return buf.getvalue()
 
 
 def generate_passphrase(n: int = 4) -> str:
@@ -304,7 +342,12 @@ def encrypt_file(file_bytes: bytes, password: str) -> bytes:
 
 
 def upload(server: str, token: str, filename: str, encrypted: bytes, expiry: str = None) -> dict:
-    """POST the encrypted blob to /upload and return the JSON response."""
+    """
+    POST the encrypted blob to /upload and return the JSON response.
+
+    The body is streamed in 64 KB chunks so that a live progress bar can be
+    rendered while data travels over the network.
+    """
     requests = _requests()
 
     files = {
@@ -314,26 +357,51 @@ def upload(server: str, token: str, filename: str, encrypted: bytes, expiry: str
     if expiry:
         data['expiry'] = expiry
 
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'X-Requested-With': 'XMLHttpRequest',
+    }
+
+    # Build the multipart body via prepare() so requests handles the boundary
+    # and content-type, then replace the body with a streaming generator that
+    # renders progress as each chunk is handed to urllib3.
+    session = requests.Session()
+    prepared = session.prepare_request(
+        requests.Request('POST', f"{server}/upload", files=files, data=data, headers=headers)
+    )
+
+    raw_body = prepared.body
+    if isinstance(raw_body, bytes) and raw_body:
+        total = len(raw_body)
+        prepared.headers['Content-Length'] = str(total)
+
+        def _streaming_body():
+            chunk_size = 65536  # 64 KB
+            sent = 0
+            _render_progress(0, total, "Uploading")
+            while sent < total:
+                chunk = raw_body[sent:sent + chunk_size]
+                sent += len(chunk)
+                _render_progress(sent, total, "Uploading")
+                yield chunk
+
+        prepared.body = _streaming_body()
+    else:
+        print("Uploading...", end=' ', flush=True)
+
     try:
-        resp = requests.post(
-            f"{server}/upload",
-            files=files,
-            data=data,
-            headers={
-                'Authorization': f'Bearer {token}',
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            timeout=120,
-        )
+        resp = session.send(prepared, timeout=120)
     except requests.ConnectionError:
-        print(f"Error: could not connect to {server}", file=sys.stderr)
+        print(f"\nError: could not connect to {server}", file=sys.stderr)
         sys.exit(1)
     except requests.Timeout:
-        print("Error: upload timed out", file=sys.stderr)
+        print("\nError: upload timed out", file=sys.stderr)
         sys.exit(1)
     except requests.RequestException as exc:
-        print(f"Error: upload failed: {exc}", file=sys.stderr)
+        print(f"\nError: upload failed: {exc}", file=sys.stderr)
         sys.exit(1)
+
+    print()  # newline after the progress bar
 
     if resp.status_code == 401:
         print(
@@ -365,6 +433,11 @@ def main():
         help='Encryption password (default: random 4-word passphrase)',
     )
     parser.add_argument(
+        '-z', '--zip',
+        action='store_true',
+        help='Zip the file before uploading (useful for blocked extensions like .sqlite)',
+    )
+    parser.add_argument(
         '--expiry',
         metavar='DATETIME',
         help='Optional expiry datetime in ISO format, e.g. 2025-12-31T23:59',
@@ -378,36 +451,51 @@ def main():
 
     token, server = read_token_file(server_override=args.server)
 
+    if not os.path.isfile(args.file):
+        print(f"Error: file not found: {args.file}", file=sys.stderr)
+        sys.exit(1)
+
     # Determine password
     password = args.password
     password_generated = password is None
     if password_generated:
         password = generate_passphrase()
 
-    # Read file
-    if not os.path.isfile(args.file):
-        print(f"Error: file not found: {args.file}", file=sys.stderr)
-        sys.exit(1)
-    try:
-        with open(args.file, 'rb') as fh:
-            file_bytes = fh.read()
-    except OSError as exc:
-        print(f"Error: cannot read {args.file}: {exc}", file=sys.stderr)
-        sys.exit(1)
+    # Zip or read the file
+    if args.zip:
+        orig_size = os.path.getsize(args.file)
+        print(
+            f"Zipping    {os.path.basename(args.file)}"
+            f"  ({_format_size(orig_size)})...",
+            end=' ', flush=True,
+        )
+        file_bytes = _zip_file(args.file)
+        upload_name = os.path.basename(args.file) + '.zip'
+        print(f"done  →  {_format_size(len(file_bytes))}")
+    else:
+        try:
+            with open(args.file, 'rb') as fh:
+                file_bytes = fh.read()
+        except OSError as exc:
+            print(f"Error: cannot read {args.file}: {exc}", file=sys.stderr)
+            sys.exit(1)
+        upload_name = args.file
 
     # Encrypt
-    print(f"Encrypting {os.path.basename(args.file)}...", end=' ', flush=True)
+    print(
+        f"Encrypting {os.path.basename(upload_name)}"
+        f"  ({_format_size(len(file_bytes))})...",
+        end=' ', flush=True,
+    )
     encrypted = encrypt_file(file_bytes, password)
-    print("done")
+    print(f"done  ({_format_size(len(encrypted))} on wire)")
 
-    # Upload
-    print("Uploading...", end=' ', flush=True)
-    result = upload(server, token, args.file, encrypted, expiry=args.expiry)
-    print("done\n")
+    # Upload with live progress bar
+    result = upload(server, token, upload_name, encrypted, expiry=args.expiry)
 
     share_link = result.get('share_link') or f"{server}/view/{result['file_id']}"
 
-    print(f"Share link:     {share_link}")
+    print(f"\nShare link:     {share_link}")
     if password_generated:
         print(f"Password:       {password}")
     print()
