@@ -1,0 +1,418 @@
+#!/usr/bin/env python3
+"""
+buzz — Buzzdrop CLI for sharing files from the command line.
+
+Authentication: reads ~/.buzz_token (JSON with 'token' and 'server' fields).
+Encryption: AES-GCM with PBKDF2-SHA256 key derivation, compatible with the
+Buzzdrop web UI.
+
+Usage:
+    buzz file.pdf
+    buzz file.pdf -p my-passphrase
+    buzz file.pdf --expiry 2025-12-31T23:59
+"""
+
+import argparse
+import json
+import os
+import random
+import sys
+from io import BytesIO
+
+# ---------------------------------------------------------------------------
+# Word list for passphrase generation (~400 common, memorable words).
+# 4 words from this list gives ~400^4 ≈ 25 billion combinations,
+# which is much harder to brute-force offline than 3 words from a small list.
+# ---------------------------------------------------------------------------
+_WORDS = [
+    "acid", "acorn", "acre", "also", "amber", "amble", "ample", "ankle",
+    "anvil", "apple", "apron", "arena", "atlas", "attic", "audio", "audit",
+    "avid", "awake", "bacon", "badge", "banjo", "basin", "batch", "baton",
+    "beach", "beard", "beast", "bench", "berry", "birch", "bison", "blade",
+    "blast", "blaze", "blend", "bliss", "bloom", "blown", "blunt", "board",
+    "bonus", "booze", "brace", "braid", "brand", "brave", "bread", "breed",
+    "brick", "bride", "brine", "brisk", "broth", "brown", "brush", "cabin",
+    "cable", "cacao", "camel", "candy", "cargo", "cedar", "chalk", "chant",
+    "charm", "chase", "cheek", "chess", "chest", "chief", "chill", "chimp",
+    "china", "choir", "civic", "claim", "clamp", "clash", "clasp", "class",
+    "clean", "clear", "clerk", "click", "cliff", "cloak", "clock", "clone",
+    "cloud", "clove", "clown", "cobra", "comet", "coral", "craft", "crane",
+    "crash", "crave", "crawl", "cream", "creek", "crest", "crisp", "cross",
+    "crown", "cruel", "crush", "crust", "curly", "cycle", "daisy", "dance",
+    "datum", "decay", "delta", "depot", "depth", "derby", "dodge", "donna",
+    "dough", "draft", "drain", "drake", "drama", "drape", "dread", "drift",
+    "drill", "drink", "drive", "drone", "drool", "drown", "druck", "drunk",
+    "dryer", "dune", "dusty", "dwarf", "eagle", "earth", "eight", "elite",
+    "ember", "emoji", "empty", "envoy", "epoch", "equal", "error", "event",
+    "evict", "exact", "exile", "extra", "fable", "faith", "false", "fancy",
+    "feast", "fence", "ferry", "fetch", "fiber", "field", "fifth", "fifty",
+    "finch", "first", "fjord", "flame", "flash", "flask", "fleet", "flesh",
+    "flint", "flock", "flood", "floor", "floss", "flour", "fluid", "fluke",
+    "flute", "focus", "forge", "forum", "foyer", "frame", "fresh", "front",
+    "frost", "froze", "fruit", "fungi", "fungi", "gauze", "gavel", "genre",
+    "ghost", "giant", "girth", "given", "glade", "glass", "gleam", "globe",
+    "gloom", "glove", "glyph", "gnome", "golem", "gorge", "gourd", "grace",
+    "grade", "grain", "grand", "grant", "graph", "grasp", "grass", "grate",
+    "grave", "graze", "greed", "greet", "grief", "grill", "grind", "groan",
+    "group", "grout", "grove", "growl", "gruel", "gruff", "guard", "guava",
+    "guide", "guild", "guise", "gulch", "gusto", "gypsy", "haven", "heart",
+    "heavy", "hedge", "heist", "helix", "herbs", "heron", "hippo", "hoist",
+    "honey", "honor", "horde", "hotel", "hound", "house", "human", "humid",
+    "humus", "hurry", "hydra", "hyena", "hyper", "icicle", "ideal", "ident",
+    "image", "inbox", "index", "inner", "input", "inter", "intro", "ionic",
+    "ivory", "jaunt", "jewel", "joust", "judge", "juice", "jumbo", "karma",
+    "kayak", "knack", "kneel", "knelt", "knife", "knoll", "koala", "kraken",
+    "label", "lance", "lapse", "large", "laser", "latch", "layer", "leach",
+    "level", "light", "linen", "lingo", "llama", "lobby", "lodge", "logic",
+    "lotus", "lucid", "lunar", "lusty", "lyric", "macro", "magic", "major",
+    "manor", "maple", "march", "marsh", "match", "maxim", "melon", "merit",
+    "metal", "metro", "micro", "mirth", "model", "moose", "morse", "mount",
+    "movie", "muddy", "mulch", "mural", "music", "musty", "naive", "nymph",
+    "ocean", "olive", "onset", "opera", "optic", "orbit", "order", "ozone",
+    "oxide", "pagan", "panda", "panel", "papal", "parch", "parse", "party",
+    "pasta", "patch", "pause", "peace", "peach", "pearl", "pedal", "penny",
+    "petal", "phase", "piano", "pilot", "pixel", "pizza", "plane", "plank",
+    "plant", "plate", "plaza", "plead", "pluck", "plumb", "plume", "plump",
+    "plunge", "polar", "pouch", "power", "press", "price", "prick", "prism",
+    "probe", "proud", "proxy", "psalm", "pulse", "punch", "pupil", "purse",
+    "quaff", "qualm", "query", "queue", "quick", "quiet", "quill", "quirk",
+    "quota", "quote", "radar", "radix", "rally", "ranch", "rapid", "raven",
+    "reach", "realm", "rebel", "reflex", "reign", "relay", "remix", "renew",
+    "repel", "resin", "rider", "ridge", "rivet", "robin", "rocky", "rogue",
+    "roman", "roost", "rough", "round", "royal", "rugby", "ruler", "rumba",
+    "rupee", "rusty", "sadly", "saint", "salsa", "salve", "sandy", "sapling",
+    "sauce", "sauna", "scala", "scale", "scald", "scamp", "scant", "scare",
+    "scene", "scone", "scout", "scram", "screw", "scrub", "seize", "senna",
+    "serum", "shade", "shaft", "shale", "sheen", "shelf", "shell", "shift",
+    "shine", "shire", "shirt", "shook", "shore", "shout", "shrub", "siege",
+    "sigma", "silky", "silly", "since", "sixth", "sixty", "sized", "sketch",
+    "skill", "slate", "slave", "sleek", "slick", "slime", "sling", "slope",
+    "smelt", "smile", "smoke", "snake", "snare", "sneak", "solve", "sonic",
+    "sorry", "space", "spare", "spark", "speak", "spear", "speed", "spell",
+    "spend", "spice", "spill", "spine", "spite", "spoil", "spray", "squad",
+    "squat", "staff", "stain", "stair", "stake", "stale", "stand", "stank",
+    "stark", "stars", "start", "stave", "steal", "steam", "steel", "steep",
+    "steer", "stern", "stick", "still", "sting", "stock", "stomp", "stone",
+    "stoop", "store", "storm", "story", "stout", "straw", "stray", "strip",
+    "strut", "study", "stump", "sugar", "suite", "sunny", "super", "surge",
+    "swamp", "swath", "swear", "sweep", "sweet", "swift", "swipe", "swirl",
+    "sword", "swore", "synth", "syrup", "table", "taboo", "tacit", "talon",
+    "tango", "taunt", "teeth", "tempt", "thorn", "those", "three", "threw",
+    "throw", "tiger", "tilted", "timer", "tithe", "toast", "token", "topaz",
+    "torch", "totem", "touch", "tough", "towel", "tower", "toxic", "trace",
+    "track", "trade", "trail", "train", "trait", "tramp", "trawl", "treat",
+    "trend", "triad", "trick", "trite", "troll", "troop", "trout", "trove",
+    "truck", "truly", "trump", "trunk", "trust", "truth", "tulip", "tuner",
+    "tunic", "tutor", "tweed", "twirl", "twist", "ultra", "unify", "union",
+    "unity", "until", "upper", "upset", "urban", "usher", "valor", "valve",
+    "vapor", "vault", "venom", "verse", "vicar", "video", "vigil", "viola",
+    "viper", "viral", "visor", "vista", "vital", "vivid", "vixen", "vocal",
+    "vodka", "vogue", "voice", "voter", "vouch", "vulva", "wafer", "waltz",
+    "watch", "water", "weave", "wedge", "weigh", "weird", "whack", "whale",
+    "wheat", "wheel", "where", "whirl", "white", "whole", "widen", "witch",
+    "witty", "world", "worry", "worse", "worth", "wrath", "wrist", "yacht",
+    "yearn", "zebra", "zesty",
+]
+
+TOKEN_FILE = os.path.expanduser('~/.buzz_token')
+
+
+def generate_passphrase(n: int = 4) -> str:
+    """Return n random words joined by hyphens."""
+    return '-'.join(random.choices(_WORDS, k=n))
+
+
+def _requests():
+    """Return the requests module, exiting with a helpful message if missing."""
+    try:
+        import requests as _r
+        return _r
+    except ImportError:
+        print(
+            "Error: the 'requests' package is required.\n"
+            "Install it with:  pip install requests",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+def setup_token(server_override: str = None) -> tuple[str, str]:
+    """
+    Interactive flow to obtain and save an API token.
+
+    Prompts for server URL (if not supplied), username, and password,
+    logs in via the web session, generates a token, and writes it to
+    ~/.buzz_token with mode 0600.
+
+    Returns (token, server_url).
+    """
+    import getpass
+
+    requests = _requests()
+
+    print("No token found. Let's set one up.\n")
+
+    server = server_override
+    if not server:
+        server = input("Buzzdrop server URL (e.g. https://buzzdrop.example.com): ").strip().rstrip('/')
+    if not server:
+        print("Error: server URL is required.", file=sys.stderr)
+        sys.exit(1)
+
+    username = input("Username: ").strip()
+    if not username:
+        print("Error: username is required.", file=sys.stderr)
+        sys.exit(1)
+
+    password = getpass.getpass("Password: ")
+    if not password:
+        print("Error: password is required.", file=sys.stderr)
+        sys.exit(1)
+
+    session = requests.Session()
+
+    # Log in
+    try:
+        resp = session.post(
+            f"{server}/login",
+            data={'username': username, 'password': password},
+            allow_redirects=True,
+            timeout=15,
+        )
+    except requests.ConnectionError:
+        print(f"Error: could not connect to {server}", file=sys.stderr)
+        sys.exit(1)
+    except requests.RequestException as exc:
+        print(f"Error: login request failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    # Buzzdrop redirects to / on success and back to /login on failure.
+    # Check for the session cookie as a reliable success signal.
+    if 'session' not in session.cookies:
+        print("Error: login failed — check your username and password.", file=sys.stderr)
+        sys.exit(1)
+
+    # Generate token for self
+    try:
+        resp = session.post(
+            f"{server}/api/token",
+            json={'username': username},
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        print(f"Error: token request failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if resp.status_code == 403:
+        print("Error: your account does not have permission to generate tokens.", file=sys.stderr)
+        sys.exit(1)
+    if not resp.ok:
+        msg = f"Server returned {resp.status_code}"
+        try:
+            msg += f": {resp.json().get('error', '')}"
+        except Exception:
+            pass
+        print(f"Error: {msg}", file=sys.stderr)
+        sys.exit(1)
+
+    token = resp.json().get('token')
+    if not token:
+        print("Error: server did not return a token.", file=sys.stderr)
+        sys.exit(1)
+
+    # Write ~/.buzz_token with restricted permissions
+    token_data = json.dumps({'token': token, 'server': server}, indent=2) + '\n'
+    # Open with O_CREAT | O_WRONLY | O_TRUNC and mode 0600 atomically
+    fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, token_data.encode())
+    finally:
+        os.close(fd)
+
+    print(f"\nToken saved to {TOKEN_FILE}\n")
+    return token, server
+
+
+def read_token_file(server_override: str = None) -> tuple[str, str]:
+    """
+    Read ~/.buzz_token and return (token, server_url).
+
+    If the file is missing, runs the interactive setup flow, saves the token,
+    then exits with a message asking the user to repeat their command.
+    """
+    if not os.path.exists(TOKEN_FILE):
+        print(f"No token found at {TOKEN_FILE} — let's get one now.\n")
+        setup_token(server_override=server_override)
+        print("All set! Now repeat your command.")
+        sys.exit(0)
+
+    try:
+        with open(TOKEN_FILE) as fh:
+            data = json.load(fh)
+    except json.JSONDecodeError as exc:
+        print(f"Error: {TOKEN_FILE} is not valid JSON: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    token = data.get('token')
+    server = server_override or data.get('server')
+    if not token or not server:
+        print(
+            f"Error: {TOKEN_FILE} must have both 'token' and 'server' fields.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    return token, server.rstrip('/')
+
+
+def encrypt_file(file_bytes: bytes, password: str) -> bytes:
+    """
+    Encrypt file_bytes with password using AES-GCM + PBKDF2-SHA256.
+
+    Output format (same as the Buzzdrop browser client):
+        salt (16 bytes) + iv (12 bytes) + AES-GCM ciphertext (with 16-byte tag)
+
+    The plaintext has the magic header b'BKP-FILE' prepended before encryption
+    so the browser can detect a wrong password.
+    """
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+        from cryptography.hazmat.primitives import hashes
+    except ImportError:
+        print(
+            "Error: the 'cryptography' package is required.\n"
+            "Install it with:  pip install cryptography",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    salt = os.urandom(16)
+    iv = os.urandom(12)
+
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100_000,
+    )
+    key = kdf.derive(password.encode('utf-8'))
+
+    plaintext = b'BKP-FILE' + file_bytes
+    ciphertext = AESGCM(key).encrypt(iv, plaintext, None)
+    return salt + iv + ciphertext
+
+
+def upload(server: str, token: str, filename: str, encrypted: bytes, expiry: str = None) -> dict:
+    """POST the encrypted blob to /upload and return the JSON response."""
+    requests = _requests()
+
+    files = {
+        'file': (os.path.basename(filename), BytesIO(encrypted), 'application/octet-stream'),
+    }
+    data = {}
+    if expiry:
+        data['expiry'] = expiry
+
+    try:
+        resp = requests.post(
+            f"{server}/upload",
+            files=files,
+            data=data,
+            headers={
+                'Authorization': f'Bearer {token}',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            timeout=120,
+        )
+    except requests.ConnectionError:
+        print(f"Error: could not connect to {server}", file=sys.stderr)
+        sys.exit(1)
+    except requests.Timeout:
+        print("Error: upload timed out", file=sys.stderr)
+        sys.exit(1)
+    except requests.RequestException as exc:
+        print(f"Error: upload failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if resp.status_code == 401:
+        print(
+            "Error: authentication failed — check your token in ~/.buzz_token",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if not resp.ok:
+        msg = f"Server returned {resp.status_code}"
+        try:
+            msg += f": {resp.json().get('error', '')}"
+        except Exception:
+            pass
+        print(f"Error: {msg}", file=sys.stderr)
+        sys.exit(1)
+
+    return resp.json()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog='buzz',
+        description='Share a file via Buzzdrop (one-time self-destructing link).',
+    )
+    parser.add_argument('file', help='File to share')
+    parser.add_argument(
+        '-p', '--password',
+        help='Encryption password (default: random 4-word passphrase)',
+    )
+    parser.add_argument(
+        '--expiry',
+        metavar='DATETIME',
+        help='Optional expiry datetime in ISO format, e.g. 2025-12-31T23:59',
+    )
+    parser.add_argument(
+        '--server',
+        metavar='URL',
+        help='Override server URL from ~/.buzz_token',
+    )
+    args = parser.parse_args()
+
+    token, server = read_token_file(server_override=args.server)
+
+    # Determine password
+    password = args.password
+    password_generated = password is None
+    if password_generated:
+        password = generate_passphrase()
+
+    # Read file
+    if not os.path.isfile(args.file):
+        print(f"Error: file not found: {args.file}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        with open(args.file, 'rb') as fh:
+            file_bytes = fh.read()
+    except OSError as exc:
+        print(f"Error: cannot read {args.file}: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    # Encrypt
+    print(f"Encrypting {os.path.basename(args.file)}...", end=' ', flush=True)
+    encrypted = encrypt_file(file_bytes, password)
+    print("done")
+
+    # Upload
+    print("Uploading...", end=' ', flush=True)
+    result = upload(server, token, args.file, encrypted, expiry=args.expiry)
+    print("done\n")
+
+    share_link = result.get('share_link') or f"{server}/view/{result['file_id']}"
+
+    print(f"Share link:     {share_link}")
+    if password_generated:
+        print(f"Password:       {password}")
+    print()
+    print(f"One-click link: {share_link}#{password}")
+
+
+if __name__ == '__main__':
+    main()

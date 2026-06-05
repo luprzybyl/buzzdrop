@@ -1,0 +1,80 @@
+name: Release CLI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'cli/**'
+      - 'requirements-cli.txt'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller
+          pip install -r requirements-cli.txt
+
+      - name: Build binary with PyInstaller
+        run: |
+          pyinstaller \
+            --onefile \
+            --name buzz \
+            --strip \
+            cli/buzz
+
+      - name: Smoke-test binary
+        run: |
+          ./dist/buzz --help
+
+      - name: Compute release tag
+        id: tag
+        run: |
+          echo "tag=cli-$(date -u '+%Y%m%d%H%M%S')-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "buzz CLI – ${{ steps.tag.outputs.tag }}"
+          body: |
+            Automated release of the `buzz` CLI binary.
+
+            **Triggered by commit:** ${{ github.sha }}
+            **Commit message:** ${{ github.event.head_commit.message }}
+
+            ## Installation
+
+            ```bash
+            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/buzz -o ~/.local/bin/buzz
+            chmod +x ~/.local/bin/buzz
+            ```
+
+            Then create `~/.buzz_token`:
+            ```json
+            {"token": "YOUR_API_TOKEN", "server": "https://your-buzzdrop-instance.example.com"}
+            ```
+
+            ## Usage
+
+            ```
+            buzz file.pdf                    # generates a random 4-word passphrase
+            buzz file.pdf -p my-passphrase   # use your own password
+            buzz file.pdf --expiry 2025-12-31T23:59
+            ```
+          files: dist/buzz
+          fail_on_unmatched_files: true
