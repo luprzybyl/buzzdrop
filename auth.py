@@ -4,7 +4,7 @@ Handles user management and authentication decorators.
 """
 import os
 from functools import wraps, lru_cache
-from flask import session, flash, redirect, url_for
+from flask import g, session, flash, redirect, url_for, request
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
@@ -125,12 +125,12 @@ def get_current_user() -> dict:
 def login_required(f):
     """
     Decorator to require login for a route.
-    
-    Usage:
+
+    Usage::
+
         @app.route('/protected')
         @login_required
         def protected_route():
-            # Only accessible to logged-in users
             pass
     """
     @wraps(f)
@@ -139,8 +139,51 @@ def login_required(f):
             flash('Please log in to access this page')
             return redirect(url_for('login'))
         return f(*args, **kwargs)
-    
+
     return decorated_function
+
+
+def api_auth_required(f):
+    """
+    Decorator for routes that accept both API token auth and session auth.
+
+    Checks for an ``Authorization: Bearer <token>`` header first. If the header
+    is present but the token is invalid, returns 401 JSON immediately (no
+    session fallback). If no Authorization header is present, falls back to
+    checking the session cookie like ``@login_required``.
+
+    On success, sets ``flask.g.username`` so route handlers should read the
+    authenticated user from ``g.username`` instead of ``session['username']``.
+
+    Usage::
+
+        @app.route('/upload', methods=['POST'])
+        @api_auth_required
+        def upload_file():
+            username = g.username
+            ...
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            raw_token = auth_header[7:]
+            from tokens import validate_api_token
+            username = validate_api_token(raw_token)
+            if not username:
+                return {'error': 'Invalid or expired token'}, 401
+            g.username = username
+            return f(*args, **kwargs)
+
+        # No Bearer header: require session login
+        if 'username' not in session:
+            flash('Please log in to access this page')
+            return redirect(url_for('login'))
+        g.username = session['username']
+        return f(*args, **kwargs)
+
+    return decorated_function
+
 
 
 def admin_required(f):

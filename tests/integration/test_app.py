@@ -39,7 +39,7 @@ def test_index_anonymous_user(client, app):
     assert b'Login' in response.data # Login link in header
     assert b'Your Shared Files' not in response.data # Should not see this section title
 
-def test_index_logged_in_user_no_files(client, app):
+def test_index_logged_in_user_no_files(client, app, db_instance):
     login_user(client, 'testuser', 'password')
     response = client.get(url_for('index'))
     assert response.status_code == 200

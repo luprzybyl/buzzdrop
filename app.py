@@ -4,6 +4,7 @@ from datetime import datetime
 from io import BytesIO
 from flask import (
     Flask,
+    g,
     request,
     render_template,
     send_from_directory,
@@ -28,7 +29,7 @@ load_dotenv(dotenv_path=env_path)
 # Import new modules AFTER loading .env
 from config import get_config
 from storage import get_storage_backend, print_backend_info, StorageError
-from auth import login_required, admin_required, get_users, login_user, logout_user
+from auth import login_required, admin_required, api_auth_required, get_users, login_user, logout_user
 from utils import (
     format_file_timestamps,
     enhance_file_display,
@@ -254,8 +255,41 @@ def manage_users():
     users = get_users()
     return render_template('users.html', users=users)
 
-@app.route('/upload', methods=['POST'])
+
+@app.route('/api/token', methods=['POST'])
 @login_required
+def create_api_token():
+    """
+    Generate an API token.
+
+    - Any logged-in user may generate a token for themselves (omit ``username``
+      or pass their own username).
+    - Admins may generate a token for any existing user by passing
+      ``{"username": "targetuser"}``.
+
+    Request JSON: {"username": "<existing_username>"}  (optional for self)
+    Response JSON: {"token": "<raw_token>"}  ← shown once, store securely
+    """
+    from tokens import generate_api_token
+    data = request.get_json(silent=True) or {}
+    requested_username = data.get('username') or session['username']
+
+    users = get_users()
+    current_user = users.get(session['username'], {})
+    is_current_admin = current_user.get('is_admin', False)
+
+    if requested_username != session['username'] and not is_current_admin:
+        return {'error': 'Admin access required to generate tokens for other users'}, 403
+
+    if requested_username not in users:
+        return {'error': 'Unknown user'}, 404
+
+    raw_token = generate_api_token(requested_username)
+    return {'token': raw_token}, 201
+
+
+@app.route('/upload', methods=['POST'])
+@api_auth_required
 def upload_file():
     # Check if this is a text note upload
     note_text = request.form.get('note_text')
@@ -285,7 +319,7 @@ def upload_file():
         file_repo.create({
             'original_name': 'Secret Note',
             'path': file_path,
-            'uploaded_by': session['username'],
+            'uploaded_by': g.username,
             'expiry_at': expiry_iso,
             'type': 'text'
         }, file_id=unique_id)
@@ -329,7 +363,7 @@ def upload_file():
         file_repo.create({
             'original_name': filename,
             'path': file_path,
-            'uploaded_by': session['username'],
+            'uploaded_by': g.username,
             'expiry_at': expiry_iso,
             'type': 'file'
         }, file_id=unique_id)

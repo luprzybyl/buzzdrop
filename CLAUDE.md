@@ -63,13 +63,19 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 
 ### Database
 
-**TinyDB** (JSON-based): Lightweight NoSQL database stored in `db.json`. Single `files` table tracks:
+**TinyDB** (JSON-based): Lightweight NoSQL database stored in `db.json`. Two tables:
+
+`files` table tracks:
 - `id` (UUID), `original_name`, `path` (local or S3 key)
 - `created_at`, `downloaded_at`, `expiry_at` timestamps
 - `uploaded_by` (username), `status` (active/expired)
 - `downloaded_by_ip` (IP address of client who downloaded the file)
 - `decryption_success` (bool, tracked after client-side decryption)
 - `type` (`'file'` or `'text'` for text notes)
+
+`api_tokens` table tracks:
+- `token_hash` (SHA-256 of the raw token — raw token is never stored)
+- `username`, `created_at`, `last_used_at`
 
 **Database Helper Functions**:
 - `get_db()`: Returns TinyDB instance, handles reopening if closed (important for tests)
@@ -79,14 +85,42 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 
 **Environment-Based Users**: No database for users. Configured via `.env`:
 ```
-FLASK_USER_1=username:password:is_admin
+FLASK_USER_N=username:password:is_admin
 ```
 
-Passwords are SHA-256 hashed. `get_users()` function reads all `FLASK_USER_*` environment variables at runtime.
+Passwords are hashed with PBKDF2-SHA256 via Werkzeug. `get_users()` function reads all `FLASK_USER_*` environment variables at runtime and is decorated with `@lru_cache`.
 
 **Decorators**:
 - `@login_required`: Checks session for username
 - `@admin_required`: Checks both login and admin flag
+- `@api_auth_required`: Accepts `Authorization: Bearer <token>` header **or** session cookie. If Bearer is present and invalid → 401 JSON (no session fallback). Sets `flask.g.username` on success; routes must read `g.username` not `session['username']`.
+
+### API Token Management
+
+`tokens.py` provides:
+- `generate_api_token(username)` → stores SHA-256 hash in `api_tokens` table, returns raw 64-char token (shown once)
+- `validate_api_token(raw_token)` → returns username or None, updates `last_used_at`
+- `revoke_api_token(raw_token)` → removes entry from table
+
+**Generate a token** (admin only):
+```bash
+POST /api/token
+Content-Type: application/json
+{"username": "targetuser"}
+# Response: {"token": "<64-char hex>"}  ← store immediately, never shown again
+```
+
+### CLI Tool (`cli/buzz`)
+
+Standalone Python script. Requires `cryptography` and `requests` (see `requirements-cli.txt`). Reads `~/.buzz_token` as JSON `{"token": "...", "server": "https://..."}`.
+
+```bash
+buzz file.pdf                  # generates 4-word passphrase
+buzz file.pdf -p mypassword
+buzz file.pdf --expiry 2025-12-31T23:59
+```
+
+Encrypts files using the same AES-GCM + PBKDF2 format as the browser client, uploads via Bearer token auth. A binary release is automatically built and published to GitHub Releases on every change to `cli/` (see `.github/workflows/release-cli.yml`).
 
 ### Key Routes
 

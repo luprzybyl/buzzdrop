@@ -141,7 +141,81 @@ Just fill out your `.env` with your S3 details. Buzzdrop will handle the swarm.
 Ready to buzz? Drop a file and watch it fly—then disappear!  
 _Powered by caffeine, code, and a little bit of sting._
 
-## Development
+## `buzz` CLI — Share from the Terminal
+
+The `buzz` command-line tool lets you encrypt and upload files directly from your laptop without opening a browser.
+
+### Installation
+
+Download the latest binary from [GitHub Releases](https://github.com/luprzybyl/buzzdrop/releases) and put it on your `$PATH`:
+
+```bash
+curl -fsSL https://github.com/luprzybyl/buzzdrop/releases/latest/download/buzz -o ~/.local/bin/buzz
+chmod +x ~/.local/bin/buzz
+```
+
+Or run from source (requires `pip install -r requirements-cli.txt`):
+
+```bash
+ln -s $(pwd)/cli/buzz ~/.local/bin/buzz
+```
+
+### Setup
+
+1. **Get an API token** — ask an admin to generate one for your account:
+   ```bash
+   # Admin runs on the server (or via curl while logged in as admin):
+   curl -s -X POST https://your-buzzdrop.example.com/api/token \
+     -H 'Content-Type: application/json' \
+     -b 'session=<admin-session-cookie>' \
+     -d '{"username": "yourname"}' | jq -r .token
+   ```
+
+2. **Create `~/.buzz_token`**:
+   ```bash
+   echo '{"token": "PASTE_TOKEN_HERE", "server": "https://your-buzzdrop.example.com"}' \
+     > ~/.buzz_token
+   chmod 600 ~/.buzz_token
+   ```
+
+### Usage
+
+```bash
+buzz file.pdf                        # auto-generates a 4-word passphrase
+buzz file.pdf -p my-secret-pass      # use your own password
+buzz file.pdf --expiry 2025-12-31T23:59
+```
+
+Output:
+```
+Encrypting file.pdf... done
+Uploading... done
+
+Share link:     https://your-buzzdrop.example.com/view/abc123
+Password:       tiger-ocean-lamp-drift
+
+One-click link: https://your-buzzdrop.example.com/view/abc123#tiger-ocean-lamp-drift
+```
+
+The recipient opens the share link, enters the password (or uses the one-click link), and the file decrypts in their browser — exactly the same as a web upload.
+
+---
+
+## API Token Management
+
+The `/api/token` endpoint lets admins issue API tokens for CLI access.
+
+**Generate a token** (admin session required):
+```bash
+POST /api/token
+Content-Type: application/json
+
+{"username": "targetuser"}
+```
+Returns `{"token": "<64-char hex>"}` — **shown once, store it immediately**.
+
+Tokens are stored as SHA-256 hashes in the database; the raw value is never persisted. To revoke a token, delete the corresponding entry from the `api_tokens` TinyDB table.
+
 
 The application is built with:
 - **Flask** (Python web framework)
