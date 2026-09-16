@@ -15,7 +15,6 @@
                     <div>
                         <a href="{{ url_for('index') }}" class="flex items-center py-4">
                             <img src="{{ url_for('static', filename='logo.png') }}" alt="Buzzdrop logo" class="h-18 mr-2 inline"/>
-                            <span class="sr-only">Buzzdrop home</span>
                         </a>
                     </div>
                     {% if request.endpoint == 'index' and not session.get('username') %}
