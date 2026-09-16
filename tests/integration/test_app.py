@@ -88,6 +88,25 @@ def test_index_logged_in_user_with_own_files(client, app, files_table):
     assert b'my_document.txt' in response.data
     # The "Shared With Me" section is missing in the template, so no assertions for it or its placeholders.
 
+def test_index_logged_in_user_sees_own_private_note(client, app, files_table):
+    login_user(client, 'testuser', 'password')
+
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'file': (io.BytesIO(b"Hello world"), "noted_document.txt"),
+            'private_note': 'haslo do wordpressa'
+        },
+        content_type='multipart/form-data',
+        follow_redirects=False
+    )
+    assert response.status_code == 200
+
+    response = client.get(url_for('index'))
+    assert response.status_code == 200
+    assert b'noted_document.txt' in response.data
+    assert b'haslo do wordpressa' in response.data
+
 def test_index_logged_in_user_with_shared_files(client, app, files_table):
     # NOTE: The current index.html template does NOT display files shared with the user.
     # This test will need to be adjusted if/when the template is fixed.

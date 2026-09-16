@@ -6,6 +6,11 @@ import os
 from typing import Set
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    """Read a boolean environment variable."""
+    return os.getenv(name, str(default)).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
 class Config:
     """Base configuration class."""
     
@@ -33,6 +38,15 @@ class Config:
     
     # Timezone
     DEFAULT_TIMEZONE = os.getenv('DEFAULT_TIMEZONE', 'Europe/Warsaw')
+
+    # Rate limiting
+    RATE_LIMIT_ENABLED = _env_bool('RATE_LIMIT_ENABLED', True)
+    RATE_LIMIT_HEADERS_ENABLED = _env_bool('RATE_LIMIT_HEADERS_ENABLED', True)
+    RATE_LIMIT_STORAGE_URI = os.getenv('RATE_LIMIT_STORAGE_URI', 'memory://')
+    LOGIN_RATE_LIMIT = os.getenv('LOGIN_RATE_LIMIT', '10 per minute')
+    API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '10 per hour')
+    UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '30 per hour')
+    PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '60 per hour')
     
     @classmethod
     def validate(cls):
@@ -72,6 +86,11 @@ class Config:
             'database_path': cls.DATABASE_PATH,
             'max_file_size_mb': cls.MAX_CONTENT_LENGTH / (1024 * 1024),
             'allowed_extensions': ', '.join(sorted(cls.ALLOWED_EXTENSIONS)),
+            'rate_limit_enabled': cls.RATE_LIMIT_ENABLED,
+            'login_rate_limit': cls.LOGIN_RATE_LIMIT,
+            'api_token_rate_limit': cls.API_TOKEN_RATE_LIMIT,
+            'upload_rate_limit': cls.UPLOAD_RATE_LIMIT,
+            'public_file_rate_limit': cls.PUBLIC_FILE_RATE_LIMIT,
             's3_configured': bool(cls.S3_BUCKET) if cls.STORAGE_BACKEND == 's3' else False,
             's3_region': cls.S3_REGION if cls.STORAGE_BACKEND == 's3' else 'N/A',
         }
@@ -81,6 +100,10 @@ class DevelopmentConfig(Config):
     """Development environment configuration."""
     DEBUG = True
     TESTING = False
+    LOGIN_RATE_LIMIT = os.getenv('LOGIN_RATE_LIMIT', '100 per minute')
+    API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '60 per hour')
+    UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '120 per hour')
+    PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '240 per hour')
 
 
 class TestingConfig(Config):
@@ -88,12 +111,20 @@ class TestingConfig(Config):
     TESTING = True
     DEBUG = True
     # Tests will override DATABASE_PATH in conftest.py
+    LOGIN_RATE_LIMIT = os.getenv('LOGIN_RATE_LIMIT', '1000 per minute')
+    API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '1000 per hour')
+    UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '1000 per hour')
+    PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '1000 per hour')
 
 
 class ProductionConfig(Config):
     """Production environment configuration."""
     DEBUG = False
     TESTING = False
+    LOGIN_RATE_LIMIT = os.getenv('LOGIN_RATE_LIMIT', '10 per minute')
+    API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '10 per hour')
+    UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '30 per hour')
+    PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '60 per hour')
 
 
 def get_config():

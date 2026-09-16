@@ -82,6 +82,27 @@ def test_upload_text_note_with_expiry(client, app, files_table):
     assert note_info['expiry_at'] is not None
     assert '2025-12-31' in note_info['expiry_at']
 
+def test_upload_text_note_stores_private_note(client, files_table):
+    """Test text note upload stores a private note for the uploader."""
+    login_user(client, 'testuser', 'password')
+
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'note_text': base64.b64encode(b"Test note").decode('utf-8'),
+            'type': 'text',
+            'private_note': 'Password for the ZIP'
+        },
+        headers={'X-Requested-With': 'XMLHttpRequest'}
+    )
+
+    assert response.status_code == 200
+
+    File = Query()
+    note_info = files_table.get(File.id == response.get_json()['file_id'])
+    assert note_info is not None
+    assert note_info['private_note'] == 'Password for the ZIP'
+
 def test_view_text_note_shows_correct_template(client, app, files_table):
     """Test that viewing a text note shows the correct template with text type."""
     login_user(client, 'testuser', 'password')

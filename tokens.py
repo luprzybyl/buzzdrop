@@ -1,24 +1,30 @@
 """
 API token management for Buzzdrop.
-Tokens are stored as PBKDF2-HMAC-SHA256 fingerprints; the raw token is shown only once at generation.
+Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests with a stable
+hash secret; the raw token is shown only once at generation. Legacy PBKDF2
+token hashes remain valid and are migrated on successful validation.
 """
 import hashlib
-import hmac
+import os
 import secrets
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from flask import current_app
 from tinydb import Query
+
+DEFAULT_TOKEN_EXPIRY_DAYS = 30
+TOKEN_HASH_ITERATIONS = 310_000
+TOKEN_HASH_BYTES = 32
+DEFAULT_TOKEN_HASH_SECRET = b'buzzdrop-api-token-v1'
+TOKEN_HASH_VERSION = 'pbkdf2-sha256-v1'
+LEGACY_TOKEN_HASH_ITERATIONS = 120_000
+LEGACY_TOKEN_HASH_SECRET = b'buzzdrop-api-token-legacy-v1'
+LEGACY_TOKEN_HASH_VERSION = 'legacy-pbkdf2-sha256-v1'
 
 
 def _get_tokens_table():
     from app import get_db
     return get_db().table('api_tokens')
-
-
-DEFAULT_TOKEN_EXPIRY_DAYS = 30
-TOKEN_HASH_ITERATIONS = 10_000
 
 
 def _parse_timestamp(value: Optional[str]) -> Optional[datetime]:
@@ -57,19 +63,45 @@ def _serialize_token(entry: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _get_token_hash_secret() -> bytes:
+    from app import app as flask_app
+
+    token_hash_secret = flask_app.config.get('TOKEN_HASH_SECRET')
+    if not token_hash_secret:
+        token_hash_secret = os.getenv('TOKEN_HASH_SECRET') or os.getenv('FLASK_SECRET_KEY')
+    if isinstance(token_hash_secret, str):
+        token_hash_secret = token_hash_secret.encode()
+    return token_hash_secret or DEFAULT_TOKEN_HASH_SECRET
+
+
 def _hash_token(raw_token: str) -> str:
-    secret_key = current_app.config.get('SECRET_KEY', '')
-    return hashlib.pbkdf2_hmac(
+    """Derive the current deterministic digest for API token storage and lookup."""
+    digest = hashlib.pbkdf2_hmac(
         'sha256',
         raw_token.encode(),
-        secret_key.encode(),
+        _get_token_hash_secret(),
         TOKEN_HASH_ITERATIONS,
-    ).hex()
+        dklen=TOKEN_HASH_BYTES,
+    )
+    return digest.hex()
 
 
-def _legacy_hash_token(raw_token: str) -> str:
-    secret_key = current_app.config.get('SECRET_KEY', '')
-    return hmac.new(secret_key.encode(), raw_token.encode(), hashlib.sha256).hexdigest()
+def _hash_token_legacy(raw_token: str) -> str:
+    """Derive deterministic legacy digest for backward-compatible token migration."""
+    digest = hashlib.pbkdf2_hmac(
+        'sha256',
+        raw_token.encode(),
+        LEGACY_TOKEN_HASH_SECRET,
+        LEGACY_TOKEN_HASH_ITERATIONS,
+        dklen=TOKEN_HASH_BYTES,
+    )
+    return digest.hex()
+
+
+def _has_legacy_token_hashes(table) -> bool:
+    """Return whether any stored API tokens still use the legacy hash version."""
+    Q = Query()
+    return table.contains(Q.token_hash_version == LEGACY_TOKEN_HASH_VERSION)
 
 
 def generate_api_token(username: str, expires_at: Optional[datetime] = None) -> str:
@@ -77,7 +109,7 @@ def generate_api_token(username: str, expires_at: Optional[datetime] = None) -> 
     Generate a new API token for a user, store its hash, and return the raw token.
 
     The raw token is returned exactly once and never stored. Future lookups use
-    a PBKDF2-HMAC-SHA256 fingerprint.
+    the derived token digest.
 
     Args:
         username: Username to associate with the token
@@ -91,6 +123,7 @@ def generate_api_token(username: str, expires_at: Optional[datetime] = None) -> 
     expires_at = expires_at or (now + timedelta(days=DEFAULT_TOKEN_EXPIRY_DAYS))
     _get_tokens_table().insert({
         'token_hash': token_hash,
+        'token_hash_version': TOKEN_HASH_VERSION,
         'username': username,
         'created_at': now.isoformat(),
         'last_used_at': None,
@@ -111,27 +144,42 @@ def validate_api_token(raw_token: str) -> Optional[str]:
     Returns:
         Username string if valid, None otherwise
     """
+    token_hash = _hash_token(raw_token)
     Q = Query()
     table = _get_tokens_table()
-    token_hash = _hash_token(raw_token)
+
     entry = table.get(Q.token_hash == token_hash)
-    is_legacy_entry = False
     if not entry:
-        legacy_token_hash = _legacy_hash_token(raw_token)
-        entry = table.get(Q.token_hash == legacy_token_hash)
-        is_legacy_entry = entry is not None
-    if not entry:
+        if not _has_legacy_token_hashes(table):
+            return None
+        legacy_token_hash = _hash_token_legacy(raw_token)
+        entry = table.get(
+            (Q.token_hash == legacy_token_hash)
+            & (Q.token_hash_version == LEGACY_TOKEN_HASH_VERSION)
+        )
+        if not entry:
+            return None
+        token_hash = legacy_token_hash
+
+    from auth import get_users
+    if entry['username'] not in get_users():
         return None
+
     if _is_token_expired(entry):
         table.remove(doc_ids=[entry.doc_id])
         return None
+
     updates = {'last_used_at': datetime.now().isoformat()}
-    if not entry.get('expires_at'):
-        expires_at = _get_token_expiry(entry)
-        if expires_at is not None:
-            updates['expires_at'] = expires_at.isoformat()
-    if is_legacy_entry:
-        updates['token_hash'] = token_hash
+    expires_at = _get_token_expiry(entry)
+    if expires_at is not None and not entry.get('expires_at'):
+        updates['expires_at'] = expires_at.isoformat()
+
+    if entry.get('token_hash_version') == LEGACY_TOKEN_HASH_VERSION:
+        updates['token_hash'] = _hash_token(raw_token)
+        updates['token_hash_version'] = TOKEN_HASH_VERSION
+    elif not entry.get('token_hash_version'):
+        updates['token_hash_version'] = TOKEN_HASH_VERSION
+
     table.update(updates, doc_ids=[entry.doc_id])
     return entry['username']
 
@@ -195,5 +243,7 @@ def revoke_api_token(raw_token: str) -> bool:
     removed = table.remove(Q.token_hash == token_hash)
     if removed:
         return True
-    removed = table.remove(Q.token_hash == _legacy_hash_token(raw_token))
+    if not _has_legacy_token_hashes(table):
+        return False
+    removed = table.remove(Q.token_hash == _hash_token_legacy(raw_token))
     return bool(removed)

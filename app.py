@@ -19,6 +19,7 @@ from flask import (
 )
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
+from flask_limiter import Limiter
 from tinydb import TinyDB, Query
 from dotenv import load_dotenv
 import base64
@@ -31,7 +32,7 @@ load_dotenv(dotenv_path=env_path)
 # Import new modules AFTER loading .env
 from config import get_config
 from storage import get_storage_backend, print_backend_info, StorageError
-from auth import login_required, admin_required, api_auth_required, get_users, login_user, logout_user
+from auth import login_required, admin_required, api_auth_required, get_users, get_current_user, login_user, logout_user
 from utils import (
     format_file_timestamps,
     enhance_file_display,
@@ -60,6 +61,16 @@ if not app.config.get('SECRET_KEY'):
 config_class.validate()
 
 app.secret_key = app.config['SECRET_KEY']
+RATE_LIMIT_EXCEEDED_MESSAGE = 'Too many requests. Please try again later.'
+
+limiter = Limiter(
+    key_func=get_client_ip,
+    app=app,
+    default_limits=[],
+    headers_enabled=app.config.get('RATE_LIMIT_HEADERS_ENABLED', True),
+    storage_uri=app.config.get('RATE_LIMIT_STORAGE_URI', 'memory://'),
+    enabled=app.config.get('RATE_LIMIT_ENABLED', True),
+)
 
 
 def _get_csrf_token():
@@ -247,12 +258,34 @@ def handle_large_file(error):
     flash('File too large')
     return 'File too large', 413
 
+
+@app.errorhandler(429)
+def handle_rate_limit(error):
+    """Return consistent rate-limit responses for HTML, AJAX, and API clients."""
+    message = getattr(error, 'description', RATE_LIMIT_EXCEEDED_MESSAGE)
+    is_api_request = (
+        request.path.startswith('/api/')
+        or request.headers.get('Authorization', '').startswith('Bearer ')
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    )
+
+    if is_api_request:
+        return {'error': message}, 429
+
+    if request.endpoint == 'login':
+        flash(message)
+        return render_template('login.html'), 429
+
+    return message, 429
+
 @app.route('/')
 def index():
     """Home page route."""
-    if 'username' in session:
+    current_user = get_current_user()
+    if current_user:
+        username = current_user['username']
         # Get files uploaded by the current user
-        user_files = file_repo.get_user_files(session['username'])
+        user_files = file_repo.get_user_files(username)
         
         # Check expiry and format for display
         for f in user_files:
@@ -260,7 +293,7 @@ def index():
             enhance_file_display(f)
 
         # Get files shared with the current user
-        shared_files = file_repo.get_shared_files(session['username'])
+        shared_files = file_repo.get_shared_files(username)
         
         return render_template(
             'index.html', 
@@ -277,6 +310,11 @@ def index():
     )
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit(
+    lambda: current_app.config['LOGIN_RATE_LIMIT'],
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
@@ -309,6 +347,11 @@ def manage_users():
 
 
 @app.route('/api/token', methods=['POST'])
+@limiter.limit(
+    lambda: current_app.config['API_TOKEN_RATE_LIMIT'],
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 @login_required
 def create_api_token():
     """
@@ -411,11 +454,17 @@ def revoke_api_token_route(token_id):
 
 
 @app.route('/upload', methods=['POST'])
+@limiter.limit(
+    lambda: current_app.config['UPLOAD_RATE_LIMIT'],
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 @api_auth_required
 def upload_file():
     # Check if this is a text note upload
     note_text = request.form.get('note_text')
     upload_type = request.form.get('type', 'file')
+    private_note = (request.form.get('private_note') or '').strip() or None
 
     if upload_type == 'text' and note_text:
         # Handle text note upload
@@ -443,7 +492,8 @@ def upload_file():
             'path': file_path,
             'uploaded_by': g.username,
             'expiry_at': expiry_iso,
-            'type': 'text'
+            'type': 'text',
+            'private_note': private_note
         }, file_id=unique_id)
         
         share_link = url_for('view_file', file_id=unique_id, _external=True)
@@ -487,7 +537,8 @@ def upload_file():
             'path': file_path,
             'uploaded_by': g.username,
             'expiry_at': expiry_iso,
-            'type': 'file'
+            'type': 'file',
+            'private_note': private_note
         }, file_id=unique_id)
         
         share_link = url_for('view_file', file_id=unique_id, _external=True)
@@ -507,6 +558,12 @@ def upload_file():
 # Remove confirm_download route, logic moves to /view/<file_id> and /view/<file_id>/confirm
 
 @app.route('/download/<file_id>', methods=['GET'])
+@limiter.shared_limit(
+    lambda: current_app.config['PUBLIC_FILE_RATE_LIMIT'],
+    'public_file_access',
+    methods=['GET'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 def download_file(file_id):
     file_info = file_repo.get_by_id(file_id)
     if not file_info:
@@ -575,6 +632,12 @@ def upload_success(file_id):
 
 
 @app.route('/view/<file_id>', methods=['GET'])
+@limiter.shared_limit(
+    lambda: current_app.config['PUBLIC_FILE_RATE_LIMIT'],
+    'public_file_access',
+    methods=['GET'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 def view_file(file_id):
     file_info = file_repo.get_by_id(file_id)
     if not file_info or file_info['downloaded_at'] is not None:
@@ -587,6 +650,12 @@ def view_file(file_id):
     return render_template('confirm_download.html', file_id=file_id, original_name=file_info['original_name'], file_type=file_type)
 
 @app.route('/view/<file_id>/confirm', methods=['POST'])
+@limiter.shared_limit(
+    lambda: current_app.config['PUBLIC_FILE_RATE_LIMIT'],
+    'public_file_access',
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 def confirm_view_file(file_id):
     file_info = file_repo.get_by_id(file_id)
     if not file_info or file_info['downloaded_at'] is not None:

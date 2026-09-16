@@ -53,6 +53,26 @@ def test_upload_file_success(client, app, files_table):
     with open(file_path_on_disk, 'rb') as f:
         assert f.read() == file_content
 
+def test_upload_file_stores_private_note(client, files_table):
+    login_user(client, 'testuser', 'password')
+
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'file': (io.BytesIO(b"test content"), "private_note.txt"),
+            'private_note': 'Internal handoff note'
+        },
+        content_type='multipart/form-data',
+        follow_redirects=False
+    )
+
+    assert response.status_code == 200
+
+    File = Query()
+    file_info = files_table.get(File.original_name == 'private_note.txt')
+    assert file_info is not None
+    assert file_info['private_note'] == 'Internal handoff note'
+
 def test_upload_file_no_file_part(client):
     login_user(client, 'testuser', 'password')
     response = client.post(url_for('upload_file'), data={}, follow_redirects=True)
@@ -148,6 +168,34 @@ def test_view_file_success(client, app, files_table):
     assert response.status_code == 200
     assert file_name.encode() in response.data
     assert file_id.encode() in response.data
+
+def test_public_views_do_not_show_private_note(client, files_table):
+    login_user(client, 'testuser', 'password')
+
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'file': (io.BytesIO(b"view content"), "private_view.txt"),
+            'private_note': 'Only uploader should see this'
+        },
+        content_type='multipart/form-data',
+        follow_redirects=False
+    )
+    assert response.status_code == 200
+
+    File = Query()
+    file_info = files_table.get(File.original_name == 'private_view.txt')
+    assert file_info is not None
+
+    client.get(url_for('logout'))
+
+    public_response = client.get(url_for('view_file', file_id=file_info['id']))
+    assert public_response.status_code == 200
+    assert b'Only uploader should see this' not in public_response.data
+
+    confirm_response = client.post(url_for('confirm_view_file', file_id=file_info['id']))
+    assert confirm_response.status_code == 200
+    assert b'Only uploader should see this' not in confirm_response.data
 
 def test_view_file_not_found_or_downloaded(client):
     response = client.get(url_for('view_file', file_id='nonexistentid'), follow_redirects=True)

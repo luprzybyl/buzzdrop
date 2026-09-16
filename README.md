@@ -124,8 +124,11 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 - **Sanitized Logging**: No sensitive data (bucket names, file paths) exposed in logs.
 
 ### Rate Limiting:
-- Infrastructure ready with Flask-Limiter (configurable via environment).
-- Recommended: Deploy behind nginx/Cloudflare for production-grade rate limiting.
+- **Implemented with Flask-Limiter**: configurable per-route limits protect `/login`, `/api/token`, `/upload`, and public file access (`/view/<id>`, `/view/<id>/confirm`, `/download/<id>`).
+- **Environment configurable**: tune `LOGIN_RATE_LIMIT`, `API_TOKEN_RATE_LIMIT`, `UPLOAD_RATE_LIMIT`, `PUBLIC_FILE_RATE_LIMIT`, `RATE_LIMIT_ENABLED`, and `RATE_LIMIT_STORAGE_URI` in `.env`.
+- **Proxy safety by default**: Buzzdrop intentionally ignores `X-Forwarded-For` for rate-limit enforcement and uses the direct peer address (`request.remote_addr`) instead, so a direct client cannot spoof a new IP on every request to bypass limits.
+- **Reverse proxy caveat**: if you deploy behind nginx, Cloudflare, an ingress, or another proxy without explicit trusted-proxy handling in your stack, `request.remote_addr` may be the proxy address and multiple users behind that proxy may share one rate-limit bucket. Configure your proxy/deployment to pass and trust client IPs correctly rather than enabling blind trust in `X-Forwarded-For`.
+- Recommended: keep these app-level limits and deploy behind nginx/Cloudflare/AWS WAF for defense in depth.
 
 ### Input Validation:
 - Base64 validation with size limits on encrypted uploads.
@@ -216,7 +219,7 @@ Returns `{"token": "<64-char hex>", "expires_at": "<ISO-8601 timestamp>"}` — *
 
 By default, tokens expire after 30 days. You can optionally pass `{"expires_in_days": 7}` when creating a token to shorten or extend that lifetime.
 
-Tokens are stored as PBKDF2-HMAC-SHA256 fingerprints in the database; the raw value is never persisted. Logged-in users can list their active tokens with `GET /api/tokens` and revoke one with `POST /api/tokens/<token_id>/revoke`. Admins can also review and revoke active tokens for any user from the **Manage Users** page.
+Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; the raw value is never persisted. The hash secret can be set explicitly with `TOKEN_HASH_SECRET`, otherwise Buzzdrop falls back to `FLASK_SECRET_KEY` when it is configured and to a stable built-in development fallback when it is not. Existing legacy token digests remain valid and are migrated on successful validation. Logged-in users can list their active tokens with `GET /api/tokens` and revoke one with `POST /api/tokens/<token_id>/revoke`. Admins can also review and revoke active tokens for any user from the **Manage Users** page.
 
 
 The application is built with:
@@ -248,7 +251,7 @@ Before deploying Buzzdrop to production, ensure you:
 
 3. **Enable HTTPS**: Security headers like HSTS require HTTPS. Configure your reverse proxy (nginx/Apache) with valid SSL/TLS certificates.
 
-4. **Configure rate limiting**: Enable infrastructure-level rate limiting via nginx, Cloudflare, or AWS WAF for production-grade protection.
+4. **Configure rate limiting**: Review the built-in Flask-Limiter settings in `.env`, make sure your reverse-proxy deployment preserves the real client IP safely, and layer nginx, Cloudflare, or AWS WAF limits on top for production-grade protection.
 
 5. **Set up S3 (optional)**: For scalable storage, configure `STORAGE_BACKEND=s3` and provide AWS credentials in `.env`.
 
