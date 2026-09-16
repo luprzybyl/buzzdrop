@@ -46,6 +46,13 @@ def test_index_anonymous_user(client, app):
     assert b'Read the Buzzdrop README on GitHub' in response.data
     assert b'Login' in response.data # Login link in header
     assert b'Your Shared Files' not in response.data # Should not see this section title
+    assert b'/static/css/app.css' in response.data
+    assert b'cdn.jsdelivr.net/npm/@tailwindcss/browser' not in response.data
+
+def test_local_stylesheet_is_served(client):
+    response = client.get('/static/css/app.css')
+    assert response.status_code == 200
+    assert b'.btn-primary' in response.data
 
 def test_index_logged_in_user_no_files(client, app, db_instance):
     login_user(client, 'testuser', 'password')
