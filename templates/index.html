@@ -2,39 +2,51 @@
 
 {% block content %}
 {% if session.get('username') %}
-<div class="max-w-2xl mx-auto">
-    <div class="bg-white shadow-md rounded-lg p-6">
-        <h1 class="text-2xl font-bold text-gray-800 mb-6">Share Securely</h1>
-
-        <!-- Tabs -->
-        <div class="flex space-x-2 mb-6 border-b border-gray-200">
-            <button id="file-tab" onclick="showFileUpload()" class="px-4 py-2 font-medium text-indigo-600 border-b-2 border-indigo-600">
-                Upload File
-            </button>
-            <button id="text-tab" onclick="showTextNote()" class="px-4 py-2 font-medium text-gray-500 hover:text-gray-700">
-                Share Text Note
-            </button>
+<div class="mx-auto max-w-5xl">
+    <div class="surface-card p-6 sm:p-8">
+        <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div class="space-y-3">
+                <span class="eyebrow">🐝 Secure handoff</span>
+                <h1 class="section-title">Share Securely</h1>
+                <p class="max-w-2xl text-sm leading-6 text-slate-600">
+                    Create a one-time buzz for files or secret notes. Encryption happens in your browser first, and the drop disappears after the first successful open.
+                </p>
+            </div>
+            <div class="surface-card-soft p-4 text-sm text-slate-600 sm:max-w-xs">
+                <p class="font-semibold text-slate-900">Drop secured</p>
+                <p class="mt-2">For the strongest setup, send the share link and password in different channels.</p>
+            </div>
         </div>
 
-        <!-- File Upload Section -->
-        <div id="file-upload-section">
+        <div class="mt-8 rounded-full bg-slate-100 p-1">
+            <div class="flex flex-wrap gap-2">
+                <button id="file-tab" onclick="showFileUpload()" class="share-tab share-tab-active">
+                    Upload File
+                </button>
+                <button id="text-tab" onclick="showTextNote()" class="share-tab">
+                    Share Text Note
+                </button>
+            </div>
+        </div>
+
+        <div id="file-upload-section" class="mt-6">
             <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="space-y-6">
-                <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                    <div class="space-y-2">
-                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                <div class="dropzone">
+                    <div class="space-y-3">
+                        <svg class="mx-auto h-12 w-12 text-amber-500" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
-                        <div class="text-gray-600">
-                            <label for="file" class="relative cursor-pointer rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2">
-                                <span>Upload a file</span>
+                        <div class="text-slate-600">
+                            <label for="file" class="relative cursor-pointer rounded-md font-semibold text-slate-950 hover:text-amber-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-amber-300 focus-within:ring-offset-2">
+                                <span>Select a file to encrypt</span>
                                 <input id="file" name="file" type="file" class="sr-only" required>
                             </label>
-                            <p class="pl-1">or drag and drop</p>
+                            <p class="mt-2">or drag and drop it here before you make it buzz away.</p>
                         </div>
-                        <p class="text-xs text-gray-500">
+                        <p class="text-xs text-slate-500">
                             Supported formats: {{ allowed_extensions|join(', ')|upper }}
                         </p>
-                        <p class="text-xs text-gray-500">
+                        <p class="text-xs text-slate-500">
                             Maximum file size: {{ (max_content_length / 1024 / 1024)|int }}MB
                         </p>
                     </div>
@@ -42,44 +54,49 @@
             </form>
         </div>
 
-        <!-- Text Note Section -->
-        <div id="text-note-section" style="display:none;" class="space-y-6">
+        <div id="text-note-section" style="display:none;" class="mt-6 space-y-6">
             <div>
-                <label for="note-text" class="block text-sm font-medium text-gray-700 mb-2">Secret Text</label>
-                <textarea id="note-text" rows="8" class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter your secret text here..." required></textarea>
-                <p class="mt-1 text-xs text-gray-500">Your text will be encrypted in the browser before being sent to the server.</p>
+                <label for="note-text" class="field-label">Secret Text</label>
+                <textarea id="note-text" rows="8" class="field-input min-h-[13rem]" placeholder="Paste the note you want to protect with a one-time buzz..." required></textarea>
+                <p class="field-help">Your text is encrypted in the browser before it reaches the server.</p>
             </div>
         </div>
 
-        <div class="mt-6 space-y-6 border-t border-gray-200 pt-6">
-            <div>
-                <label for="shared-password" class="block text-sm font-medium text-gray-700">Password</label>
-                <input id="shared-password" type="password" class="mt-1 p-2 border rounded-md w-full" placeholder="Enter a strong password" required>
+        <div class="mt-8 grid gap-6 border-t border-slate-200 pt-6">
+            <div class="grid gap-6 md:grid-cols-2">
+                <div>
+                    <label for="shared-password" class="field-label">Password</label>
+                    <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" required>
+                    <p class="field-help">Share it separately for the strongest handoff.</p>
+                </div>
+                <div>
+                    <label for="shared-expiry" class="field-label">Expiry Date (optional)</label>
+                    <input id="shared-expiry" name="expiry" type="datetime-local" class="field-input">
+                    <p class="field-help">Optional for time-sensitive drops.</p>
+                </div>
             </div>
 
             <div>
-                <label for="shared-expiry" class="block text-sm font-medium text-gray-700">Expiry Date (optional)</label>
-                <input id="shared-expiry" name="expiry" type="datetime-local" class="mt-1 p-2 border rounded-md w-full">
+                <label for="shared-private-note" class="field-label">Private note (optional)</label>
+                <textarea id="shared-private-note" name="private_note" rows="2" class="field-input" placeholder="Visible only to you in your shared items list"></textarea>
             </div>
 
-            <div>
-                <label for="shared-private-note" class="block text-sm font-medium text-gray-700">Private note (optional)</label>
-                <textarea id="shared-private-note" name="private_note" rows="2" class="mt-1 p-2 border rounded-md w-full" placeholder="Visible only to you in your shared items list"></textarea>
-            </div>
-
-            <div class="flex justify-center">
-                <button id="share-action-btn" type="button" aria-label="Upload file" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+            <div class="surface-card-soft grid gap-4 p-4 sm:grid-cols-[1fr,auto] sm:items-center">
+                <div class="text-sm text-slate-600">
+                    <p class="font-semibold text-slate-900">One-time buzz</p>
+                    <p class="mt-1">The file is stored only as ciphertext and self-destructs after the first successful open.</p>
+                </div>
+                <button id="share-action-btn" type="button" aria-label="Upload file" class="btn-primary w-full sm:w-auto">
                     Upload File
                 </button>
-                <div id="share-progress-container" class="w-full" style="display:none; align-items:center;">
-                    <div class="w-full bg-gray-200 rounded-full h-4">
-                        <div id="share-progress-bar" class="bg-indigo-600 h-4 rounded-full" style="width: 0%"></div>
+                <div id="share-progress-container" class="col-span-full w-full" style="display:none; align-items:center;">
+                    <div class="w-full rounded-full bg-slate-200">
+                        <div id="share-progress-bar" class="h-4 rounded-full bg-amber-400 transition-all" style="width: 0%"></div>
                     </div>
-                    <span id="share-progress-text" class="ml-2 text-sm text-gray-700">0%</span>
+                    <span id="share-progress-text" class="ml-2 text-sm font-semibold text-slate-700">0%</span>
                 </div>
             </div>
         </div>
-
     </div>
 </div>
 {% else %}
@@ -178,58 +195,60 @@
 </div>
 {% endif %}
 {% if session.get('username') and user_files %}
-<div class="max-w-2xl mx-auto mt-8">
-    <div class="bg-white shadow-md rounded-lg p-6">
-        <h2 class="text-xl font-semibold text-gray-800 mb-4">Your Shared Files</h2>
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead>
-                <tr>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">File Name</th>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Uploaded At</th>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Expiry</th>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Downloaded</th>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Downloaded By</th>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                {% for file in user_files %}
-                <tr>
-                    <td class="px-4 py-2">
-                        <a href="#" class="copy-url text-indigo-600 hover:underline" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}">{{ file.original_name }}</a>
-                        {% if file.private_note %}
-                            <p class="mt-1 text-sm text-gray-500">{{ file.private_note }}</p>
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-2">{{ file.created_at }}</td>
-                    <td class="px-4 py-2">{{ file.expiry_at or '' }}</td>
-                    <td class="px-4 py-2">
-                        {% if file.downloaded_at %}
-                            <span class="text-green-600 font-semibold">{{ file.downloaded_at }}</span>
-                        {% else %}
-                            <span class="text-gray-500">No</span>
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-2">
-                        {% if file.downloaded_by_ip %}
-                            <span class="text-sm text-gray-600">{{ file.downloaded_by_ip }}</span>
-                        {% else %}
-                            <span class="text-gray-400">-</span>
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-2">
-                        {{ file.status_display }}
-                    </td>
-                    <td class="px-4 py-2 whitespace-nowrap">
+<div class="mt-8">
+    <div class="surface-card p-6 sm:p-8">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h2 class="text-xl font-semibold text-slate-950">Your Shared Files</h2>
+                <p class="mt-1 text-sm text-slate-600">Track the status of each drop and copy links without exposing your private notes.</p>
+            </div>
+            <span class="status-badge status-badge-slate">{{ user_files|length }} active or historical drops</span>
+        </div>
+        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <label class="block sm:max-w-xs sm:flex-1">
+                <span class="field-label mb-1">Quick search</span>
+                <input id="shared-files-search" type="search" class="field-input py-2.5" placeholder="Search by name, note, or status">
+            </label>
+            <div id="shared-files-summary" class="text-sm text-slate-500"></div>
+        </div>
+        <div id="shared-files-list" class="mt-4 space-y-3" data-page-size="5">
+            {% for file in user_files %}
+            <article class="dashboard-item shared-file-row" data-search-text="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.status ~ ' ' ~ file.status_display ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or '') ~ ' ' ~ (file.downloaded_by_ip or ''))|lower }}">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="min-w-0 flex-1">
+                        <div>
+                            <a href="#" class="copy-url text-base font-semibold text-slate-950 hover:text-amber-600" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}">{{ file.original_name }}</a>
+                            {% if file.private_note %}
+                                <p class="mt-2 text-sm text-slate-500">{{ file.private_note }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
+                            <span><span class="font-semibold text-slate-700">Uploaded:</span> {{ file.created_at }}</span>
+                            <span><span class="font-semibold text-slate-700">Expiry:</span> {{ file.expiry_at or 'No expiry' }}</span>
+                            <span><span class="font-semibold text-slate-700">Downloaded:</span> {{ file.downloaded_at or 'No' }}</span>
+                            <span class="break-all"><span class="font-semibold text-slate-700">Downloaded By:</span> {{ file.downloaded_by_ip or '-' }}</span>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 lg:justify-end">
+                        <span class="status-badge {% if file.downloaded_at %}status-badge-green{% elif file.status == 'expired' %}status-badge-red{% else %}status-badge-amber{% endif %}">
+                            {{ file.status_display or 'Active' }}
+                        </span>
                         <form method="post" action="{{ url_for('delete_file', file_id=file.id) }}" class="inline-block">
-                            <button type="submit" class="text-red-600 hover:underline" onclick="return confirm('Delete this file?');">Delete</button>
+                            <button type="submit" class="btn-secondary px-4 py-2 text-rose-700 hover:bg-rose-50" onclick="return confirm('Delete this file?');">Delete</button>
                         </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        <p id="shared-files-empty-state" class="mt-4 hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">No drops match this search.</p>
+        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span id="shared-files-page" class="text-sm font-medium text-slate-500"></span>
+            <div class="flex gap-2">
+                <button id="shared-files-prev" type="button" class="btn-secondary px-4 py-2">Previous</button>
+                <button id="shared-files-next" type="button" class="btn-secondary px-4 py-2">Next</button>
+            </div>
+        </div>
     </div>
 </div>
 {% endif %}

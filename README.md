@@ -41,9 +41,24 @@
    ```
 3. **Start the hive**:
    ```bash
+   npm install
+   npm run build:css
    python app.py
    ```
 4. **Fly to**: [http://localhost:5000](http://localhost:5000)
+
+### Refreshing the local CSS build
+
+Buzzdrop now serves its Tailwind-based styling from a local compiled file at `static/css/app.css` rather than the browser Tailwind CDN.
+
+Whenever you change template classes or the Tailwind source file, rebuild the production CSS with:
+
+```bash
+npm install
+npm run build:css
+```
+
+The editable source lives in `static/css/tailwind.css`, and the compiled output is committed so production deployments do not need Node installed at runtime.
 
 ---
 

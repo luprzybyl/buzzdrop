@@ -46,6 +46,13 @@ def test_index_anonymous_user(client, app):
     assert b'Read the Buzzdrop README on GitHub' in response.data
     assert b'Login' in response.data # Login link in header
     assert b'Your Shared Files' not in response.data # Should not see this section title
+    assert b'/static/css/app.css' in response.data
+    assert b'cdn.jsdelivr.net/npm/@tailwindcss/browser' not in response.data
+
+def test_local_stylesheet_is_served(client):
+    response = client.get('/static/css/app.css')
+    assert response.status_code == 200
+    assert b'.btn-primary' in response.data
 
 def test_index_logged_in_user_no_files(client, app, db_instance):
     login_user(client, 'testuser', 'password')
@@ -86,6 +93,9 @@ def test_index_logged_in_user_with_own_files(client, app, files_table):
     assert response.status_code == 200
     assert b'Your Shared Files' in response.data # This section title should now appear
     assert b'my_document.txt' in response.data
+    assert b'id="shared-files-search"' in response.data
+    assert b'id="shared-files-prev"' in response.data
+    assert b'id="shared-files-next"' in response.data
     # The "Shared With Me" section is missing in the template, so no assertions for it or its placeholders.
 
 def test_index_logged_in_user_sees_own_private_note(client, app, files_table):
