@@ -99,7 +99,8 @@ function uploadWithProgress(formData, password, uiElements) {
 }
 
 // --- File Upload Logic ---
-if (document.querySelector('form')) {
+const fileUploadForm = document.querySelector('#file-upload-section form');
+if (fileUploadForm) {
     // Validate file extension when a file is selected
     document.getElementById('file').addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -112,7 +113,7 @@ if (document.querySelector('form')) {
     });
 
     // Handle form submission: encrypt file client-side, then upload
-    document.querySelector('form').addEventListener('submit', async (e) => {
+    fileUploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const fileInput = document.getElementById('file');
         const passInput = document.getElementById('shared-password');
