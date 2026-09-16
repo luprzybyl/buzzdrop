@@ -1,5 +1,4 @@
 """Unit tests for API token generation and validation."""
-import hashlib
 from datetime import datetime, timedelta
 import pytest
 
@@ -39,32 +38,29 @@ def test_validate_api_token_expired(app, db_instance):
 def test_token_stored_as_hash_not_plaintext(app):
     with app.app_context():
         from app import get_db
-        from tokens import generate_api_token
+        from tokens import _hash_token, generate_api_token
         token = generate_api_token('testuser')
         table = get_db().table('api_tokens')
         entry = table.all()[-1]
         assert 'token_hash' in entry
         assert entry.get('token_hash') != token
-        expected_hash = hashlib.sha256(token.encode()).hexdigest()
+        expected_hash = _hash_token(token)
         assert entry['token_hash'] == expected_hash
         assert entry.get('expires_at') is not None
 
 
-def test_validate_updates_last_used_at(app):
+def test_validate_updates_last_used_at(app, db_instance):
     with app.app_context():
         from app import get_db
         from tokens import generate_api_token, validate_api_token
-        from tinydb import Query
         token = generate_api_token('testuser')
         # last_used_at is None before first validation
-        Q = Query()
         table = get_db().table('api_tokens')
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-        entry_before = table.get(Q.token_hash == token_hash)
+        entry_before = table.get(lambda item: item['username'] == 'testuser')
         assert entry_before['last_used_at'] is None
 
         validate_api_token(token)
-        entry_after = table.get(Q.token_hash == token_hash)
+        entry_after = table.get(doc_id=entry_before.doc_id)
         assert entry_after['last_used_at'] is not None
 
 
@@ -90,13 +86,13 @@ def test_list_api_tokens_filters_expired_and_legacy_tokens(app, db_instance):
 
         table = get_db().table('api_tokens')
         table.insert({
-            'token_hash': hashlib.sha256(b'legacy-active').hexdigest(),
+            'token_hash': 'legacy-active',
             'username': 'testuser',
             'created_at': datetime.now().isoformat(),
             'last_used_at': None,
         })
         table.insert({
-            'token_hash': hashlib.sha256(b'legacy-expired').hexdigest(),
+            'token_hash': 'legacy-expired',
             'username': 'testuser',
             'created_at': (datetime.now() - timedelta(days=31)).isoformat(),
             'last_used_at': None,

@@ -1,7 +1,6 @@
 """Integration tests for API token authentication and the /api/token endpoint."""
 import io
 import os
-import hashlib
 import pytest
 
 
@@ -99,8 +98,7 @@ def test_user_can_revoke_own_token(app, user_client, db_instance):
         from tokens import generate_api_token, validate_api_token
 
         token = generate_api_token('testuser')
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-        token_entry = get_db().table('api_tokens').get(lambda item: item['token_hash'] == token_hash)
+        token_entry = get_db().table('api_tokens').get(lambda item: item['username'] == 'testuser')
         token_id = token_entry.doc_id
         assert validate_api_token(token) == 'testuser'
 
@@ -121,9 +119,8 @@ def test_user_cannot_revoke_other_users_token(app, user_client, db_instance):
         from app import get_db
         from tokens import generate_api_token
 
-        token = generate_api_token('adminuser')
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-        token_entry = get_db().table('api_tokens').get(lambda item: item['token_hash'] == token_hash)
+        generate_api_token('adminuser')
+        token_entry = get_db().table('api_tokens').get(lambda item: item['username'] == 'adminuser')
         token_id = token_entry.doc_id
 
     resp = user_client.post(
