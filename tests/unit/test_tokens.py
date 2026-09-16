@@ -84,18 +84,23 @@ def test_token_hash_does_not_depend_on_temporary_session_key(app, monkeypatch):
 
 def test_validate_api_token_accepts_legacy_sha256_hash(app):
     with app.app_context():
+        import hashlib
         from app import get_db
-        from tokens import _legacy_hash_token, validate_api_token
+        from tokens import _hash_token, validate_api_token
+        from tinydb import Query
 
         token = 'a' * 64
+        legacy_hash = hashlib.new('sha256', token.encode()).hexdigest()
         get_db().table('api_tokens').insert({
-            'token_hash': _legacy_hash_token(token),
+            'token_hash': legacy_hash,
             'username': 'testuser',
             'created_at': '2026-09-16T00:00:00',
             'last_used_at': None,
         })
 
         assert validate_api_token(token) == 'testuser'
+        migrated_entry = get_db().table('api_tokens').get(Query().token_hash == _hash_token(token))
+        assert migrated_entry is not None
 
 
 def test_validate_updates_last_used_at(app):

@@ -45,11 +45,6 @@ def _hash_token(raw_token: str) -> str:
     return digest.hex()
 
 
-def _legacy_hash_token(raw_token: str) -> str:
-    """Derive the legacy SHA-256 hash used by previously issued tokens."""
-    return hashlib.new('sha256', raw_token.encode()).hexdigest()
-
-
 def generate_api_token(username: str) -> str:
     """
     Generate a new API token for a user, store its hash, and return the raw token.
@@ -89,14 +84,19 @@ def validate_api_token(raw_token: str) -> Optional[str]:
     token_hash = _hash_token(raw_token)
     Q = Query()
     table = _get_tokens_table()
-    legacy_token_hash = _legacy_hash_token(raw_token)
-    entry = table.get((Q.token_hash == token_hash) | (Q.token_hash == legacy_token_hash))
+
+    entry = table.get(Q.token_hash == token_hash)
     if not entry:
-        return None
+        legacy_token_hash = hashlib.new('sha256', raw_token.encode()).hexdigest()
+        entry = table.get(Q.token_hash == legacy_token_hash)
+        if not entry:
+            return None
+        table.update({'token_hash': token_hash}, Q.token_hash == legacy_token_hash)
+
     from auth import get_users
     if entry['username'] not in get_users():
         return None
-    table.update({'last_used_at': datetime.now().isoformat()}, Q.token_hash == entry['token_hash'])
+    table.update({'last_used_at': datetime.now().isoformat()}, Q.token_hash == token_hash)
     return entry['username']
 
 
@@ -111,8 +111,7 @@ def revoke_api_token(raw_token: str) -> bool:
         True if the token existed and was removed, False otherwise
     """
     token_hash = _hash_token(raw_token)
-    legacy_token_hash = _legacy_hash_token(raw_token)
     Q = Query()
     table = _get_tokens_table()
-    removed = table.remove((Q.token_hash == token_hash) | (Q.token_hash == legacy_token_hash))
+    removed = table.remove(Q.token_hash == token_hash)
     return bool(removed)
