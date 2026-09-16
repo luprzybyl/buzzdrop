@@ -118,6 +118,29 @@ def test_upload_with_invalid_token(client):
     assert resp.get_json()['error'] == 'Invalid or expired token'
 
 
+def test_upload_with_removed_token_user_is_rejected(app, client, monkeypatch, clear_user_cache):
+    with app.app_context():
+        from tokens import generate_api_token
+        token = generate_api_token('testuser')
+
+    monkeypatch.delenv('FLASK_USER_1', raising=False)
+    from auth import get_users
+    get_users.cache_clear()
+
+    resp = client.post(
+        '/upload',
+        data={'file': (_make_fake_upload(), 'test.pdf')},
+        headers={
+            'Authorization': 'Bearer ' + token,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        content_type='multipart/form-data',
+    )
+
+    assert resp.status_code == 401
+    assert resp.get_json()['error'] == 'Invalid or expired token'
+
+
 def test_upload_with_session_still_works(user_client, db_instance):
     """Existing web-UI session auth must remain functional."""
     import io, os
