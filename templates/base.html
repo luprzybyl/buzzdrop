@@ -20,8 +20,8 @@
                     </div>
                     {% if request.endpoint == 'index' and not session.get('username') %}
                     <a href="https://github.com/luprzybyl/buzzdrop/stargazers" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
-                        <span>Star on GitHub</span>
-                        <img src="https://img.shields.io/github/stars/luprzybyl/buzzdrop?style=social" alt="Current Buzzdrop star count on GitHub" class="h-5" loading="lazy" decoding="async"/>
+                        <span aria-hidden="true">⭐</span>
+                        <span>Star Buzzdrop on GitHub</span>
                         <span class="sr-only">(opens in new tab)</span>
                     </a>
                     {% endif %}
