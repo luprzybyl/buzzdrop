@@ -106,8 +106,8 @@
                     Zero-knowledge sharing for files and secret notes
                 </span>
                 <div class="space-y-4">
-                    <img src="{{ url_for('static', filename='logo.png') }}" alt="Buzzdrop" class="h-20"/>
-                    <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">File sharing that stings—just once.</h1>
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="h-20"/>
+                    <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">Buzzdrop: file sharing that stings—just once.</h1>
                     <p class="max-w-2xl text-lg text-indigo-100">
                         BuzzDrop: secure, one-time file sharing. Upload encrypted files or secret notes, send a link, and let them vanish after a single successful view.
                     </p>
@@ -118,7 +118,8 @@
                     </a>
                     <a href="https://github.com/luprzybyl/buzzdrop" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg border border-white/30 px-6 py-3 font-semibold text-white hover:bg-white/10">
                         <span>View on GitHub</span>
-                        <span class="ml-2 text-xs font-medium text-indigo-100">(opens in new tab)</span>
+                        <span class="sr-only">(opens in new tab)</span>
+                        <span aria-hidden="true" class="ml-2 text-xs font-medium text-indigo-100">↗</span>
                     </a>
                 </div>
                 <div class="grid gap-3 text-sm text-indigo-100 sm:grid-cols-3">
@@ -194,11 +195,13 @@
             <div class="mt-6 flex flex-col gap-3">
                 <a href="https://github.com/luprzybyl/buzzdrop" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-gray-900 px-5 py-3 font-semibold text-white hover:bg-gray-800">
                     <span>Open Buzzdrop on GitHub</span>
-                    <span class="ml-2 text-xs font-medium text-gray-300">(opens in new tab)</span>
+                    <span class="sr-only">(opens in new tab)</span>
+                    <span aria-hidden="true" class="ml-2 text-xs font-medium text-gray-300">↗</span>
                 </a>
                 <a href="https://github.com/luprzybyl/buzzdrop/blob/main/README.md" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg border border-gray-300 px-5 py-3 font-semibold text-gray-700 hover:bg-white">
                     <span>Read the Buzzdrop README on GitHub</span>
-                    <span class="ml-2 text-xs font-medium text-gray-500">(opens in new tab)</span>
+                    <span class="sr-only">(opens in new tab)</span>
+                    <span aria-hidden="true" class="ml-2 text-xs font-medium text-gray-500">↗</span>
                 </a>
             </div>
         </div>

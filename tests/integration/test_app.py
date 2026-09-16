@@ -34,7 +34,7 @@ def test_index_anonymous_user(client, app):
     assert response.status_code == 200
     # Anonymous visitors should see the marketing landing page, not the upload UI.
     assert b'Share Your File' not in response.data
-    assert b'File sharing that stings\xe2\x80\x94just once.' in response.data
+    assert b'Buzzdrop: file sharing that stings\xe2\x80\x94just once.' in response.data
     assert b'BuzzDrop: secure, one-time file sharing.' in response.data
     assert b'Star Buzzdrop on GitHub' in response.data
     assert b'https://github.com/luprzybyl/buzzdrop' in response.data
