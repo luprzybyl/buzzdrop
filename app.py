@@ -1,6 +1,8 @@
+import math
 import os
+import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 from flask import (
     Flask,
@@ -50,7 +52,6 @@ app.config.from_object(config_class)
 if not app.config.get('SECRET_KEY'):
     if os.getenv('FLASK_ENV') == 'production':
         raise ValueError("FLASK_SECRET_KEY must be set in production environment")
-    import secrets
     app.config['SECRET_KEY'] = secrets.token_hex(32)
     import logging
     logging.warning("Using temporary session key. Set FLASK_SECRET_KEY in .env for production!")
@@ -71,7 +72,53 @@ limiter = Limiter(
     enabled=app.config.get('RATE_LIMIT_ENABLED', True),
 )
 
+
+def _get_csrf_token():
+    token = session.get('csrf_token')
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session['csrf_token'] = token
+    return token
+
+
+def _is_valid_csrf_token() -> bool:
+    submitted_token = request.headers.get('X-CSRF-Token')
+    if submitted_token is None:
+        submitted_token = request.form.get('csrf_token')
+    if submitted_token is None and request.is_json:
+        submitted_token = (request.get_json(silent=True) or {}).get('csrf_token')
+
+    session_token = session.get('csrf_token')
+    return bool(submitted_token and session_token and secrets.compare_digest(submitted_token, session_token))
+
+
+def _parse_positive_integer(value):
+    if isinstance(value, bool):
+        raise ValueError
+    if isinstance(value, int):
+        parsed_value = value
+    elif isinstance(value, float):
+        if not math.isfinite(value) or not value.is_integer():
+            raise ValueError
+        parsed_value = int(value)
+    elif isinstance(value, str):
+        stripped_value = value.strip()
+        if not stripped_value or not stripped_value.isdigit():
+            raise ValueError
+        parsed_value = int(stripped_value)
+    else:
+        raise ValueError
+
+    if parsed_value < 1:
+        raise ValueError
+    return parsed_value
+
 # --- SRI HASH HELPER ---
+@app.context_processor
+def csrf_token_processor():
+    return {'csrf_token': _get_csrf_token}
+
+
 @app.context_processor
 def sri_hash_processor():
     """Context processor to generate SRI hashes for static files."""
@@ -290,8 +337,13 @@ def logout():
 @app.route('/users', methods=['GET'])
 @admin_required
 def manage_users():
+    from tokens import list_api_tokens
+
     users = get_users()
-    return render_template('users.html', users=users)
+    tokens_by_user = {username: [] for username in users}
+    for token in list_api_tokens():
+        tokens_by_user.setdefault(token['username'], []).append(token)
+    return render_template('users.html', users=users, tokens_by_user=tokens_by_user)
 
 
 @app.route('/api/token', methods=['POST'])
@@ -310,12 +362,14 @@ def create_api_token():
     - Admins may generate a token for any existing user by passing
       ``{"username": "targetuser"}``.
 
-    Request JSON: {"username": "<existing_username>"}  (optional for self)
-    Response JSON: {"token": "<raw_token>"}  ← shown once, store securely
+    Request JSON: {"username": "<existing_username>", "expires_in_days": 30}
+    Response JSON: {"token": "<raw_token>", "expires_at": "<ISO timestamp>"}
+    ← shown once, store securely
     """
-    from tokens import generate_api_token
+    from tokens import DEFAULT_TOKEN_EXPIRY_DAYS, generate_api_token
     data = request.get_json(silent=True) or {}
     requested_username = data.get('username') or session['username']
+    requested_expiry_days = data.get('expires_in_days', DEFAULT_TOKEN_EXPIRY_DAYS)
 
     users = get_users()
     current_user = users.get(session['username'], {})
@@ -327,8 +381,76 @@ def create_api_token():
     if requested_username not in users:
         return {'error': 'Unknown user'}, 404
 
-    raw_token = generate_api_token(requested_username)
-    return {'token': raw_token}, 201
+    try:
+        requested_expiry_days = _parse_positive_integer(requested_expiry_days)
+    except ValueError:
+        return {'error': 'expires_in_days must be a positive integer'}, 400
+
+    expires_at = datetime.now() + timedelta(days=requested_expiry_days)
+    raw_token = generate_api_token(requested_username, expires_at=expires_at)
+    return {'token': raw_token, 'expires_at': expires_at.isoformat()}, 201
+
+
+@app.route('/api/tokens', methods=['GET'])
+@login_required
+def list_api_tokens_route():
+    from tokens import list_api_tokens
+
+    users = get_users()
+    current_username = session['username']
+    current_user = users.get(current_username, {})
+    requested_username = request.args.get('username') or current_username
+
+    if requested_username != current_username and not current_user.get('is_admin', False):
+        return {'error': 'Admin access required to list tokens for other users'}, 403
+
+    if requested_username not in users:
+        return {'error': 'Unknown user'}, 404
+
+    return {'tokens': list_api_tokens(requested_username)}, 200
+
+
+@app.route('/api/tokens/<int:token_id>/revoke', methods=['POST'])
+@login_required
+def revoke_api_token_route(token_id):
+    from tokens import get_api_token, revoke_api_token_by_id
+
+    wants_json = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.is_json
+    )
+
+    users = get_users()
+    current_username = session['username']
+    current_user = users.get(current_username, {})
+
+    if not _is_valid_csrf_token():
+        if wants_json:
+            return {'error': 'CSRF validation failed'}, 403
+        flash('Invalid request')
+        return redirect(url_for('manage_users' if current_user.get('is_admin', False) else 'index'))
+
+    token = get_api_token(token_id)
+
+    if not token:
+        if wants_json:
+            return {'error': 'Token not found'}, 404
+        flash('API token not found')
+        return redirect(url_for('manage_users' if current_user.get('is_admin', False) else 'index'))
+
+    if token['username'] != current_username and not current_user.get('is_admin', False):
+        if wants_json:
+            return {'error': 'Admin access required to revoke tokens for other users'}, 403
+        flash('Admin access required')
+        return redirect(url_for('index'))
+
+    revoke_api_token_by_id(token_id)
+
+    if wants_json:
+        return {'status': 'revoked'}, 200
+
+    flash('API token revoked')
+    return redirect(url_for('manage_users' if current_user.get('is_admin', False) else 'index'))
 
 
 @app.route('/upload', methods=['POST'])

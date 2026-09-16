@@ -7,11 +7,12 @@ token hashes remain valid and are migrated on successful validation.
 import hashlib
 import os
 import secrets
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 from tinydb import Query
 
+DEFAULT_TOKEN_EXPIRY_DAYS = 30
 TOKEN_HASH_ITERATIONS = 310_000
 TOKEN_HASH_BYTES = 32
 DEFAULT_TOKEN_HASH_SECRET = b'buzzdrop-api-token-v1'
@@ -24,6 +25,42 @@ LEGACY_TOKEN_HASH_VERSION = 'legacy-pbkdf2-sha256-v1'
 def _get_tokens_table():
     from app import get_db
     return get_db().table('api_tokens')
+
+
+def _parse_timestamp(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _get_token_expiry(entry: Dict[str, Any]) -> Optional[datetime]:
+    expires_at = _parse_timestamp(entry.get('expires_at'))
+    if expires_at is not None:
+        return expires_at
+
+    created_at = _parse_timestamp(entry.get('created_at'))
+    if created_at is None:
+        return None
+    return created_at + timedelta(days=DEFAULT_TOKEN_EXPIRY_DAYS)
+
+
+def _is_token_expired(entry: Dict[str, Any]) -> bool:
+    expires_at = _get_token_expiry(entry)
+    return expires_at is not None and datetime.now() >= expires_at
+
+
+def _serialize_token(entry: Dict[str, Any]) -> Dict[str, Any]:
+    expires_at = _get_token_expiry(entry)
+    return {
+        'id': entry.doc_id,
+        'username': entry['username'],
+        'created_at': entry.get('created_at'),
+        'last_used_at': entry.get('last_used_at'),
+        'expires_at': expires_at.isoformat() if expires_at is not None else None,
+    }
 
 
 def _get_token_hash_secret() -> bytes:
@@ -67,7 +104,7 @@ def _has_legacy_token_hashes(table) -> bool:
     return table.contains(Q.token_hash_version == LEGACY_TOKEN_HASH_VERSION)
 
 
-def generate_api_token(username: str) -> str:
+def generate_api_token(username: str, expires_at: Optional[datetime] = None) -> str:
     """
     Generate a new API token for a user, store its hash, and return the raw token.
 
@@ -80,14 +117,17 @@ def generate_api_token(username: str) -> str:
     Returns:
         Raw 64-character hex token (show to user once)
     """
+    now = datetime.now()
     raw_token = secrets.token_hex(32)
     token_hash = _hash_token(raw_token)
+    expires_at = expires_at or (now + timedelta(days=DEFAULT_TOKEN_EXPIRY_DAYS))
     _get_tokens_table().insert({
         'token_hash': token_hash,
         'token_hash_version': TOKEN_HASH_VERSION,
         'username': username,
-        'created_at': datetime.now().isoformat(),
+        'created_at': now.isoformat(),
         'last_used_at': None,
+        'expires_at': expires_at.isoformat(),
     })
     return raw_token
 
@@ -109,9 +149,7 @@ def validate_api_token(raw_token: str) -> Optional[str]:
     table = _get_tokens_table()
 
     entry = table.get(Q.token_hash == token_hash)
-    if entry:
-        stored_token_hash = token_hash
-    else:
+    if not entry:
         if not _has_legacy_token_hashes(table):
             return None
         legacy_token_hash = _hash_token_legacy(raw_token)
@@ -121,24 +159,72 @@ def validate_api_token(raw_token: str) -> Optional[str]:
         )
         if not entry:
             return None
-        stored_token_hash = legacy_token_hash
+        token_hash = legacy_token_hash
 
     from auth import get_users
     if entry['username'] not in get_users():
         return None
 
-    if entry.get('token_hash_version') == LEGACY_TOKEN_HASH_VERSION:
-        table.update(
-            {
-                'token_hash': token_hash,
-                'token_hash_version': TOKEN_HASH_VERSION,
-            },
-            Q.token_hash == stored_token_hash,
-        )
-        stored_token_hash = token_hash
+    if _is_token_expired(entry):
+        table.remove(doc_ids=[entry.doc_id])
+        return None
 
-    table.update({'last_used_at': datetime.now().isoformat()}, Q.token_hash == stored_token_hash)
+    updates = {'last_used_at': datetime.now().isoformat()}
+    expires_at = _get_token_expiry(entry)
+    if expires_at is not None and not entry.get('expires_at'):
+        updates['expires_at'] = expires_at.isoformat()
+
+    if entry.get('token_hash_version') == LEGACY_TOKEN_HASH_VERSION:
+        updates['token_hash'] = _hash_token(raw_token)
+        updates['token_hash_version'] = TOKEN_HASH_VERSION
+    elif not entry.get('token_hash_version'):
+        updates['token_hash_version'] = TOKEN_HASH_VERSION
+
+    table.update(updates, doc_ids=[entry.doc_id])
     return entry['username']
+
+
+def list_api_tokens(username: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    List active API tokens, optionally scoped to a single user.
+
+    Expired tokens are removed from storage as part of the listing operation.
+    """
+    table = _get_tokens_table()
+    active_tokens = []
+    expired_token_ids = []
+
+    for entry in table.all():
+        if _is_token_expired(entry):
+            expired_token_ids.append(entry.doc_id)
+            continue
+        if username and entry.get('username') != username:
+            continue
+        active_tokens.append(_serialize_token(entry))
+
+    if expired_token_ids:
+        table.remove(doc_ids=expired_token_ids)
+
+    return sorted(active_tokens, key=lambda token: token['created_at'] or '', reverse=True)
+
+
+def get_api_token(token_id: int) -> Optional[Dict[str, Any]]:
+    """Return active token metadata by TinyDB document ID."""
+    table = _get_tokens_table()
+    entry = table.get(doc_id=token_id)
+    if not entry:
+        return None
+    if _is_token_expired(entry):
+        table.remove(doc_ids=[token_id])
+        return None
+    return _serialize_token(entry)
+
+
+def revoke_api_token_by_id(token_id: int) -> bool:
+    """Revoke a token by TinyDB document ID."""
+    table = _get_tokens_table()
+    removed = table.remove(doc_ids=[token_id])
+    return bool(removed)
 
 
 def revoke_api_token(raw_token: str) -> bool:
@@ -152,8 +238,12 @@ def revoke_api_token(raw_token: str) -> bool:
         True if the token existed and was removed, False otherwise
     """
     token_hash = _hash_token(raw_token)
-    legacy_token_hash = _hash_token_legacy(raw_token)
     Q = Query()
     table = _get_tokens_table()
-    removed = table.remove((Q.token_hash == token_hash) | (Q.token_hash == legacy_token_hash))
+    removed = table.remove(Q.token_hash == token_hash)
+    if removed:
+        return True
+    if not _has_legacy_token_hashes(table):
+        return False
+    removed = table.remove(Q.token_hash == _hash_token_legacy(raw_token))
     return bool(removed)

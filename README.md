@@ -206,18 +206,20 @@ The recipient opens the share link, enters the password (or uses the one-click l
 
 ## API Token Management
 
-The `/api/token` endpoint lets admins issue API tokens for CLI access.
+The `/api/token` endpoint lets any logged-in user issue an API token for themselves, and lets admins issue API tokens for other users.
 
-**Generate a token** (admin session required):
+**Generate a token** (logged-in session required; admin required only when requesting a different user):
 ```bash
 POST /api/token
 Content-Type: application/json
 
 {"username": "targetuser"}
 ```
-Returns `{"token": "<64-char hex>"}` — **shown once, store it immediately**.
+Returns `{"token": "<64-char hex>", "expires_at": "<ISO-8601 timestamp>"}` — **shown once, store it immediately**.
 
-Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; the raw value is never persisted. The hash secret can be set explicitly with `TOKEN_HASH_SECRET`, otherwise Buzzdrop falls back to `FLASK_SECRET_KEY` when it is configured and to a stable built-in development fallback when it is not. Existing legacy SHA-256 token hashes remain valid. To revoke a token, delete the corresponding entry from the `api_tokens` TinyDB table.
+By default, tokens expire after 30 days. You can optionally pass `{"expires_in_days": 7}` when creating a token to shorten or extend that lifetime.
+
+Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; the raw value is never persisted. The hash secret can be set explicitly with `TOKEN_HASH_SECRET`, otherwise Buzzdrop falls back to `FLASK_SECRET_KEY` when it is configured and to a stable built-in development fallback when it is not. Existing legacy token digests remain valid and are migrated on successful validation. Logged-in users can list their active tokens with `GET /api/tokens` and revoke one with `POST /api/tokens/<token_id>/revoke`. Admins can also review and revoke active tokens for any user from the **Manage Users** page.
 
 
 The application is built with:

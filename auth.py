@@ -3,6 +3,7 @@ Authentication module for Buzzdrop.
 Handles user management and authentication decorators.
 """
 import os
+import secrets
 from functools import wraps, lru_cache
 from flask import g, session, flash, redirect, url_for, request
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -253,6 +254,7 @@ def login_user(username: str, password: str) -> bool:
     # Set session data
     session['username'] = username
     session['is_admin'] = user.get('is_admin', False)
+    session['csrf_token'] = secrets.token_urlsafe(32)
     
     return True
 
@@ -261,3 +263,4 @@ def logout_user():
     """Log out the current user by clearing session."""
     session.pop('username', None)
     session.pop('is_admin', None)
+    session.pop('csrf_token', None)

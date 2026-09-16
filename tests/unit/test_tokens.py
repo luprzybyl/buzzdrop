@@ -1,4 +1,6 @@
 """Unit tests for API token generation and validation."""
+from datetime import datetime, timedelta
+
 import pytest
 
 
@@ -33,18 +35,27 @@ def test_validate_api_token_invalid(app):
         assert validate_api_token('0' * 64) is None
 
 
+def test_validate_api_token_expired(app, db_instance):
+    with app.app_context():
+        from app import get_db
+        from tokens import generate_api_token, validate_api_token
+
+        token = generate_api_token('testuser', expires_at=datetime.now() - timedelta(minutes=1))
+        assert validate_api_token(token) is None
+        assert get_db().table('api_tokens').all() == []
+
+
 def test_validate_api_token_rejects_removed_user(app, monkeypatch, clear_user_cache):
     with app.app_context():
         from app import get_db
-        from tokens import _hash_token
-        from tokens import generate_api_token, validate_api_token
+        from auth import get_users
         from tinydb import Query
+        from tokens import _hash_token, generate_api_token, validate_api_token
 
         token = generate_api_token('testuser')
         token_hash = _hash_token(token)
 
         monkeypatch.delenv('FLASK_USER_1', raising=False)
-        from auth import get_users
         get_users.cache_clear()
 
         assert validate_api_token(token) is None
@@ -57,14 +68,15 @@ def test_token_stored_as_hash_not_plaintext(app):
     with app.app_context():
         from app import get_db
         from tokens import TOKEN_HASH_VERSION, _hash_token, generate_api_token
+
         token = generate_api_token('testuser')
         table = get_db().table('api_tokens')
         entry = table.all()[-1]
         assert 'token_hash' in entry
         assert entry.get('token_hash') != token
-        expected_hash = _hash_token(token)
-        assert entry['token_hash'] == expected_hash
+        assert entry['token_hash'] == _hash_token(token)
         assert entry['token_hash_version'] == TOKEN_HASH_VERSION
+        assert entry.get('expires_at') is not None
 
 
 def test_token_hash_does_not_depend_on_temporary_session_key(app, monkeypatch):
@@ -83,9 +95,10 @@ def test_token_hash_does_not_depend_on_temporary_session_key(app, monkeypatch):
         assert first_hash == second_hash
 
 
-def test_validate_api_token_accepts_legacy_hash(app):
+def test_validate_api_token_accepts_legacy_hash(app, db_instance):
     with app.app_context():
         from app import get_db
+        from tinydb import Query
         from tokens import (
             LEGACY_TOKEN_HASH_VERSION,
             TOKEN_HASH_VERSION,
@@ -93,7 +106,6 @@ def test_validate_api_token_accepts_legacy_hash(app):
             _hash_token_legacy,
             validate_api_token,
         )
-        from tinydb import Query
 
         token = 'a' * 64
         legacy_hash = _hash_token_legacy(token)
@@ -101,7 +113,7 @@ def test_validate_api_token_accepts_legacy_hash(app):
             'token_hash': legacy_hash,
             'token_hash_version': LEGACY_TOKEN_HASH_VERSION,
             'username': 'testuser',
-            'created_at': '2026-09-16T00:00:00',
+            'created_at': datetime.now().isoformat(),
             'last_used_at': None,
         })
 
@@ -109,6 +121,8 @@ def test_validate_api_token_accepts_legacy_hash(app):
         migrated_entry = get_db().table('api_tokens').get(Query().token_hash == _hash_token(token))
         assert migrated_entry is not None
         assert migrated_entry['token_hash_version'] == TOKEN_HASH_VERSION
+        assert migrated_entry['expires_at'] is not None
+        assert migrated_entry['last_used_at'] is not None
 
 
 def test_validate_api_token_skips_legacy_hash_when_no_legacy_tokens_exist(app, monkeypatch):
@@ -123,46 +137,47 @@ def test_validate_api_token_skips_legacy_hash_when_no_legacy_tokens_exist(app, m
         assert validate_api_token('0' * 64) is None
 
 
-def test_validate_updates_last_used_at(app):
+def test_validate_updates_last_used_at(app, db_instance):
     with app.app_context():
         from app import get_db
-        from tokens import _hash_token, generate_api_token, validate_api_token
         from tinydb import Query
+        from tokens import _hash_token, generate_api_token, validate_api_token
+
         token = generate_api_token('testuser')
-        # last_used_at is None before first validation
-        Q = Query()
         table = get_db().table('api_tokens')
         token_hash = _hash_token(token)
-        entry_before = table.get(Q.token_hash == token_hash)
+        entry_before = table.get(Query().token_hash == token_hash)
         assert entry_before['last_used_at'] is None
 
         validate_api_token(token)
-        entry_after = table.get(Q.token_hash == token_hash)
+        entry_after = table.get(Query().token_hash == token_hash)
         assert entry_after['last_used_at'] is not None
 
 
 def test_revoke_api_token(app):
     with app.app_context():
-        from tokens import generate_api_token, validate_api_token, revoke_api_token
+        from tokens import generate_api_token, revoke_api_token, validate_api_token
+
         token = generate_api_token('testuser')
         assert validate_api_token(token) == 'testuser'
         assert revoke_api_token(token) is True
         assert validate_api_token(token) is None
 
 
-def test_revoke_api_token_removes_legacy_hash(app):
+def test_revoke_api_token_removes_legacy_hash(app, db_instance):
     with app.app_context():
         from app import get_db
-        from tokens import _hash_token_legacy, revoke_api_token
         from tinydb import Query
+        from tokens import LEGACY_TOKEN_HASH_VERSION, _hash_token_legacy, revoke_api_token
 
         token = 'a' * 64
         legacy_hash = _hash_token_legacy(token)
         table = get_db().table('api_tokens')
         table.insert({
             'token_hash': legacy_hash,
+            'token_hash_version': LEGACY_TOKEN_HASH_VERSION,
             'username': 'testuser',
-            'created_at': '2026-09-16T00:00:00',
+            'created_at': datetime.now().isoformat(),
             'last_used_at': None,
         })
 
@@ -174,3 +189,30 @@ def test_revoke_nonexistent_token(app):
     with app.app_context():
         from tokens import revoke_api_token
         assert revoke_api_token('0' * 64) is False
+
+
+def test_list_api_tokens_filters_expired_and_legacy_tokens(app, db_instance):
+    with app.app_context():
+        from app import get_db
+        from tokens import list_api_tokens
+
+        table = get_db().table('api_tokens')
+        table.insert({
+            'token_hash': 'legacy-active',
+            'username': 'testuser',
+            'created_at': datetime.now().isoformat(),
+            'last_used_at': None,
+        })
+        table.insert({
+            'token_hash': 'legacy-expired',
+            'username': 'testuser',
+            'created_at': (datetime.now() - timedelta(days=31)).isoformat(),
+            'last_used_at': None,
+        })
+
+        tokens = list_api_tokens('testuser')
+
+        assert len(tokens) == 1
+        assert tokens[0]['username'] == 'testuser'
+        assert tokens[0]['expires_at'] is not None
+        assert len(table.all()) == 1
