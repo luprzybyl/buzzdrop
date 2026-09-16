@@ -125,7 +125,8 @@ def revoke_api_token(raw_token: str) -> bool:
         True if the token existed and was removed, False otherwise
     """
     token_hash = _hash_token(raw_token)
+    legacy_token_hash = _hash_token_legacy(raw_token)
     Q = Query()
     table = _get_tokens_table()
-    removed = table.remove(Q.token_hash == token_hash)
+    removed = table.remove((Q.token_hash == token_hash) | (Q.token_hash == legacy_token_hash))
     return bool(removed)

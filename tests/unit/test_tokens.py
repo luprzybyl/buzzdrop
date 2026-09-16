@@ -129,6 +129,26 @@ def test_revoke_api_token(app):
         assert validate_api_token(token) is None
 
 
+def test_revoke_api_token_removes_legacy_hash(app):
+    with app.app_context():
+        from app import get_db
+        from tokens import _hash_token_legacy, revoke_api_token
+        from tinydb import Query
+
+        token = 'a' * 64
+        legacy_hash = _hash_token_legacy(token)
+        table = get_db().table('api_tokens')
+        table.insert({
+            'token_hash': legacy_hash,
+            'username': 'testuser',
+            'created_at': '2026-09-16T00:00:00',
+            'last_used_at': None,
+        })
+
+        assert revoke_api_token(token) is True
+        assert table.get(Query().token_hash == legacy_hash) is None
+
+
 def test_revoke_nonexistent_token(app):
     with app.app_context():
         from tokens import revoke_api_token
