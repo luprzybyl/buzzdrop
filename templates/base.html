@@ -10,14 +10,18 @@
 <body class="bg-gray-100 min-h-screen">
     <nav class="bg-white shadow-lg">
         <div class="max-w-6xl mx-auto px-4">
-            <div class="flex justify-between">
-                <div class="flex space-x-7">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex flex-wrap items-center gap-4">
                     <div>
                         <a href="{{ url_for('index') }}" class="flex items-center py-4">
-                            <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="h-18 mr-2 inline"/>
-<span class="font-semibold text-gray-500 text-lg"></span>
+                            <img src="{{ url_for('static', filename='logo.png') }}" alt="Buzzdrop logo" class="h-18 mr-2 inline"/>
+                            <span class="sr-only">Buzzdrop home</span>
                         </a>
                     </div>
+                    <a href="https://github.com/luprzybyl/buzzdrop/stargazers" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
+                        <img src="https://img.shields.io/github/stars/luprzybyl/buzzdrop?style=social" alt="GitHub stars for Buzzdrop" class="h-5" loading="lazy" decoding="async"/>
+                        <span class="sr-only">(opens in new tab)</span>
+                    </a>
                     {% if session.get('is_admin') %}
                     <div class="flex items-center">
                         <a href="{{ url_for('manage_users') }}" 
