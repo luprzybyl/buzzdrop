@@ -1,7 +1,6 @@
 import os
 import uuid
 from datetime import datetime
-from io import BytesIO
 from flask import (
     Flask,
     g,
@@ -17,6 +16,7 @@ from flask import (
 )
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
+from flask_limiter import Limiter
 from tinydb import TinyDB, Query
 from dotenv import load_dotenv
 import base64
@@ -59,6 +59,16 @@ if not app.config.get('SECRET_KEY'):
 config_class.validate()
 
 app.secret_key = app.config['SECRET_KEY']
+RATE_LIMIT_EXCEEDED_MESSAGE = 'Too many requests. Please try again later.'
+
+limiter = Limiter(
+    key_func=get_client_ip,
+    app=app,
+    default_limits=[],
+    headers_enabled=app.config.get('RATE_LIMIT_HEADERS_ENABLED', True),
+    storage_uri=app.config.get('RATE_LIMIT_STORAGE_URI', 'memory://'),
+    enabled=app.config.get('RATE_LIMIT_ENABLED', True),
+)
 
 # --- SRI HASH HELPER ---
 @app.context_processor
@@ -200,6 +210,26 @@ def handle_large_file(error):
     flash('File too large')
     return 'File too large', 413
 
+
+@app.errorhandler(429)
+def handle_rate_limit(error):
+    """Return consistent rate-limit responses for HTML, AJAX, and API clients."""
+    message = getattr(error, 'description', RATE_LIMIT_EXCEEDED_MESSAGE)
+    is_api_request = (
+        request.path.startswith('/api/')
+        or request.headers.get('Authorization', '').startswith('Bearer ')
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    )
+
+    if is_api_request:
+        return {'error': message}, 429
+
+    if request.endpoint == 'login':
+        flash(message)
+        return render_template('login.html'), 429
+
+    return message, 429
+
 @app.route('/')
 def index():
     """Home page route."""
@@ -230,6 +260,11 @@ def index():
     )
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit(
+    lambda: current_app.config['LOGIN_RATE_LIMIT'],
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
@@ -257,6 +292,11 @@ def manage_users():
 
 
 @app.route('/api/token', methods=['POST'])
+@limiter.limit(
+    lambda: current_app.config['API_TOKEN_RATE_LIMIT'],
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 @login_required
 def create_api_token():
     """
@@ -289,6 +329,11 @@ def create_api_token():
 
 
 @app.route('/upload', methods=['POST'])
+@limiter.limit(
+    lambda: current_app.config['UPLOAD_RATE_LIMIT'],
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 @api_auth_required
 def upload_file():
     # Check if this is a text note upload
@@ -385,6 +430,12 @@ def upload_file():
 # Remove confirm_download route, logic moves to /view/<file_id> and /view/<file_id>/confirm
 
 @app.route('/download/<file_id>', methods=['GET'])
+@limiter.shared_limit(
+    lambda: current_app.config['PUBLIC_FILE_RATE_LIMIT'],
+    'public_file_access',
+    methods=['GET'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 def download_file(file_id):
     file_info = file_repo.get_by_id(file_id)
     if not file_info:
@@ -453,6 +504,12 @@ def upload_success(file_id):
 
 
 @app.route('/view/<file_id>', methods=['GET'])
+@limiter.shared_limit(
+    lambda: current_app.config['PUBLIC_FILE_RATE_LIMIT'],
+    'public_file_access',
+    methods=['GET'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 def view_file(file_id):
     file_info = file_repo.get_by_id(file_id)
     if not file_info or file_info['downloaded_at'] is not None:
@@ -465,6 +522,12 @@ def view_file(file_id):
     return render_template('confirm_download.html', file_id=file_id, original_name=file_info['original_name'], file_type=file_type)
 
 @app.route('/view/<file_id>/confirm', methods=['POST'])
+@limiter.shared_limit(
+    lambda: current_app.config['PUBLIC_FILE_RATE_LIMIT'],
+    'public_file_access',
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 def confirm_view_file(file_id):
     file_info = file_repo.get_by_id(file_id)
     if not file_info or file_info['downloaded_at'] is not None:

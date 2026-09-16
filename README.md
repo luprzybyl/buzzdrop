@@ -124,8 +124,9 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 - **Sanitized Logging**: No sensitive data (bucket names, file paths) exposed in logs.
 
 ### Rate Limiting:
-- Infrastructure ready with Flask-Limiter (configurable via environment).
-- Recommended: Deploy behind nginx/Cloudflare for production-grade rate limiting.
+- **Implemented with Flask-Limiter**: configurable per-route limits protect `/login`, `/api/token`, `/upload`, and public file access (`/view/<id>`, `/view/<id>/confirm`, `/download/<id>`).
+- **Environment configurable**: tune `LOGIN_RATE_LIMIT`, `API_TOKEN_RATE_LIMIT`, `UPLOAD_RATE_LIMIT`, `PUBLIC_FILE_RATE_LIMIT`, `RATE_LIMIT_ENABLED`, and `RATE_LIMIT_STORAGE_URI` in `.env`.
+- Recommended: keep these app-level limits and deploy behind nginx/Cloudflare/AWS WAF for defense in depth.
 
 ### Input Validation:
 - Base64 validation with size limits on encrypted uploads.
@@ -246,7 +247,7 @@ Before deploying Buzzdrop to production, ensure you:
 
 3. **Enable HTTPS**: Security headers like HSTS require HTTPS. Configure your reverse proxy (nginx/Apache) with valid SSL/TLS certificates.
 
-4. **Configure rate limiting**: Enable infrastructure-level rate limiting via nginx, Cloudflare, or AWS WAF for production-grade protection.
+4. **Configure rate limiting**: Review the built-in Flask-Limiter settings in `.env` and layer nginx, Cloudflare, or AWS WAF limits on top for production-grade protection.
 
 5. **Set up S3 (optional)**: For scalable storage, configure `STORAGE_BACKEND=s3` and provide AWS credentials in `.env`.
 
