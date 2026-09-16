@@ -30,7 +30,7 @@ load_dotenv(dotenv_path=env_path)
 # Import new modules AFTER loading .env
 from config import get_config
 from storage import get_storage_backend, print_backend_info, StorageError
-from auth import login_required, admin_required, api_auth_required, get_users, login_user, logout_user
+from auth import login_required, admin_required, api_auth_required, get_users, get_current_user, login_user, logout_user
 from utils import (
     format_file_timestamps,
     enhance_file_display,
@@ -234,9 +234,11 @@ def handle_rate_limit(error):
 @app.route('/')
 def index():
     """Home page route."""
-    if 'username' in session:
+    current_user = get_current_user()
+    if current_user:
+        username = current_user['username']
         # Get files uploaded by the current user
-        user_files = file_repo.get_user_files(session['username'])
+        user_files = file_repo.get_user_files(username)
         
         # Check expiry and format for display
         for f in user_files:
@@ -244,7 +246,7 @@ def index():
             enhance_file_display(f)
 
         # Get files shared with the current user
-        shared_files = file_repo.get_shared_files(session['username'])
+        shared_files = file_repo.get_shared_files(username)
         
         return render_template(
             'index.html', 

@@ -18,6 +18,15 @@ def user_client(client):
     return client
 
 
+@pytest.fixture
+def clear_user_cache(monkeypatch):
+    from auth import get_users
+    get_users.cache_clear()
+    yield
+    monkeypatch.undo()
+    get_users.cache_clear()
+
+
 # ---------------------------------------------------------------------------
 # Token creation
 # ---------------------------------------------------------------------------
@@ -110,6 +119,29 @@ def test_upload_with_invalid_token(client):
     assert resp.get_json()['error'] == 'Invalid or expired token'
 
 
+def test_upload_with_removed_token_user_is_rejected(app, client, monkeypatch, clear_user_cache):
+    with app.app_context():
+        from tokens import generate_api_token
+        token = generate_api_token('testuser')
+
+    monkeypatch.delenv('FLASK_USER_1', raising=False)
+    from auth import get_users
+    get_users.cache_clear()
+
+    resp = client.post(
+        '/upload',
+        data={'file': (_make_fake_upload(), 'test.pdf')},
+        headers={
+            'Authorization': 'Bearer ' + token,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        content_type='multipart/form-data',
+    )
+
+    assert resp.status_code == 401
+    assert resp.get_json()['error'] == 'Invalid or expired token'
+
+
 def test_upload_with_session_still_works(user_client, db_instance):
     """Existing web-UI session auth must remain functional."""
     import io, os
@@ -121,6 +153,26 @@ def test_upload_with_session_still_works(user_client, db_instance):
     )
     assert resp.status_code == 200
     assert 'file_id' in resp.get_json()
+
+
+def test_upload_with_removed_session_user_redirects_to_login(user_client, monkeypatch, clear_user_cache):
+    monkeypatch.delenv('FLASK_USER_1', raising=False)
+    from auth import get_users
+    get_users.cache_clear()
+
+    resp = user_client.post(
+        '/upload',
+        data={'file': (_make_fake_upload(), 'test.pdf')},
+        content_type='multipart/form-data',
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert '/login' in resp.request.path
+    assert b'Please log in to access this page' in resp.data
+    with user_client.session_transaction() as sess:
+        assert 'username' not in sess
+        assert 'is_admin' not in sess
 
 
 def test_upload_token_sets_uploaded_by(app, client, db_instance):

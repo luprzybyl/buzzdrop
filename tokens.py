@@ -1,13 +1,24 @@
 """
 API token management for Buzzdrop.
-Tokens are stored as SHA-256 hashes; the raw token is shown only once at generation.
+Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests with a stable
+hash secret; the raw token is shown only once at generation. Legacy PBKDF2
+token hashes remain valid and are migrated on successful validation.
 """
 import hashlib
+import os
 import secrets
 from datetime import datetime
 from typing import Optional
 
 from tinydb import Query
+
+TOKEN_HASH_ITERATIONS = 310_000
+TOKEN_HASH_BYTES = 32
+DEFAULT_TOKEN_HASH_SECRET = b'buzzdrop-api-token-v1'
+TOKEN_HASH_VERSION = 'pbkdf2-sha256-v1'
+LEGACY_TOKEN_HASH_ITERATIONS = 120_000
+LEGACY_TOKEN_HASH_SECRET = b'buzzdrop-api-token-legacy-v1'
+LEGACY_TOKEN_HASH_VERSION = 'legacy-pbkdf2-sha256-v1'
 
 
 def _get_tokens_table():
@@ -15,12 +26,53 @@ def _get_tokens_table():
     return get_db().table('api_tokens')
 
 
+def _get_token_hash_secret() -> bytes:
+    from app import app as flask_app
+
+    token_hash_secret = flask_app.config.get('TOKEN_HASH_SECRET')
+    if not token_hash_secret:
+        token_hash_secret = os.getenv('TOKEN_HASH_SECRET') or os.getenv('FLASK_SECRET_KEY')
+    if isinstance(token_hash_secret, str):
+        token_hash_secret = token_hash_secret.encode()
+    return token_hash_secret or DEFAULT_TOKEN_HASH_SECRET
+
+
+def _hash_token(raw_token: str) -> str:
+    """Derive the current deterministic digest for API token storage and lookup."""
+    digest = hashlib.pbkdf2_hmac(
+        'sha256',
+        raw_token.encode(),
+        _get_token_hash_secret(),
+        TOKEN_HASH_ITERATIONS,
+        dklen=TOKEN_HASH_BYTES,
+    )
+    return digest.hex()
+
+
+def _hash_token_legacy(raw_token: str) -> str:
+    """Derive deterministic legacy digest for backward-compatible token migration."""
+    digest = hashlib.pbkdf2_hmac(
+        'sha256',
+        raw_token.encode(),
+        LEGACY_TOKEN_HASH_SECRET,
+        LEGACY_TOKEN_HASH_ITERATIONS,
+        dklen=TOKEN_HASH_BYTES,
+    )
+    return digest.hex()
+
+
+def _has_legacy_token_hashes(table) -> bool:
+    """Return whether any stored API tokens still use the legacy hash version."""
+    Q = Query()
+    return table.contains(Q.token_hash_version == LEGACY_TOKEN_HASH_VERSION)
+
+
 def generate_api_token(username: str) -> str:
     """
     Generate a new API token for a user, store its hash, and return the raw token.
 
     The raw token is returned exactly once and never stored. Future lookups use
-    the SHA-256 hash.
+    the derived token digest.
 
     Args:
         username: Username to associate with the token
@@ -29,9 +81,10 @@ def generate_api_token(username: str) -> str:
         Raw 64-character hex token (show to user once)
     """
     raw_token = secrets.token_hex(32)
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    token_hash = _hash_token(raw_token)
     _get_tokens_table().insert({
         'token_hash': token_hash,
+        'token_hash_version': TOKEN_HASH_VERSION,
         'username': username,
         'created_at': datetime.now().isoformat(),
         'last_used_at': None,
@@ -51,13 +104,40 @@ def validate_api_token(raw_token: str) -> Optional[str]:
     Returns:
         Username string if valid, None otherwise
     """
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    token_hash = _hash_token(raw_token)
     Q = Query()
     table = _get_tokens_table()
+
     entry = table.get(Q.token_hash == token_hash)
-    if not entry:
+    if entry:
+        stored_token_hash = token_hash
+    else:
+        if not _has_legacy_token_hashes(table):
+            return None
+        legacy_token_hash = _hash_token_legacy(raw_token)
+        entry = table.get(
+            (Q.token_hash == legacy_token_hash)
+            & (Q.token_hash_version == LEGACY_TOKEN_HASH_VERSION)
+        )
+        if not entry:
+            return None
+        stored_token_hash = legacy_token_hash
+
+    from auth import get_users
+    if entry['username'] not in get_users():
         return None
-    table.update({'last_used_at': datetime.now().isoformat()}, Q.token_hash == token_hash)
+
+    if entry.get('token_hash_version') == LEGACY_TOKEN_HASH_VERSION:
+        table.update(
+            {
+                'token_hash': token_hash,
+                'token_hash_version': TOKEN_HASH_VERSION,
+            },
+            Q.token_hash == stored_token_hash,
+        )
+        stored_token_hash = token_hash
+
+    table.update({'last_used_at': datetime.now().isoformat()}, Q.token_hash == stored_token_hash)
     return entry['username']
 
 
@@ -71,8 +151,9 @@ def revoke_api_token(raw_token: str) -> bool:
     Returns:
         True if the token existed and was removed, False otherwise
     """
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    token_hash = _hash_token(raw_token)
+    legacy_token_hash = _hash_token_legacy(raw_token)
     Q = Query()
     table = _get_tokens_table()
-    removed = table.remove(Q.token_hash == token_hash)
+    removed = table.remove((Q.token_hash == token_hash) | (Q.token_hash == legacy_token_hash))
     return bool(removed)

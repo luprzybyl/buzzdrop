@@ -5,6 +5,15 @@ from flask import session, url_for, get_flashed_messages
 # os.environ['FLASK_USER_1'] = 'testuser:password:false'
 # os.environ['FLASK_USER_2'] = 'adminuser:adminpass:true'
 
+
+@pytest.fixture
+def clear_user_cache(monkeypatch):
+    from auth import get_users
+    get_users.cache_clear()
+    yield
+    monkeypatch.undo()
+    get_users.cache_clear()
+
 def test_login_page_loads(client):
     response = client.get(url_for('login'))
     assert response.status_code == 200
@@ -107,6 +116,38 @@ def test_login_required_allows_access_when_logged_in(client, app):
     assert response_upload_get.status_code == 405 or b'No file part' in response_upload_get.data or b'Method Not Allowed' in response_upload_get.data
 
 
+def test_removed_session_user_is_logged_out_on_index(client, monkeypatch, clear_user_cache):
+    client.post(url_for('login'), data={'username': 'testuser', 'password': 'password'})
+
+    monkeypatch.delenv('FLASK_USER_1', raising=False)
+    from auth import get_users
+    get_users.cache_clear()
+
+    response = client.get(url_for('index'))
+
+    assert response.status_code == 200
+    with client.session_transaction() as sess:
+        assert 'username' not in sess
+        assert 'is_admin' not in sess
+
+
+def test_login_required_logs_out_removed_user(client, monkeypatch, clear_user_cache):
+    client.post(url_for('login'), data={'username': 'testuser', 'password': 'password'})
+
+    monkeypatch.delenv('FLASK_USER_1', raising=False)
+    from auth import get_users
+    get_users.cache_clear()
+
+    response = client.get(url_for('upload_success', file_id='somefile'), follow_redirects=True)
+
+    assert response.status_code == 200
+    assert url_for('login') in response.request.path
+    assert b'Please log in to access this page' in response.data
+    with client.session_transaction() as sess:
+        assert 'username' not in sess
+        assert 'is_admin' not in sess
+
+
 def test_admin_required_redirects_non_admin_to_index(client, app):
     # Log in as a normal user
     client.post(url_for('login'), data={'username': 'testuser', 'password': 'password'})
@@ -132,3 +173,37 @@ def test_admin_required_allows_admin_access(client, app):
     # Check if user list is present (e.g., testuser, adminuser)
     assert b'testuser' in response.data
     assert b'adminuser' in response.data
+
+
+def test_admin_required_logs_out_removed_admin(client, monkeypatch, clear_user_cache):
+    client.post(url_for('login'), data={'username': 'adminuser', 'password': 'adminpass'})
+
+    monkeypatch.delenv('FLASK_USER_2', raising=False)
+    from auth import get_users
+    get_users.cache_clear()
+
+    response = client.get(url_for('manage_users'), follow_redirects=True)
+
+    assert response.status_code == 200
+    assert url_for('login') in response.request.path
+    assert b'Please log in to access this page' in response.data
+    with client.session_transaction() as sess:
+        assert 'username' not in sess
+        assert 'is_admin' not in sess
+
+
+def test_admin_required_revokes_session_admin_on_demotion(client, monkeypatch, clear_user_cache):
+    client.post(url_for('login'), data={'username': 'adminuser', 'password': 'adminpass'})
+
+    monkeypatch.setenv('FLASK_USER_2', 'adminuser:adminpass:false')
+    from auth import get_users
+    get_users.cache_clear()
+
+    response = client.get(url_for('manage_users'), follow_redirects=True)
+
+    assert response.status_code == 200
+    assert url_for('index') in response.request.path
+    assert b'Admin access required' in response.data
+    with client.session_transaction() as sess:
+        assert sess['username'] == 'adminuser'
+        assert sess['is_admin'] is False

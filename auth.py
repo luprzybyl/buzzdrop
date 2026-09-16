@@ -111,15 +111,33 @@ def get_current_user() -> dict:
             'is_admin': bool
         }
     """
-    username = session.get('username')
-    
+    username, user = _get_active_session_user()
+
     if not username:
         return None
-    
+
     return {
         'username': username,
-        'is_admin': session.get('is_admin', False)
+        'is_admin': user.get('is_admin', False)
     }
+
+
+def _get_active_session_user():
+    """Return the current session user if still configured, otherwise clear session."""
+    username = session.get('username')
+
+    if not username:
+        return None, None
+
+    users = get_users()
+    user = users.get(username)
+
+    if not user:
+        logout_user()
+        return None, None
+
+    session['is_admin'] = user.get('is_admin', False)
+    return username, user
 
 
 def login_required(f):
@@ -135,7 +153,8 @@ def login_required(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session:
+        username, _ = _get_active_session_user()
+        if not username:
             flash('Please log in to access this page')
             return redirect(url_for('login'))
         return f(*args, **kwargs)
@@ -176,10 +195,11 @@ def api_auth_required(f):
             return f(*args, **kwargs)
 
         # No Bearer header: require session login
-        if 'username' not in session:
+        username, _ = _get_active_session_user()
+        if not username:
             flash('Please log in to access this page')
             return redirect(url_for('login'))
-        g.username = session['username']
+        g.username = username
         return f(*args, **kwargs)
 
     return decorated_function
@@ -199,14 +219,12 @@ def admin_required(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session:
+        username, user = _get_active_session_user()
+        if not username:
             flash('Please log in to access this page')
             return redirect(url_for('login'))
-        
-        users = get_users()
-        user = users.get(session['username'])
-        
-        if not user or not user['is_admin']:
+
+        if not user['is_admin']:
             flash('Admin access required')
             return redirect(url_for('index'))
         
