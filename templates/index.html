@@ -62,6 +62,11 @@
                 <input id="shared-expiry" name="expiry" type="datetime-local" class="mt-1 p-2 border rounded-md w-full">
             </div>
 
+            <div>
+                <label for="shared-private-note" class="block text-sm font-medium text-gray-700">Private note (optional)</label>
+                <textarea id="shared-private-note" name="private_note" rows="2" class="mt-1 p-2 border rounded-md w-full" placeholder="Visible only to you in your shared items list"></textarea>
+            </div>
+
             <div class="flex justify-center">
                 <button id="share-action-btn" type="button" aria-label="Upload file" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
                     Upload File
@@ -191,7 +196,12 @@
             <tbody class="bg-white divide-y divide-gray-200">
                 {% for file in user_files %}
                 <tr>
-                    <td class="px-4 py-2"><a href="#" class="copy-url text-indigo-600 hover:underline" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}">{{ file.original_name }}</a></td>
+                    <td class="px-4 py-2">
+                        <a href="#" class="copy-url text-indigo-600 hover:underline" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}">{{ file.original_name }}</a>
+                        {% if file.private_note %}
+                            <p class="mt-1 text-sm text-gray-500">{{ file.private_note }}</p>
+                        {% endif %}
+                    </td>
                     <td class="px-4 py-2">{{ file.created_at }}</td>
                     <td class="px-4 py-2">{{ file.expiry_at or '' }}</td>
                     <td class="px-4 py-2">

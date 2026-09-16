@@ -56,6 +56,7 @@ class FileRepository:
             'status': 'active',
             'decryption_success': None,
             'type': file_data.get('type', 'file'),
+            'private_note': file_data.get('private_note'),
             'shared_with': file_data.get('shared_with', []),
         }
         
