@@ -1,4 +1,6 @@
+import math
 import os
+import secrets
 import uuid
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -49,7 +51,6 @@ app.config.from_object(config_class)
 if not app.config.get('SECRET_KEY'):
     if os.getenv('FLASK_ENV') == 'production':
         raise ValueError("FLASK_SECRET_KEY must be set in production environment")
-    import secrets
     app.config['SECRET_KEY'] = secrets.token_hex(32)
     import logging
     logging.warning("Using temporary session key. Set FLASK_SECRET_KEY in .env for production!")
@@ -60,7 +61,53 @@ config_class.validate()
 
 app.secret_key = app.config['SECRET_KEY']
 
+
+def _get_csrf_token():
+    token = session.get('csrf_token')
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session['csrf_token'] = token
+    return token
+
+
+def _is_valid_csrf_token() -> bool:
+    submitted_token = request.headers.get('X-CSRF-Token')
+    if submitted_token is None:
+        submitted_token = request.form.get('csrf_token')
+    if submitted_token is None and request.is_json:
+        submitted_token = (request.get_json(silent=True) or {}).get('csrf_token')
+
+    session_token = session.get('csrf_token')
+    return bool(submitted_token and session_token and secrets.compare_digest(submitted_token, session_token))
+
+
+def _parse_positive_integer(value):
+    if isinstance(value, bool):
+        raise ValueError
+    if isinstance(value, int):
+        parsed_value = value
+    elif isinstance(value, float):
+        if not math.isfinite(value) or not value.is_integer():
+            raise ValueError
+        parsed_value = int(value)
+    elif isinstance(value, str):
+        stripped_value = value.strip()
+        if not stripped_value or not stripped_value.isdigit():
+            raise ValueError
+        parsed_value = int(stripped_value)
+    else:
+        raise ValueError
+
+    if parsed_value < 1:
+        raise ValueError
+    return parsed_value
+
 # --- SRI HASH HELPER ---
+@app.context_processor
+def csrf_token_processor():
+    return {'csrf_token': _get_csrf_token}
+
+
 @app.context_processor
 def sri_hash_processor():
     """Context processor to generate SRI hashes for static files."""
@@ -292,11 +339,8 @@ def create_api_token():
         return {'error': 'Unknown user'}, 404
 
     try:
-        requested_expiry_days = int(requested_expiry_days)
-    except (TypeError, ValueError):
-        return {'error': 'expires_in_days must be a positive integer'}, 400
-
-    if requested_expiry_days < 1:
+        requested_expiry_days = _parse_positive_integer(requested_expiry_days)
+    except ValueError:
         return {'error': 'expires_in_days must be a positive integer'}, 400
 
     expires_at = datetime.now() + timedelta(days=requested_expiry_days)
@@ -336,6 +380,13 @@ def revoke_api_token_route(token_id):
     users = get_users()
     current_username = session['username']
     current_user = users.get(current_username, {})
+
+    if not _is_valid_csrf_token():
+        if wants_json:
+            return {'error': 'CSRF validation failed'}, 403
+        flash('Invalid request')
+        return redirect(url_for('manage_users' if current_user.get('is_admin', False) else 'index'))
+
     token = get_api_token(token_id)
 
     if not token:

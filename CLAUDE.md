@@ -75,7 +75,7 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 
 `api_tokens` table tracks:
 - `token_hash` (PBKDF2-HMAC-SHA256 fingerprint of the raw token — raw token is never stored)
-- `username`, `created_at`, `last_used_at`
+- `username`, `created_at`, `last_used_at`, `expires_at`
 
 **Database Helper Functions**:
 - `get_db()`: Returns TinyDB instance, handles reopening if closed (important for tests)

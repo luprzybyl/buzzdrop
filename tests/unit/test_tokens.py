@@ -79,6 +79,46 @@ def test_revoke_nonexistent_token(app):
         assert revoke_api_token('0' * 64) is False
 
 
+def test_validate_api_token_migrates_legacy_fingerprint(app, db_instance):
+    with app.app_context():
+        from app import get_db
+        from tokens import _hash_token, _legacy_hash_token, validate_api_token
+
+        token = 'a' * 64
+        table = get_db().table('api_tokens')
+        table.insert({
+            'token_hash': _legacy_hash_token(token),
+            'username': 'testuser',
+            'created_at': datetime.now().isoformat(),
+            'last_used_at': None,
+        })
+
+        assert validate_api_token(token) == 'testuser'
+
+        entry = table.all()[0]
+        assert entry['token_hash'] == _hash_token(token)
+        assert entry['expires_at'] is not None
+        assert entry['last_used_at'] is not None
+
+
+def test_revoke_api_token_accepts_legacy_fingerprint(app, db_instance):
+    with app.app_context():
+        from app import get_db
+        from tokens import _legacy_hash_token, revoke_api_token
+
+        token = 'b' * 64
+        table = get_db().table('api_tokens')
+        table.insert({
+            'token_hash': _legacy_hash_token(token),
+            'username': 'testuser',
+            'created_at': datetime.now().isoformat(),
+            'last_used_at': None,
+        })
+
+        assert revoke_api_token(token) is True
+        assert table.all() == []
+
+
 def test_list_api_tokens_filters_expired_and_legacy_tokens(app, db_instance):
     with app.app_context():
         from app import get_db

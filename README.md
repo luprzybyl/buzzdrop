@@ -203,9 +203,9 @@ The recipient opens the share link, enters the password (or uses the one-click l
 
 ## API Token Management
 
-The `/api/token` endpoint lets admins issue API tokens for CLI access.
+The `/api/token` endpoint lets any logged-in user issue an API token for themselves, and lets admins issue API tokens for other users.
 
-**Generate a token** (admin session required):
+**Generate a token** (logged-in session required; admin required only when requesting a different user):
 ```bash
 POST /api/token
 Content-Type: application/json

@@ -4,6 +4,15 @@ import os
 import pytest
 
 
+def _csrf_headers(client):
+    with client.session_transaction() as session:
+        csrf_token = session['csrf_token']
+    return {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-Token': csrf_token,
+    }
+
+
 @pytest.fixture
 def admin_client(client):
     """A test client logged in as admin."""
@@ -70,6 +79,13 @@ def test_create_token_rejects_invalid_expiry(user_client):
     assert resp.get_json()['error'] == 'expires_in_days must be a positive integer'
 
 
+@pytest.mark.parametrize('expires_in_days', [1.5, True, float('inf')])
+def test_create_token_rejects_non_integer_expiry_values(user_client, expires_in_days):
+    resp = user_client.post('/api/token', json={'expires_in_days': expires_in_days})
+    assert resp.status_code == 400
+    assert resp.get_json()['error'] == 'expires_in_days must be a positive integer'
+
+
 def test_list_tokens_for_self(app, user_client, db_instance):
     with app.app_context():
         from tokens import generate_api_token
@@ -104,7 +120,7 @@ def test_user_can_revoke_own_token(app, user_client, db_instance):
 
     resp = user_client.post(
         f'/api/tokens/{token_id}/revoke',
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers=_csrf_headers(user_client),
     )
     assert resp.status_code == 200
     assert resp.get_json()['status'] == 'revoked'
@@ -125,9 +141,49 @@ def test_user_cannot_revoke_other_users_token(app, user_client, db_instance):
 
     resp = user_client.post(
         f'/api/tokens/{token_id}/revoke',
+        headers=_csrf_headers(user_client),
+    )
+    assert resp.status_code == 403
+
+
+def test_admin_can_revoke_other_users_token(app, admin_client, db_instance):
+    with app.app_context():
+        from app import get_db
+        from tokens import generate_api_token, validate_api_token
+
+        token = generate_api_token('testuser')
+        token_entry = get_db().table('api_tokens').get(lambda item: item['username'] == 'testuser')
+        token_id = token_entry.doc_id
+        assert validate_api_token(token) == 'testuser'
+
+    resp = admin_client.post(
+        f'/api/tokens/{token_id}/revoke',
+        headers=_csrf_headers(admin_client),
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()['status'] == 'revoked'
+
+    with app.app_context():
+        from tokens import list_api_tokens, validate_api_token
+        assert validate_api_token(token) is None
+        assert list_api_tokens('testuser') == []
+
+
+def test_revoke_token_requires_csrf(app, user_client, db_instance):
+    with app.app_context():
+        from app import get_db
+        from tokens import generate_api_token
+
+        generate_api_token('testuser')
+        token_entry = get_db().table('api_tokens').get(lambda item: item['username'] == 'testuser')
+        token_id = token_entry.doc_id
+
+    resp = user_client.post(
+        f'/api/tokens/{token_id}/revoke',
         headers={'X-Requested-With': 'XMLHttpRequest'},
     )
     assert resp.status_code == 403
+    assert resp.get_json()['error'] == 'CSRF validation failed'
 
 
 # ---------------------------------------------------------------------------
