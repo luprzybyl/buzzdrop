@@ -42,11 +42,7 @@ def test_index_anonymous_user(client, app):
     assert b'View on GitHub' not in response.data
     assert b'https://github.com/luprzybyl/buzzdrop' in response.data
     assert b'https://github.com/luprzybyl/buzzdrop/blob/main/README.md' in response.data
-    assert b'https://github.com/luprzybyl/buzzdrop/stargazers' in response.data
-    assert b'luprzybyl/buzzdrop' in response.data
-    assert b'GitHub' in response.data
-    assert b'Star' in response.data
-    assert b'README' in response.data
+    assert b'aria-label="Open Buzzdrop on GitHub (opens in new tab)"' in response.data
     assert b'Read the Buzzdrop README on GitHub' in response.data
     assert b'Login' in response.data # Login link in header
     assert b'Your Shared Files' not in response.data # Should not see this section title
