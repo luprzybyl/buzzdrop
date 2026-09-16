@@ -32,10 +32,12 @@ def test_index_anonymous_user(client, app):
 
     response = client.get(url_for('index'))
     assert response.status_code == 200
-    # For anonymous user, from index.html:
-    # Anonymous visitors only see the humorous landing message, not the upload title
+    # Anonymous visitors should see the marketing landing page, not the upload UI.
     assert b'Share Your File' not in response.data
+    assert b'File sharing that stings\xe2\x80\x94just once.' in response.data
     assert b'BuzzDrop: secure, one-time file sharing.' in response.data
+    assert b'Star Buzzdrop on GitHub' in response.data
+    assert b'https://github.com/luprzybyl/buzzdrop' in response.data
     assert b'Login' in response.data # Login link in header
     assert b'Your Shared Files' not in response.data # Should not see this section title
 

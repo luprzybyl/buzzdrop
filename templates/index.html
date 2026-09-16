@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% if session.get('username') %}
 <div class="max-w-2xl mx-auto">
     <div class="bg-white shadow-md rounded-lg p-6">
-        {% if session.get('username') %}
         <h1 class="text-2xl font-bold text-gray-800 mb-6">Share Securely</h1>
 
         <!-- Tabs -->
@@ -95,14 +95,104 @@
             </div>
         </div>
 
-        {% else %}
-            <div class="text-center py-12">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="mx-auto h-32 mb-4"/>
-                <p class="text-gray-600">BuzzDrop: secure, one-time file sharing.</p>
-            </div>
-        {% endif %}
     </div>
 </div>
+{% else %}
+<div class="max-w-6xl mx-auto space-y-8">
+    <section class="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-2xl">
+        <div class="grid gap-10 px-8 py-10 lg:grid-cols-[1.4fr,1fr] lg:px-12 lg:py-14">
+            <div class="space-y-6">
+                <span class="inline-flex items-center rounded-full bg-white/10 px-4 py-1 text-sm font-medium ring-1 ring-white/20">
+                    Zero-knowledge sharing for files and secret notes
+                </span>
+                <div class="space-y-4">
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="Buzzdrop Logo" class="h-20"/>
+                    <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">File sharing that stings—just once.</h1>
+                    <p class="max-w-2xl text-lg text-indigo-100">
+                        BuzzDrop: secure, one-time file sharing. Upload encrypted files or secret notes, send a link, and let them vanish after a single successful view.
+                    </p>
+                </div>
+                <div class="flex flex-col gap-3 sm:flex-row">
+                    <a href="{{ url_for('login') }}" class="inline-flex items-center justify-center rounded-lg bg-white px-6 py-3 font-semibold text-indigo-700 shadow hover:bg-indigo-50">
+                        Login to start sharing
+                    </a>
+                    <a href="https://github.com/luprzybyl/buzzdrop" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg border border-white/30 px-6 py-3 font-semibold text-white hover:bg-white/10">
+                        View on GitHub
+                    </a>
+                </div>
+                <div class="grid gap-3 text-sm text-indigo-100 sm:grid-cols-3">
+                    <div class="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/10">🔒 AES-GCM + PBKDF2 encryption in the browser</div>
+                    <div class="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/10">💥 One-time downloads with self-destructing links</div>
+                    <div class="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/10">📝 Secret text notes alongside file sharing</div>
+                </div>
+            </div>
+
+            <div class="rounded-3xl bg-white/10 p-6 shadow-lg ring-1 ring-white/15 backdrop-blur">
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-100">Why Buzzdrop</p>
+                <div class="mt-4 space-y-4">
+                    <div class="rounded-2xl bg-slate-950/20 p-4">
+                        <p class="text-lg font-semibold">One link. One view. Gone.</p>
+                        <p class="mt-1 text-sm text-indigo-100">Perfect for contracts, credentials, handoffs, and anything else that should not linger in an inbox forever.</p>
+                    </div>
+                    <div class="rounded-2xl bg-slate-950/20 p-4">
+                        <p class="text-lg font-semibold">Your server never sees plaintext.</p>
+                        <p class="mt-1 text-sm text-indigo-100">Encryption happens before upload, so Buzzdrop stores only ciphertext and metadata.</p>
+                    </div>
+                    <div class="rounded-2xl bg-slate-950/20 p-4">
+                        <p class="text-lg font-semibold">Built for flexible deployment.</p>
+                        <p class="mt-1 text-sm text-indigo-100">Run it with local storage or S3, and tune file type and size rules for your team.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid gap-6 lg:grid-cols-[1.3fr,1fr]">
+        <div class="rounded-3xl bg-white p-8 shadow-md">
+            <h2 class="text-2xl font-bold text-gray-900">How it works</h2>
+            <div class="mt-6 grid gap-4 md:grid-cols-3">
+                <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5">
+                    <p class="text-sm font-semibold text-indigo-600">1. Encrypt before upload</p>
+                    <p class="mt-2 text-sm text-gray-600">Choose a file or write a note, set a password, and let the browser encrypt everything locally.</p>
+                </div>
+                <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5">
+                    <p class="text-sm font-semibold text-indigo-600">2. Share the generated link</p>
+                    <p class="mt-2 text-sm text-gray-600">Send the one-time link and share the password separately when you want the strongest protection.</p>
+                </div>
+                <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5">
+                    <p class="text-sm font-semibold text-indigo-600">3. Watch it self-destruct</p>
+                    <p class="mt-2 text-sm text-gray-600">After the first successful download or view, the encrypted payload is deleted automatically.</p>
+                </div>
+            </div>
+            <div class="mt-6 flex flex-wrap gap-3 text-sm text-gray-600">
+                <span class="rounded-full bg-indigo-50 px-4 py-2 font-medium text-indigo-700">Supported formats: {{ allowed_extensions|join(', ')|upper }}</span>
+                <span class="rounded-full bg-gray-100 px-4 py-2 font-medium text-gray-700">Max file size: {{ (max_content_length / 1024 / 1024)|int }}MB</span>
+            </div>
+        </div>
+
+        <div class="rounded-3xl border border-amber-200 bg-amber-50 p-8 shadow-md">
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Open source</p>
+            <h2 class="mt-3 text-2xl font-bold text-gray-900">Star Buzzdrop on GitHub</h2>
+            <p class="mt-3 text-sm leading-6 text-gray-700">
+                Like the idea? Explore the code, follow releases, or drop a star to support the project and help more people find secure one-time sharing.
+            </p>
+            <ul class="mt-5 space-y-3 text-sm text-gray-700">
+                <li>🐝 Read the full feature list and security notes in the README.</li>
+                <li>🚀 Grab the <code class="rounded bg-white px-2 py-1 text-xs">buzz</code> CLI for encrypted uploads from your terminal.</li>
+                <li>✅ Track the latest build status and ongoing improvements in the repository.</li>
+            </ul>
+            <div class="mt-6 flex flex-col gap-3">
+                <a href="https://github.com/luprzybyl/buzzdrop" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-gray-900 px-5 py-3 font-semibold text-white hover:bg-gray-800">
+                    GitHub Repository
+                </a>
+                <a href="https://github.com/luprzybyl/buzzdrop#readme" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg border border-gray-300 px-5 py-3 font-semibold text-gray-700 hover:bg-white">
+                    Read the README
+                </a>
+            </div>
+        </div>
+    </section>
+</div>
+{% endif %}
 {% if session.get('username') and user_files %}
 <div class="max-w-2xl mx-auto mt-8">
     <div class="bg-white shadow-md rounded-lg p-6">
