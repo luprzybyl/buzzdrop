@@ -66,6 +66,22 @@ def test_token_stored_as_hash_not_plaintext(app):
         assert entry['token_hash'] == expected_hash
 
 
+def test_token_hash_does_not_depend_on_temporary_session_key(app, monkeypatch):
+    with app.app_context():
+        from tokens import _hash_token
+
+        monkeypatch.delenv('FLASK_SECRET_KEY', raising=False)
+        app.config.pop('TOKEN_HASH_SECRET', None)
+
+        app.config['SECRET_KEY'] = 'temporary-session-key-1'
+        first_hash = _hash_token('a' * 64)
+
+        app.config['SECRET_KEY'] = 'temporary-session-key-2'
+        second_hash = _hash_token('a' * 64)
+
+        assert first_hash == second_hash
+
+
 def test_validate_api_token_accepts_legacy_sha256_hash(app):
     with app.app_context():
         from app import get_db

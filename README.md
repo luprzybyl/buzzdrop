@@ -214,7 +214,7 @@ Content-Type: application/json
 ```
 Returns `{"token": "<64-char hex>"}` — **shown once, store it immediately**.
 
-Tokens are stored as deterministic keyed BLAKE2s digests in the database; the raw value is never persisted. Existing legacy SHA-256 token hashes remain valid. To revoke a token, delete the corresponding entry from the `api_tokens` TinyDB table.
+Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; the raw value is never persisted. The hash secret can be set explicitly with `TOKEN_HASH_SECRET`, otherwise Buzzdrop falls back to `FLASK_SECRET_KEY` when it is configured and to a stable built-in development fallback when it is not. Existing legacy SHA-256 token hashes remain valid. To revoke a token, delete the corresponding entry from the `api_tokens` TinyDB table.
 
 
 The application is built with:

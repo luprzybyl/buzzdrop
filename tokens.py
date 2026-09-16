@@ -1,14 +1,20 @@
 """
 API token management for Buzzdrop.
-Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests; the raw token is
-shown only once at generation. Legacy SHA-256 token hashes remain valid.
+Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests with a stable
+hash secret; the raw token is shown only once at generation. Legacy SHA-256
+token hashes remain valid.
 """
 import hashlib
+import os
 import secrets
 from datetime import datetime
 from typing import Optional
 
 from tinydb import Query
+
+TOKEN_HASH_ITERATIONS = 310_000
+TOKEN_HASH_BYTES = 32
+DEFAULT_TOKEN_HASH_SECRET = b'buzzdrop-api-token-v1'
 
 
 def _get_tokens_table():
@@ -16,13 +22,15 @@ def _get_tokens_table():
     return get_db().table('api_tokens')
 
 
-def _get_token_hash_key() -> bytes:
+def _get_token_hash_secret() -> bytes:
     from app import app as flask_app
 
-    secret_key = flask_app.config.get('SECRET_KEY') or ''
-    if isinstance(secret_key, str):
-        return secret_key.encode()
-    return secret_key
+    token_hash_secret = flask_app.config.get('TOKEN_HASH_SECRET')
+    if not token_hash_secret:
+        token_hash_secret = os.getenv('TOKEN_HASH_SECRET') or os.getenv('FLASK_SECRET_KEY')
+    if isinstance(token_hash_secret, str):
+        token_hash_secret = token_hash_secret.encode()
+    return token_hash_secret or DEFAULT_TOKEN_HASH_SECRET
 
 
 def _hash_token(raw_token: str) -> str:
@@ -30,8 +38,9 @@ def _hash_token(raw_token: str) -> str:
     digest = hashlib.pbkdf2_hmac(
         'sha256',
         raw_token.encode(),
-        _get_token_hash_key(),
-        310000,
+        _get_token_hash_secret(),
+        TOKEN_HASH_ITERATIONS,
+        dklen=TOKEN_HASH_BYTES,
     )
     return digest.hex()
 
