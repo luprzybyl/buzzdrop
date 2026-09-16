@@ -212,9 +212,11 @@ Content-Type: application/json
 
 {"username": "targetuser"}
 ```
-Returns `{"token": "<64-char hex>"}` — **shown once, store it immediately**.
+Returns `{"token": "<64-char hex>", "expires_at": "<ISO-8601 timestamp>"}` — **shown once, store it immediately**.
 
-Tokens are stored as SHA-256 hashes in the database; the raw value is never persisted. To revoke a token, delete the corresponding entry from the `api_tokens` TinyDB table.
+By default, tokens expire after 30 days. You can optionally pass `{"expires_in_days": 7}` when creating a token to shorten or extend that lifetime.
+
+Tokens are stored as SHA-256 hashes in the database; the raw value is never persisted. Logged-in users can list their active tokens with `GET /api/tokens` and revoke one with `POST /api/tokens/<token_id>/revoke`. Admins can also review and revoke active tokens for any user from the **Manage Users** page.
 
 
 The application is built with:

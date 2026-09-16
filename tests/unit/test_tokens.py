@@ -1,5 +1,6 @@
 """Unit tests for API token generation and validation."""
 import hashlib
+from datetime import datetime, timedelta
 import pytest
 
 
@@ -25,6 +26,16 @@ def test_validate_api_token_invalid(app):
         assert validate_api_token('0' * 64) is None
 
 
+def test_validate_api_token_expired(app, db_instance):
+    with app.app_context():
+        from app import get_db
+        from tokens import generate_api_token, validate_api_token
+
+        token = generate_api_token('testuser', expires_at=datetime.now() - timedelta(minutes=1))
+        assert validate_api_token(token) is None
+        assert get_db().table('api_tokens').all() == []
+
+
 def test_token_stored_as_hash_not_plaintext(app):
     with app.app_context():
         from app import get_db
@@ -36,6 +47,7 @@ def test_token_stored_as_hash_not_plaintext(app):
         assert entry.get('token_hash') != token
         expected_hash = hashlib.sha256(token.encode()).hexdigest()
         assert entry['token_hash'] == expected_hash
+        assert entry.get('expires_at') is not None
 
 
 def test_validate_updates_last_used_at(app):
@@ -69,3 +81,30 @@ def test_revoke_nonexistent_token(app):
     with app.app_context():
         from tokens import revoke_api_token
         assert revoke_api_token('0' * 64) is False
+
+
+def test_list_api_tokens_filters_expired_and_legacy_tokens(app, db_instance):
+    with app.app_context():
+        from app import get_db
+        from tokens import list_api_tokens
+
+        table = get_db().table('api_tokens')
+        table.insert({
+            'token_hash': hashlib.sha256(b'legacy-active').hexdigest(),
+            'username': 'testuser',
+            'created_at': datetime.now().isoformat(),
+            'last_used_at': None,
+        })
+        table.insert({
+            'token_hash': hashlib.sha256(b'legacy-expired').hexdigest(),
+            'username': 'testuser',
+            'created_at': (datetime.now() - timedelta(days=31)).isoformat(),
+            'last_used_at': None,
+        })
+
+        tokens = list_api_tokens('testuser')
+
+        assert len(tokens) == 1
+        assert tokens[0]['username'] == 'testuser'
+        assert tokens[0]['expires_at'] is not None
+        assert len(table.all()) == 1

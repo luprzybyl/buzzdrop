@@ -1,6 +1,7 @@
 """Integration tests for API token authentication and the /api/token endpoint."""
 import io
 import os
+import hashlib
 import pytest
 
 
@@ -33,6 +34,7 @@ def test_create_token_for_self(user_client):
     assert resp.status_code == 201
     data = resp.get_json()
     assert 'token' in data
+    assert 'expires_at' in data
     assert len(data['token']) == 64
 
 
@@ -41,6 +43,7 @@ def test_create_token_for_self_no_username(user_client):
     resp = user_client.post('/api/token', json={})
     assert resp.status_code == 201
     assert len(resp.get_json()['token']) == 64
+    assert 'expires_at' in resp.get_json()
 
 
 def test_create_token_for_other_user_forbidden(user_client):
@@ -54,11 +57,80 @@ def test_admin_can_create_token_for_any_user(admin_client):
     resp = admin_client.post('/api/token', json={'username': 'testuser'})
     assert resp.status_code == 201
     assert len(resp.get_json()['token']) == 64
+    assert 'expires_at' in resp.get_json()
 
 
 def test_create_token_unknown_user(admin_client):
     resp = admin_client.post('/api/token', json={'username': 'nobody'})
     assert resp.status_code == 404
+
+
+def test_create_token_rejects_invalid_expiry(user_client):
+    resp = user_client.post('/api/token', json={'expires_in_days': 0})
+    assert resp.status_code == 400
+    assert resp.get_json()['error'] == 'expires_in_days must be a positive integer'
+
+
+def test_list_tokens_for_self(app, user_client, db_instance):
+    with app.app_context():
+        from tokens import generate_api_token
+        generate_api_token('testuser')
+
+    resp = user_client.get('/api/tokens')
+    assert resp.status_code == 200
+    tokens = resp.get_json()['tokens']
+    assert len(tokens) == 1
+    assert tokens[0]['username'] == 'testuser'
+    assert tokens[0]['expires_at'] is not None
+
+
+def test_user_cannot_list_other_users_tokens(app, user_client, db_instance):
+    with app.app_context():
+        from tokens import generate_api_token
+        generate_api_token('adminuser')
+
+    resp = user_client.get('/api/tokens?username=adminuser')
+    assert resp.status_code == 403
+
+
+def test_user_can_revoke_own_token(app, user_client, db_instance):
+    with app.app_context():
+        from app import get_db
+        from tokens import generate_api_token, validate_api_token
+
+        token = generate_api_token('testuser')
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        token_entry = get_db().table('api_tokens').get(lambda item: item['token_hash'] == token_hash)
+        token_id = token_entry.doc_id
+        assert validate_api_token(token) == 'testuser'
+
+    resp = user_client.post(
+        f'/api/tokens/{token_id}/revoke',
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()['status'] == 'revoked'
+
+    with app.app_context():
+        from tokens import validate_api_token
+        assert validate_api_token(token) is None
+
+
+def test_user_cannot_revoke_other_users_token(app, user_client, db_instance):
+    with app.app_context():
+        from app import get_db
+        from tokens import generate_api_token
+
+        token = generate_api_token('adminuser')
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        token_entry = get_db().table('api_tokens').get(lambda item: item['token_hash'] == token_hash)
+        token_id = token_entry.doc_id
+
+    resp = user_client.post(
+        f'/api/tokens/{token_id}/revoke',
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------

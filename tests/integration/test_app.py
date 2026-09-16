@@ -115,9 +115,15 @@ def test_index_logged_in_user_with_shared_files(client, app, files_table):
 def test_manage_users_page_for_admin(client, app):
     login_user(client, 'adminuser', 'adminpass')
 
+    with app.app_context():
+        from tokens import generate_api_token
+        generate_api_token('testuser')
+
     response = client.get(url_for('manage_users'))
     assert response.status_code == 200
     assert b'User Management' in response.data # Page title from users.html
+    assert b'Active API Tokens' in response.data
+    assert b'Revoke' in response.data
 
     assert b'testuser' in response.data
     # From users.html: <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">User</span>
