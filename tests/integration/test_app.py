@@ -93,6 +93,9 @@ def test_index_logged_in_user_with_own_files(client, app, files_table):
     assert response.status_code == 200
     assert b'Your Shared Files' in response.data # This section title should now appear
     assert b'my_document.txt' in response.data
+    assert b'id="shared-files-search"' in response.data
+    assert b'id="shared-files-prev"' in response.data
+    assert b'id="shared-files-next"' in response.data
     # The "Shared With Me" section is missing in the template, so no assertions for it or its placeholders.
 
 def test_index_logged_in_user_sees_own_private_note(client, app, files_table):

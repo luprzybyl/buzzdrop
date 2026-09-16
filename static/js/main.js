@@ -227,3 +227,87 @@ document.querySelectorAll('.copy-url').forEach(el => {
         });
     });
 });
+
+// --- Shared Files Search & Pagination ---
+function initializeSharedFilesList() {
+    const list = document.getElementById('shared-files-list');
+    const searchInput = document.getElementById('shared-files-search');
+    const emptyState = document.getElementById('shared-files-empty-state');
+    const summary = document.getElementById('shared-files-summary');
+    const pageLabel = document.getElementById('shared-files-page');
+    const prevButton = document.getElementById('shared-files-prev');
+    const nextButton = document.getElementById('shared-files-next');
+
+    if (!list || !searchInput || !emptyState || !summary || !pageLabel || !prevButton || !nextButton) {
+        return;
+    }
+
+    const rows = Array.from(list.querySelectorAll('.shared-file-row'));
+    if (rows.length === 0) {
+        return;
+    }
+
+    const pageSize = Math.max(parseInt(list.dataset.pageSize || '5', 10), 1);
+    let currentPage = 1;
+
+    const render = () => {
+        const searchTerm = searchInput.value.trim().toLowerCase();
+        const filteredRows = rows.filter((row) => row.dataset.searchText.includes(searchTerm));
+        const totalResults = filteredRows.length;
+        const totalPages = Math.max(Math.ceil(totalResults / pageSize), 1);
+
+        if (currentPage > totalPages) {
+            currentPage = totalPages;
+        }
+
+        const startIndex = (currentPage - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+
+        rows.forEach((row) => {
+            row.style.display = 'none';
+        });
+
+        filteredRows.slice(startIndex, endIndex).forEach((row) => {
+            row.style.display = '';
+        });
+
+        if (totalResults === 0) {
+            emptyState.style.display = 'block';
+            pageLabel.textContent = 'Page 0 of 0';
+            summary.textContent = 'No matching drops';
+        } else {
+            emptyState.style.display = 'none';
+            pageLabel.textContent = `Page ${currentPage} of ${totalPages}`;
+            summary.textContent = `Showing ${startIndex + 1}-${Math.min(endIndex, totalResults)} of ${totalResults} drops`;
+        }
+
+        prevButton.disabled = currentPage <= 1 || totalResults === 0;
+        nextButton.disabled = currentPage >= totalPages || totalResults === 0;
+    };
+
+    searchInput.addEventListener('input', () => {
+        currentPage = 1;
+        render();
+    });
+
+    prevButton.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage -= 1;
+            render();
+        }
+    });
+
+    nextButton.addEventListener('click', () => {
+        const searchTerm = searchInput.value.trim().toLowerCase();
+        const filteredRows = rows.filter((row) => row.dataset.searchText.includes(searchTerm));
+        const totalPages = Math.max(Math.ceil(filteredRows.length / pageSize), 1);
+        if (currentPage < totalPages) {
+            currentPage += 1;
+            render();
+        }
+    });
+
+    render();
+}
+
+initializeSharedFilesList();
