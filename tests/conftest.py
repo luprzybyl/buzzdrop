@@ -15,7 +15,7 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)),
 # Add parent directory to sys.path to allow direct import of 'app'
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import app as flask_app, get_db, get_files_table # Import necessary items from your app
+from app import app as flask_app, get_db, get_files_table, limiter # Import necessary items from your app
 
 @pytest.fixture(scope='session')
 def app():
@@ -76,6 +76,14 @@ def app():
 def client(app):
     """A test client for the app."""
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Reset in-memory rate limit state between tests."""
+    limiter.reset()
+    yield
+    limiter.reset()
 
 @pytest.fixture(scope='function')
 def db_instance(app):
