@@ -39,28 +39,6 @@
                         </p>
                     </div>
                 </div>
-                
-                <div>
-                    <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-                    <input id="password" type="password" class="mt-1 p-2 border rounded-md w-full" required>
-                </div>
-
-                <div>
-                    <label for="expiry" class="block text-sm font-medium text-gray-700">Expiry Date (optional)</label>
-                    <input id="expiry" name="expiry" type="datetime-local" class="mt-1 p-2 border rounded-md w-full">
-                </div>
-
-                <div class="flex justify-center">
-                    <button id="upload-btn" type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                        Upload File
-                    </button>
-                    <div id="upload-progress-container" class="w-full" style="display:none; align-items:center;">
-                        <div class="w-full bg-gray-200 rounded-full h-4">
-                            <div id="upload-progress-bar" class="bg-indigo-600 h-4 rounded-full" style="width: 0%"></div>
-                        </div>
-                        <span id="upload-progress-text" class="ml-2 text-sm text-gray-700">0%</span>
-                    </div>
-                </div>
             </form>
         </div>
 
@@ -71,26 +49,28 @@
                 <textarea id="note-text" rows="8" class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Enter your secret text here..." required></textarea>
                 <p class="mt-1 text-xs text-gray-500">Your text will be encrypted in the browser before being sent to the server.</p>
             </div>
+        </div>
 
+        <div class="mt-6 space-y-6 border-t border-gray-200 pt-6">
             <div>
-                <label for="note-password" class="block text-sm font-medium text-gray-700">Password</label>
-                <input id="note-password" type="password" class="mt-1 p-2 border rounded-md w-full" placeholder="Enter a strong password" required>
+                <label for="shared-password" class="block text-sm font-medium text-gray-700">Password</label>
+                <input id="shared-password" type="password" class="mt-1 p-2 border rounded-md w-full" placeholder="Enter a strong password" required>
             </div>
 
             <div>
-                <label for="note-expiry" class="block text-sm font-medium text-gray-700">Expiry Date (optional)</label>
-                <input id="note-expiry" type="datetime-local" class="mt-1 p-2 border rounded-md w-full">
+                <label for="shared-expiry" class="block text-sm font-medium text-gray-700">Expiry Date (optional)</label>
+                <input id="shared-expiry" name="expiry" type="datetime-local" class="mt-1 p-2 border rounded-md w-full">
             </div>
 
             <div class="flex justify-center">
-                <button id="note-upload-btn" type="button" onclick="uploadNote()" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                    Share Text Note
+                <button id="share-action-btn" type="button" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                    Upload File
                 </button>
-                <div id="note-upload-progress-container" class="w-full" style="display:none; align-items:center;">
+                <div id="share-progress-container" class="w-full" style="display:none; align-items:center;">
                     <div class="w-full bg-gray-200 rounded-full h-4">
-                        <div id="note-upload-progress-bar" class="bg-indigo-600 h-4 rounded-full" style="width: 0%"></div>
+                        <div id="share-progress-bar" class="bg-indigo-600 h-4 rounded-full" style="width: 0%"></div>
                     </div>
-                    <span id="note-upload-progress-text" class="ml-2 text-sm text-gray-700">0%</span>
+                    <span id="share-progress-text" class="ml-2 text-sm text-gray-700">0%</span>
                 </div>
             </div>
         </div>

@@ -54,6 +54,9 @@ def test_index_logged_in_user_no_files(client, app, db_instance):
     assert response.status_code == 200
     assert b'Welcome, testuser' in response.data
     assert b'Share Securely' in response.data # Title for upload form
+    assert b'id="shared-password"' in response.data
+    assert b'id="note-password"' not in response.data
+    assert b'id="note-expiry"' not in response.data
     # Check that "Your Shared Files" section is not present if no files
     # The template has: {% if session.get('username') and user_files %}
     assert b'Your Shared Files' not in response.data
