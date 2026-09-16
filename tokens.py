@@ -109,7 +109,9 @@ def validate_api_token(raw_token: str) -> Optional[str]:
     table = _get_tokens_table()
 
     entry = table.get(Q.token_hash == token_hash)
-    if not entry:
+    if entry:
+        stored_token_hash = token_hash
+    else:
         if not _has_legacy_token_hashes(table):
             return None
         legacy_token_hash = _hash_token_legacy(raw_token)
@@ -119,19 +121,24 @@ def validate_api_token(raw_token: str) -> Optional[str]:
         )
         if not entry:
             return None
-        from auth import get_users
-        if entry['username'] not in get_users():
-            return None
-        if entry.get('token_hash_version') == LEGACY_TOKEN_HASH_VERSION:
-            table.update(
-                {
-                    'token_hash': token_hash,
-                    'token_hash_version': TOKEN_HASH_VERSION,
-                },
-                Q.token_hash == legacy_token_hash,
-            )
-        table.update({'last_used_at': datetime.now().isoformat()}, Q.token_hash == token_hash)
-        return entry['username']
+        stored_token_hash = legacy_token_hash
+
+    from auth import get_users
+    if entry['username'] not in get_users():
+        return None
+
+    if entry.get('token_hash_version') == LEGACY_TOKEN_HASH_VERSION:
+        table.update(
+            {
+                'token_hash': token_hash,
+                'token_hash_version': TOKEN_HASH_VERSION,
+            },
+            Q.token_hash == stored_token_hash,
+        )
+        stored_token_hash = token_hash
+
+    table.update({'last_used_at': datetime.now().isoformat()}, Q.token_hash == stored_token_hash)
+    return entry['username']
 
 
 def revoke_api_token(raw_token: str) -> bool:
