@@ -1,8 +1,8 @@
 """
 API token management for Buzzdrop.
 Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests with a stable
-hash secret; the raw token is shown only once at generation. Legacy SHA-256
-token hashes remain valid.
+hash secret; the raw token is shown only once at generation. Legacy PBKDF2
+token hashes remain valid and are migrated on successful validation.
 """
 import hashlib
 import os
@@ -15,6 +15,8 @@ from tinydb import Query
 TOKEN_HASH_ITERATIONS = 310_000
 TOKEN_HASH_BYTES = 32
 DEFAULT_TOKEN_HASH_SECRET = b'buzzdrop-api-token-v1'
+LEGACY_TOKEN_HASH_ITERATIONS = 120_000
+LEGACY_TOKEN_HASH_SECRET = b'buzzdrop-api-token-legacy-v1'
 
 
 def _get_tokens_table():
@@ -40,6 +42,18 @@ def _hash_token(raw_token: str) -> str:
         raw_token.encode(),
         _get_token_hash_secret(),
         TOKEN_HASH_ITERATIONS,
+        dklen=TOKEN_HASH_BYTES,
+    )
+    return digest.hex()
+
+
+def _hash_token_legacy(raw_token: str) -> str:
+    """Derive deterministic legacy digest for backward-compatible token migration."""
+    digest = hashlib.pbkdf2_hmac(
+        'sha256',
+        raw_token.encode(),
+        LEGACY_TOKEN_HASH_SECRET,
+        LEGACY_TOKEN_HASH_ITERATIONS,
         dklen=TOKEN_HASH_BYTES,
     )
     return digest.hex()
@@ -87,7 +101,7 @@ def validate_api_token(raw_token: str) -> Optional[str]:
 
     entry = table.get(Q.token_hash == token_hash)
     if not entry:
-        legacy_token_hash = hashlib.new('sha256', raw_token.encode()).hexdigest()
+        legacy_token_hash = _hash_token_legacy(raw_token)
         entry = table.get(Q.token_hash == legacy_token_hash)
         if not entry:
             return None

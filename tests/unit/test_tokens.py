@@ -82,15 +82,14 @@ def test_token_hash_does_not_depend_on_temporary_session_key(app, monkeypatch):
         assert first_hash == second_hash
 
 
-def test_validate_api_token_accepts_legacy_sha256_hash(app):
+def test_validate_api_token_accepts_legacy_hash(app):
     with app.app_context():
-        import hashlib
         from app import get_db
-        from tokens import _hash_token, validate_api_token
+        from tokens import _hash_token, _hash_token_legacy, validate_api_token
         from tinydb import Query
 
         token = 'a' * 64
-        legacy_hash = hashlib.new('sha256', token.encode()).hexdigest()
+        legacy_hash = _hash_token_legacy(token)
         get_db().table('api_tokens').insert({
             'token_hash': legacy_hash,
             'username': 'testuser',
