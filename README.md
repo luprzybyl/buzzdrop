@@ -214,7 +214,7 @@ Content-Type: application/json
 ```
 Returns `{"token": "<64-char hex>"}` — **shown once, store it immediately**.
 
-Tokens are stored as deterministic HMAC-SHA256 digests in the database; the raw value is never persisted. Existing legacy SHA-256 token hashes remain valid. To revoke a token, delete the corresponding entry from the `api_tokens` TinyDB table.
+Tokens are stored as deterministic keyed BLAKE2s digests in the database; the raw value is never persisted. Existing legacy SHA-256 token hashes remain valid. To revoke a token, delete the corresponding entry from the `api_tokens` TinyDB table.
 
 
 The application is built with:

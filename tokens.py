@@ -1,10 +1,9 @@
 """
 API token management for Buzzdrop.
-Tokens are stored as deterministic HMAC-SHA256 digests; the raw token is shown
-only once at generation. Legacy SHA-256 token hashes remain valid.
+Tokens are stored as deterministic keyed BLAKE2s digests; the raw token is
+shown only once at generation. Legacy SHA-256 token hashes remain valid.
 """
 import hashlib
-import hmac
 import secrets
 from datetime import datetime
 from typing import Optional
@@ -28,12 +27,12 @@ def _get_token_hash_key() -> bytes:
 
 def _hash_token(raw_token: str) -> str:
     """Derive the current deterministic digest for API token storage and lookup."""
-    return hmac.new(_get_token_hash_key(), raw_token.encode(), hashlib.sha256).hexdigest()
+    return hashlib.blake2s(raw_token.encode(), key=_get_token_hash_key()).hexdigest()
 
 
 def _legacy_hash_token(raw_token: str) -> str:
     """Derive the legacy SHA-256 hash used by previously issued tokens."""
-    return hashlib.sha256(raw_token.encode()).hexdigest()
+    return hashlib.new('sha256', raw_token.encode()).hexdigest()
 
 
 def generate_api_token(username: str) -> str:
