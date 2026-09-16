@@ -294,6 +294,7 @@ def upload_file():
     # Check if this is a text note upload
     note_text = request.form.get('note_text')
     upload_type = request.form.get('type', 'file')
+    private_note = (request.form.get('private_note') or '').strip() or None
 
     if upload_type == 'text' and note_text:
         # Handle text note upload
@@ -321,7 +322,8 @@ def upload_file():
             'path': file_path,
             'uploaded_by': g.username,
             'expiry_at': expiry_iso,
-            'type': 'text'
+            'type': 'text',
+            'private_note': private_note
         }, file_id=unique_id)
         
         share_link = url_for('view_file', file_id=unique_id, _external=True)
@@ -365,7 +367,8 @@ def upload_file():
             'path': file_path,
             'uploaded_by': g.username,
             'expiry_at': expiry_iso,
-            'type': 'file'
+            'type': 'file',
+            'private_note': private_note
         }, file_id=unique_id)
         
         share_link = url_for('view_file', file_id=unique_id, _external=True)
