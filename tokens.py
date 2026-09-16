@@ -27,13 +27,11 @@ def _get_token_hash_key() -> bytes:
 
 def _hash_token(raw_token: str) -> str:
     """Derive the current deterministic digest for API token storage and lookup."""
-    # lgtm [py/weak-sensitive-data-hashing]
     return hashlib.blake2s(raw_token.encode(), key=_get_token_hash_key()).hexdigest()
 
 
 def _legacy_hash_token(raw_token: str) -> str:
     """Derive the legacy SHA-256 hash used by previously issued tokens."""
-    # lgtm [py/weak-sensitive-data-hashing]
     return hashlib.new('sha256', raw_token.encode()).hexdigest()
 
 
