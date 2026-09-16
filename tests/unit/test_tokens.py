@@ -1,5 +1,4 @@
 """Unit tests for API token generation and validation."""
-import hashlib
 import pytest
 
 
@@ -36,11 +35,12 @@ def test_validate_api_token_invalid(app):
 def test_validate_api_token_rejects_removed_user(app, monkeypatch, clear_user_cache):
     with app.app_context():
         from app import get_db
+        from tokens import _hash_token
         from tokens import generate_api_token, validate_api_token
         from tinydb import Query
 
         token = generate_api_token('testuser')
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        token_hash = _hash_token(token)
 
         monkeypatch.delenv('FLASK_USER_1', raising=False)
         from auth import get_users
@@ -55,26 +55,26 @@ def test_validate_api_token_rejects_removed_user(app, monkeypatch, clear_user_ca
 def test_token_stored_as_hash_not_plaintext(app):
     with app.app_context():
         from app import get_db
-        from tokens import generate_api_token
+        from tokens import _hash_token, generate_api_token
         token = generate_api_token('testuser')
         table = get_db().table('api_tokens')
         entry = table.all()[-1]
         assert 'token_hash' in entry
         assert entry.get('token_hash') != token
-        expected_hash = hashlib.sha256(token.encode()).hexdigest()
+        expected_hash = _hash_token(token)
         assert entry['token_hash'] == expected_hash
 
 
 def test_validate_updates_last_used_at(app):
     with app.app_context():
         from app import get_db
-        from tokens import generate_api_token, validate_api_token
+        from tokens import _hash_token, generate_api_token, validate_api_token
         from tinydb import Query
         token = generate_api_token('testuser')
         # last_used_at is None before first validation
         Q = Query()
         table = get_db().table('api_tokens')
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        token_hash = _hash_token(token)
         entry_before = table.get(Q.token_hash == token_hash)
         assert entry_before['last_used_at'] is None
 

@@ -1,6 +1,7 @@
 """
 API token management for Buzzdrop.
-Tokens are stored as SHA-256 hashes; the raw token is shown only once at generation.
+Tokens are stored as deterministic PBKDF2 hashes; the raw token is shown only
+once at generation.
 """
 import hashlib
 import secrets
@@ -10,9 +11,23 @@ from typing import Optional
 from tinydb import Query
 
 
+_TOKEN_HASH_SALT = b'buzzdrop-api-token'
+_TOKEN_HASH_ITERATIONS = 200000
+
+
 def _get_tokens_table():
     from app import get_db
     return get_db().table('api_tokens')
+
+
+def _hash_token(raw_token: str) -> str:
+    """Derive a deterministic hash for API token storage and lookup."""
+    return hashlib.pbkdf2_hmac(
+        'sha256',
+        raw_token.encode(),
+        _TOKEN_HASH_SALT,
+        _TOKEN_HASH_ITERATIONS,
+    ).hex()
 
 
 def generate_api_token(username: str) -> str:
@@ -20,7 +35,7 @@ def generate_api_token(username: str) -> str:
     Generate a new API token for a user, store its hash, and return the raw token.
 
     The raw token is returned exactly once and never stored. Future lookups use
-    the SHA-256 hash.
+    the derived token hash.
 
     Args:
         username: Username to associate with the token
@@ -29,7 +44,7 @@ def generate_api_token(username: str) -> str:
         Raw 64-character hex token (show to user once)
     """
     raw_token = secrets.token_hex(32)
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    token_hash = _hash_token(raw_token)
     _get_tokens_table().insert({
         'token_hash': token_hash,
         'username': username,
@@ -51,7 +66,7 @@ def validate_api_token(raw_token: str) -> Optional[str]:
     Returns:
         Username string if valid, None otherwise
     """
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    token_hash = _hash_token(raw_token)
     Q = Query()
     table = _get_tokens_table()
     entry = table.get(Q.token_hash == token_hash)
@@ -74,7 +89,7 @@ def revoke_api_token(raw_token: str) -> bool:
     Returns:
         True if the token existed and was removed, False otherwise
     """
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    token_hash = _hash_token(raw_token)
     Q = Query()
     table = _get_tokens_table()
     removed = table.remove(Q.token_hash == token_hash)
