@@ -1,9 +1,8 @@
 """
 API token management for Buzzdrop.
-Tokens are stored as HMAC-SHA256 fingerprints; the raw token is shown only once at generation.
+Tokens are stored as PBKDF2-HMAC-SHA256 fingerprints; the raw token is shown only once at generation.
 """
 import hashlib
-import hmac
 import secrets
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -58,7 +57,12 @@ def _serialize_token(entry: Dict[str, Any]) -> Dict[str, Any]:
 
 def _hash_token(raw_token: str) -> str:
     secret_key = current_app.config.get('SECRET_KEY', '')
-    return hmac.new(secret_key.encode(), raw_token.encode(), hashlib.sha256).hexdigest()
+    return hashlib.pbkdf2_hmac(
+        'sha256',
+        raw_token.encode(),
+        secret_key.encode(),
+        600_000,
+    ).hex()
 
 
 def generate_api_token(username: str, expires_at: Optional[datetime] = None) -> str:
@@ -66,7 +70,7 @@ def generate_api_token(username: str, expires_at: Optional[datetime] = None) -> 
     Generate a new API token for a user, store its hash, and return the raw token.
 
     The raw token is returned exactly once and never stored. Future lookups use
-    an HMAC-SHA256 fingerprint.
+    a PBKDF2-HMAC-SHA256 fingerprint.
 
     Args:
         username: Username to associate with the token

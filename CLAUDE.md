@@ -74,7 +74,7 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 - `type` (`'file'` or `'text'` for text notes)
 
 `api_tokens` table tracks:
-- `token_hash` (HMAC-SHA256 fingerprint of the raw token — raw token is never stored)
+- `token_hash` (PBKDF2-HMAC-SHA256 fingerprint of the raw token — raw token is never stored)
 - `username`, `created_at`, `last_used_at`
 
 **Database Helper Functions**:
@@ -98,7 +98,7 @@ Passwords are hashed with PBKDF2-SHA256 via Werkzeug. `get_users()` function rea
 ### API Token Management
 
 `tokens.py` provides:
-- `generate_api_token(username)` → stores an HMAC-SHA256 fingerprint in `api_tokens` table, returns raw 64-char token (shown once)
+- `generate_api_token(username)` → stores a PBKDF2-HMAC-SHA256 fingerprint in `api_tokens` table, returns raw 64-char token (shown once)
 - `validate_api_token(raw_token)` → returns username or None, updates `last_used_at`
 - `revoke_api_token(raw_token)` → removes entry from table
 
