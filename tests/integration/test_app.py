@@ -32,10 +32,18 @@ def test_index_anonymous_user(client, app):
 
     response = client.get(url_for('index'))
     assert response.status_code == 200
-    # For anonymous user, from index.html:
-    # Anonymous visitors only see the humorous landing message, not the upload title
+    # Anonymous visitors should see the marketing landing page, not the upload UI.
     assert b'Share Your File' not in response.data
+    assert b'Buzzdrop: file sharing that stings\xe2\x80\x94just once.' in response.data
     assert b'BuzzDrop: secure, one-time file sharing.' in response.data
+    assert b'Star Buzzdrop on GitHub' in response.data
+    assert b'Open Buzzdrop on GitHub' in response.data
+    assert b'Login to start sharing' not in response.data
+    assert b'View on GitHub' not in response.data
+    assert b'https://github.com/luprzybyl/buzzdrop' in response.data
+    assert b'https://github.com/luprzybyl/buzzdrop/blob/main/README.md' in response.data
+    assert b'aria-label="Open Buzzdrop on GitHub (opens in new tab)"' in response.data
+    assert b'Read the Buzzdrop README on GitHub' in response.data
     assert b'Login' in response.data # Login link in header
     assert b'Your Shared Files' not in response.data # Should not see this section title
 
@@ -45,11 +53,28 @@ def test_index_logged_in_user_no_files(client, app, db_instance):
     assert response.status_code == 200
     assert b'Welcome, testuser' in response.data
     assert b'Share Securely' in response.data # Title for upload form
+    assert b'id="shared-password"' in response.data
+    assert b'id="note-password"' not in response.data
+    assert b'id="note-expiry"' not in response.data
     # Check that "Your Shared Files" section is not present if no files
     # The template has: {% if session.get('username') and user_files %}
     assert b'Your Shared Files' not in response.data
     # And no shared files section means no "No files shared with you" text either.
     # Also, no "No files uploaded yet" text because the section itself is conditional.
+
+def test_index_logged_in_user_uses_shared_controls_for_both_tabs(client, app, db_instance):
+    login_user(client, 'testuser', 'password')
+    response = client.get(url_for('index'))
+    assert response.status_code == 200
+
+    html = response.data.decode('utf-8')
+    assert 'id="file-tab"' in html
+    assert 'id="text-tab"' in html
+    assert html.count('id="share-action-btn"') == 1
+    assert html.count('id="shared-password"') == 1
+    assert html.count('id="shared-expiry"') == 1
+    assert 'id="note-password"' not in html
+    assert 'id="note-expiry"' not in html
 
 def test_index_logged_in_user_with_own_files(client, app, files_table):
     login_user(client, 'testuser', 'password')

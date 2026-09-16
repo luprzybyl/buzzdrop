@@ -2,23 +2,29 @@
 import { CryptoService } from './crypto.js';
 
 const cryptoService = new CryptoService();
+let activeShareMode = 'file';
+let uploadInProgress = false;
 
 // Parse allowed file extensions from a hidden JSON element injected by the server
 const allowedExtensions = JSON.parse(document.getElementById('allowed-extensions-json').textContent);
 
 // --- Tab Switching Logic ---
 function showFileUpload() {
+    activeShareMode = 'file';
     document.getElementById('file-upload-section').style.display = 'block';
     document.getElementById('text-note-section').style.display = 'none';
     document.getElementById('file-tab').className = 'px-4 py-2 font-medium text-indigo-600 border-b-2 border-indigo-600';
     document.getElementById('text-tab').className = 'px-4 py-2 font-medium text-gray-500 hover:text-gray-700';
+    document.getElementById('share-action-btn').textContent = 'Upload File';
 }
 
 function showTextNote() {
+    activeShareMode = 'text';
     document.getElementById('file-upload-section').style.display = 'none';
     document.getElementById('text-note-section').style.display = 'block';
     document.getElementById('file-tab').className = 'px-4 py-2 font-medium text-gray-500 hover:text-gray-700';
     document.getElementById('text-tab').className = 'px-4 py-2 font-medium text-indigo-600 border-b-2 border-indigo-600';
+    document.getElementById('share-action-btn').textContent = 'Share Text Note';
 }
 
 // Make functions globally accessible for inline onclick handlers
@@ -42,6 +48,12 @@ function uploadWithProgress(formData, password, uiElements) {
     const progressBar = document.getElementById(uiElements.barId);
     const progressText = document.getElementById(uiElements.textId);
 
+    if (uploadInProgress) {
+        return;
+    }
+
+    uploadInProgress = true;
+    uploadBtn.disabled = true;
     uploadBtn.style.display = 'none';
     progressContainer.style.display = 'flex';
     progressBar.style.width = '0%';
@@ -66,6 +78,8 @@ function uploadWithProgress(formData, password, uiElements) {
                 json = JSON.parse(xhr.responseText);
             } catch (e) {
                 alert('Upload succeeded but server returned invalid JSON');
+                uploadInProgress = false;
+                uploadBtn.disabled = false;
                 uploadBtn.style.display = '';
                 progressContainer.style.display = 'none';
                 return;
@@ -79,6 +93,8 @@ function uploadWithProgress(formData, password, uiElements) {
                 if (err.error) msg = err.error;
             } catch (e) {}
             alert(msg);
+            uploadInProgress = false;
+            uploadBtn.disabled = false;
             uploadBtn.style.display = '';
             progressContainer.style.display = 'none';
         }
@@ -86,6 +102,8 @@ function uploadWithProgress(formData, password, uiElements) {
 
     xhr.onerror = function() {
         alert('Network error during upload');
+        uploadInProgress = false;
+        uploadBtn.disabled = false;
         uploadBtn.style.display = '';
         progressContainer.style.display = 'none';
     };
@@ -94,7 +112,8 @@ function uploadWithProgress(formData, password, uiElements) {
 }
 
 // --- File Upload Logic ---
-if (document.querySelector('form')) {
+const fileUploadForm = document.querySelector('#file-upload-section form');
+if (fileUploadForm) {
     // Validate file extension when a file is selected
     document.getElementById('file').addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -107,10 +126,11 @@ if (document.querySelector('form')) {
     });
 
     // Handle form submission: encrypt file client-side, then upload
-    document.querySelector('form').addEventListener('submit', async (e) => {
+    fileUploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (uploadInProgress) return;
         const fileInput = document.getElementById('file');
-        const passInput = document.getElementById('password');
+        const passInput = document.getElementById('shared-password');
         const file = fileInput.files[0];
         const password = passInput.value;
         if (!file || !password) return;
@@ -123,26 +143,27 @@ if (document.querySelector('form')) {
         const encBlob = new Blob([encrypted], { type: 'application/octet-stream' });
         const formData = new FormData();
         formData.append('file', new File([encBlob], file.name));
-        const expiryInput = document.getElementById('expiry');
+        const expiryInput = document.getElementById('shared-expiry');
         if (expiryInput && expiryInput.value) {
             formData.append('expiry', expiryInput.value);
         }
 
         // Upload with progress
         uploadWithProgress(formData, password, {
-            btnId: 'upload-btn',
-            containerId: 'upload-progress-container',
-            barId: 'upload-progress-bar',
-            textId: 'upload-progress-text'
+            btnId: 'share-action-btn',
+            containerId: 'share-progress-container',
+            barId: 'share-progress-bar',
+            textId: 'share-progress-text'
         });
     });
 }
 
 // --- Text Note Upload Logic ---
 async function uploadNote() {
+    if (uploadInProgress) return;
     const noteText = document.getElementById('note-text').value;
-    const password = document.getElementById('note-password').value;
-    const expiry = document.getElementById('note-expiry').value;
+    const password = document.getElementById('shared-password').value;
+    const expiry = document.getElementById('shared-expiry').value;
 
     if (!noteText || !password) {
         alert('Please enter both text and password');
@@ -165,15 +186,28 @@ async function uploadNote() {
 
     // Upload with progress
     uploadWithProgress(formData, password, {
-        btnId: 'note-upload-btn',
-        containerId: 'note-upload-progress-container',
-        barId: 'note-upload-progress-bar',
-        textId: 'note-upload-progress-text'
+        btnId: 'share-action-btn',
+        containerId: 'share-progress-container',
+        barId: 'share-progress-bar',
+        textId: 'share-progress-text'
     });
 }
 
-// Make uploadNote globally accessible for inline onclick handlers
-window.uploadNote = uploadNote;
+const shareActionButton = document.getElementById('share-action-btn');
+if (shareActionButton) {
+    shareActionButton.addEventListener('click', () => {
+        if (uploadInProgress) return;
+        if (activeShareMode === 'text') {
+            uploadNote();
+            return;
+        }
+
+        const fileForm = document.querySelector('#file-upload-section form');
+        if (fileForm) {
+            fileForm.requestSubmit();
+        }
+    });
+}
 
 // --- Copy URL to Clipboard Logic ---
 document.querySelectorAll('.copy-url').forEach(el => {
