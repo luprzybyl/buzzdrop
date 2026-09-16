@@ -56,7 +56,7 @@ def test_validate_api_token_rejects_removed_user(app, monkeypatch, clear_user_ca
 def test_token_stored_as_hash_not_plaintext(app):
     with app.app_context():
         from app import get_db
-        from tokens import _hash_token, generate_api_token
+        from tokens import TOKEN_HASH_VERSION, _hash_token, generate_api_token
         token = generate_api_token('testuser')
         table = get_db().table('api_tokens')
         entry = table.all()[-1]
@@ -64,6 +64,7 @@ def test_token_stored_as_hash_not_plaintext(app):
         assert entry.get('token_hash') != token
         expected_hash = _hash_token(token)
         assert entry['token_hash'] == expected_hash
+        assert entry['token_hash_version'] == TOKEN_HASH_VERSION
 
 
 def test_token_hash_does_not_depend_on_temporary_session_key(app, monkeypatch):
@@ -85,13 +86,20 @@ def test_token_hash_does_not_depend_on_temporary_session_key(app, monkeypatch):
 def test_validate_api_token_accepts_legacy_hash(app):
     with app.app_context():
         from app import get_db
-        from tokens import _hash_token, _hash_token_legacy, validate_api_token
+        from tokens import (
+            LEGACY_TOKEN_HASH_VERSION,
+            TOKEN_HASH_VERSION,
+            _hash_token,
+            _hash_token_legacy,
+            validate_api_token,
+        )
         from tinydb import Query
 
         token = 'a' * 64
         legacy_hash = _hash_token_legacy(token)
         get_db().table('api_tokens').insert({
             'token_hash': legacy_hash,
+            'token_hash_version': LEGACY_TOKEN_HASH_VERSION,
             'username': 'testuser',
             'created_at': '2026-09-16T00:00:00',
             'last_used_at': None,
@@ -100,6 +108,19 @@ def test_validate_api_token_accepts_legacy_hash(app):
         assert validate_api_token(token) == 'testuser'
         migrated_entry = get_db().table('api_tokens').get(Query().token_hash == _hash_token(token))
         assert migrated_entry is not None
+        assert migrated_entry['token_hash_version'] == TOKEN_HASH_VERSION
+
+
+def test_validate_api_token_skips_legacy_hash_when_no_legacy_tokens_exist(app, monkeypatch):
+    with app.app_context():
+        from tokens import validate_api_token
+
+        def fail_if_called(raw_token):
+            raise AssertionError(f'legacy hash should not be computed for {raw_token}')
+
+        monkeypatch.setattr('tokens._hash_token_legacy', fail_if_called)
+
+        assert validate_api_token('0' * 64) is None
 
 
 def test_validate_updates_last_used_at(app):

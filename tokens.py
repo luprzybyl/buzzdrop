@@ -15,8 +15,10 @@ from tinydb import Query
 TOKEN_HASH_ITERATIONS = 310_000
 TOKEN_HASH_BYTES = 32
 DEFAULT_TOKEN_HASH_SECRET = b'buzzdrop-api-token-v1'
+TOKEN_HASH_VERSION = 'pbkdf2-sha256-v1'
 LEGACY_TOKEN_HASH_ITERATIONS = 120_000
 LEGACY_TOKEN_HASH_SECRET = b'buzzdrop-api-token-legacy-v1'
+LEGACY_TOKEN_HASH_VERSION = 'legacy-pbkdf2-sha256-v1'
 
 
 def _get_tokens_table():
@@ -59,6 +61,12 @@ def _hash_token_legacy(raw_token: str) -> str:
     return digest.hex()
 
 
+def _has_legacy_token_hashes(table) -> bool:
+    """Return whether any stored API tokens still use the legacy hash version."""
+    Q = Query()
+    return table.contains(Q.token_hash_version == LEGACY_TOKEN_HASH_VERSION)
+
+
 def generate_api_token(username: str) -> str:
     """
     Generate a new API token for a user, store its hash, and return the raw token.
@@ -76,6 +84,7 @@ def generate_api_token(username: str) -> str:
     token_hash = _hash_token(raw_token)
     _get_tokens_table().insert({
         'token_hash': token_hash,
+        'token_hash_version': TOKEN_HASH_VERSION,
         'username': username,
         'created_at': datetime.now().isoformat(),
         'last_used_at': None,
@@ -101,11 +110,22 @@ def validate_api_token(raw_token: str) -> Optional[str]:
 
     entry = table.get(Q.token_hash == token_hash)
     if not entry:
+        if not _has_legacy_token_hashes(table):
+            return None
         legacy_token_hash = _hash_token_legacy(raw_token)
-        entry = table.get(Q.token_hash == legacy_token_hash)
+        entry = table.get(
+            (Q.token_hash == legacy_token_hash)
+            & (Q.token_hash_version == LEGACY_TOKEN_HASH_VERSION)
+        )
         if not entry:
             return None
-        table.update({'token_hash': token_hash}, Q.token_hash == legacy_token_hash)
+        table.update(
+            {
+                'token_hash': token_hash,
+                'token_hash_version': TOKEN_HASH_VERSION,
+            },
+            Q.token_hash == legacy_token_hash,
+        )
 
     from auth import get_users
     if entry['username'] not in get_users():
