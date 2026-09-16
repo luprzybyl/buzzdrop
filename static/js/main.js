@@ -3,6 +3,7 @@ import { CryptoService } from './crypto.js';
 
 const cryptoService = new CryptoService();
 let activeShareMode = 'file';
+let uploadInProgress = false;
 
 // Parse allowed file extensions from a hidden JSON element injected by the server
 const allowedExtensions = JSON.parse(document.getElementById('allowed-extensions-json').textContent);
@@ -47,6 +48,12 @@ function uploadWithProgress(formData, password, uiElements) {
     const progressBar = document.getElementById(uiElements.barId);
     const progressText = document.getElementById(uiElements.textId);
 
+    if (uploadInProgress) {
+        return;
+    }
+
+    uploadInProgress = true;
+    uploadBtn.disabled = true;
     uploadBtn.style.display = 'none';
     progressContainer.style.display = 'flex';
     progressBar.style.width = '0%';
@@ -71,6 +78,8 @@ function uploadWithProgress(formData, password, uiElements) {
                 json = JSON.parse(xhr.responseText);
             } catch (e) {
                 alert('Upload succeeded but server returned invalid JSON');
+                uploadInProgress = false;
+                uploadBtn.disabled = false;
                 uploadBtn.style.display = '';
                 progressContainer.style.display = 'none';
                 return;
@@ -84,6 +93,8 @@ function uploadWithProgress(formData, password, uiElements) {
                 if (err.error) msg = err.error;
             } catch (e) {}
             alert(msg);
+            uploadInProgress = false;
+            uploadBtn.disabled = false;
             uploadBtn.style.display = '';
             progressContainer.style.display = 'none';
         }
@@ -91,6 +102,8 @@ function uploadWithProgress(formData, password, uiElements) {
 
     xhr.onerror = function() {
         alert('Network error during upload');
+        uploadInProgress = false;
+        uploadBtn.disabled = false;
         uploadBtn.style.display = '';
         progressContainer.style.display = 'none';
     };
@@ -115,6 +128,7 @@ if (fileUploadForm) {
     // Handle form submission: encrypt file client-side, then upload
     fileUploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (uploadInProgress) return;
         const fileInput = document.getElementById('file');
         const passInput = document.getElementById('shared-password');
         const file = fileInput.files[0];
@@ -146,6 +160,7 @@ if (fileUploadForm) {
 
 // --- Text Note Upload Logic ---
 async function uploadNote() {
+    if (uploadInProgress) return;
     const noteText = document.getElementById('note-text').value;
     const password = document.getElementById('shared-password').value;
     const expiry = document.getElementById('shared-expiry').value;
@@ -181,6 +196,7 @@ async function uploadNote() {
 const shareActionButton = document.getElementById('share-action-btn');
 if (shareActionButton) {
     shareActionButton.addEventListener('click', () => {
+        if (uploadInProgress) return;
         if (activeShareMode === 'text') {
             uploadNote();
             return;

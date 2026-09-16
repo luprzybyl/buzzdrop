@@ -63,6 +63,20 @@ def test_index_logged_in_user_no_files(client, app, db_instance):
     # And no shared files section means no "No files shared with you" text either.
     # Also, no "No files uploaded yet" text because the section itself is conditional.
 
+def test_index_logged_in_user_uses_shared_controls_for_both_tabs(client, app, db_instance):
+    login_user(client, 'testuser', 'password')
+    response = client.get(url_for('index'))
+    assert response.status_code == 200
+
+    html = response.data.decode('utf-8')
+    assert 'id="file-tab"' in html
+    assert 'id="text-tab"' in html
+    assert html.count('id="share-action-btn"') == 1
+    assert html.count('id="shared-password"') == 1
+    assert html.count('id="shared-expiry"') == 1
+    assert 'id="note-password"' not in html
+    assert 'id="note-expiry"' not in html
+
 def test_index_logged_in_user_with_own_files(client, app, files_table):
     login_user(client, 'testuser', 'password')
 
