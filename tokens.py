@@ -119,19 +119,19 @@ def validate_api_token(raw_token: str) -> Optional[str]:
         )
         if not entry:
             return None
-        table.update(
-            {
-                'token_hash': token_hash,
-                'token_hash_version': TOKEN_HASH_VERSION,
-            },
-            Q.token_hash == legacy_token_hash,
-        )
-
-    from auth import get_users
-    if entry['username'] not in get_users():
-        return None
-    table.update({'last_used_at': datetime.now().isoformat()}, Q.token_hash == token_hash)
-    return entry['username']
+        from auth import get_users
+        if entry['username'] not in get_users():
+            return None
+        if entry.get('token_hash_version') == LEGACY_TOKEN_HASH_VERSION:
+            table.update(
+                {
+                    'token_hash': token_hash,
+                    'token_hash_version': TOKEN_HASH_VERSION,
+                },
+                Q.token_hash == legacy_token_hash,
+            )
+        table.update({'last_used_at': datetime.now().isoformat()}, Q.token_hash == token_hash)
+        return entry['username']
 
 
 def revoke_api_token(raw_token: str) -> bool:
