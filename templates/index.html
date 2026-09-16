@@ -231,7 +231,7 @@
                     </div>
                     <div class="flex flex-wrap items-center gap-3 lg:justify-end">
                         <span class="status-badge {% if file.downloaded_at %}status-badge-green{% elif file.status == 'expired' %}status-badge-red{% else %}status-badge-amber{% endif %}">
-                            {{ file.status_display }}
+                            {{ file.status_display or 'Active' }}
                         </span>
                         <form method="post" action="{{ url_for('delete_file', file_id=file.id) }}" class="inline-block">
                             <button type="submit" class="btn-secondary px-4 py-2 text-rose-700 hover:bg-rose-50" onclick="return confirm('Delete this file?');">Delete</button>
