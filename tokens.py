@@ -57,6 +57,9 @@ def validate_api_token(raw_token: str) -> Optional[str]:
     entry = table.get(Q.token_hash == token_hash)
     if not entry:
         return None
+    from auth import get_users
+    if entry['username'] not in get_users():
+        return None
     table.update({'last_used_at': datetime.now().isoformat()}, Q.token_hash == token_hash)
     return entry['username']
 

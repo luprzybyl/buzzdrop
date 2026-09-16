@@ -3,6 +3,14 @@ import hashlib
 import pytest
 
 
+@pytest.fixture
+def clear_user_cache():
+    from auth import get_users
+    get_users.cache_clear()
+    yield
+    get_users.cache_clear()
+
+
 def test_generate_api_token_returns_hex_string(app):
     with app.app_context():
         from tokens import generate_api_token
@@ -23,6 +31,25 @@ def test_validate_api_token_invalid(app):
     with app.app_context():
         from tokens import validate_api_token
         assert validate_api_token('0' * 64) is None
+
+
+def test_validate_api_token_rejects_removed_user(app, monkeypatch, clear_user_cache):
+    with app.app_context():
+        from app import get_db
+        from tokens import generate_api_token, validate_api_token
+        from tinydb import Query
+
+        token = generate_api_token('testuser')
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+        monkeypatch.delenv('FLASK_USER_1', raising=False)
+        from auth import get_users
+        get_users.cache_clear()
+
+        assert validate_api_token(token) is None
+
+        entry = get_db().table('api_tokens').get(Query().token_hash == token_hash)
+        assert entry['last_used_at'] is None
 
 
 def test_token_stored_as_hash_not_plaintext(app):

@@ -18,6 +18,14 @@ def user_client(client):
     return client
 
 
+@pytest.fixture
+def clear_user_cache():
+    from auth import get_users
+    get_users.cache_clear()
+    yield
+    get_users.cache_clear()
+
+
 # ---------------------------------------------------------------------------
 # Token creation
 # ---------------------------------------------------------------------------
@@ -121,6 +129,26 @@ def test_upload_with_session_still_works(user_client, db_instance):
     )
     assert resp.status_code == 200
     assert 'file_id' in resp.get_json()
+
+
+def test_upload_with_removed_session_user_redirects_to_login(user_client, monkeypatch, clear_user_cache):
+    monkeypatch.delenv('FLASK_USER_1', raising=False)
+    from auth import get_users
+    get_users.cache_clear()
+
+    resp = user_client.post(
+        '/upload',
+        data={'file': (_make_fake_upload(), 'test.pdf')},
+        content_type='multipart/form-data',
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert '/login' in resp.request.path
+    assert b'Please log in to access this page' in resp.data
+    with user_client.session_transaction() as sess:
+        assert 'username' not in sess
+        assert 'is_admin' not in sess
 
 
 def test_upload_token_sets_uploaded_by(app, client, db_instance):
