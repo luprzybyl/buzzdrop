@@ -38,6 +38,7 @@ def test_index_anonymous_user(client, app):
     assert b'BuzzDrop: secure, one-time file sharing.' in response.data
     assert b'Star Buzzdrop on GitHub' in response.data
     assert b'https://github.com/luprzybyl/buzzdrop' in response.data
+    assert b'Read the Buzzdrop README on GitHub' in response.data
     assert b'Login' in response.data # Login link in header
     assert b'Your Shared Files' not in response.data # Should not see this section title
 
