@@ -3,6 +3,7 @@
 buzz — Buzzdrop CLI for sharing files from the command line.
 
 Authentication: reads ~/.buzz_token (JSON with 'token' and 'server' fields).
+Tokens created before the PBKDF2 API-token rollout must be regenerated.
 Encryption: AES-GCM with PBKDF2-SHA256 key derivation, compatible with the
 Buzzdrop web UI.
 
@@ -405,7 +406,8 @@ def upload(server: str, token: str, filename: str, encrypted: bytes, expiry: str
 
     if resp.status_code == 401:
         print(
-            "Error: authentication failed — check your token in ~/.buzz_token",
+            "Error: authentication failed — check your token in ~/.buzz_token "
+            "or generate a new one with /api/token if it predates the PBKDF2 rollout",
             file=sys.stderr,
         )
         sys.exit(1)

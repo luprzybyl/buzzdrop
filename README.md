@@ -181,6 +181,8 @@ ln -s $(pwd)/cli/buzz ~/.local/bin/buzz
    chmod 600 ~/.buzz_token
    ```
 
+   > **Breaking change:** tokens generated before the PBKDF2-HMAC-SHA256 rollout are no longer accepted in this release. If an older token stops working, generate a replacement with `POST /api/token` and update `~/.buzz_token`.
+
 ### Usage
 
 ```bash
@@ -219,7 +221,7 @@ Returns `{"token": "<64-char hex>", "expires_at": "<ISO-8601 timestamp>"}` — *
 
 By default, tokens expire after 30 days. You can optionally pass `{"expires_in_days": 7}` when creating a token to shorten or extend that lifetime.
 
-Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; the raw value is never persisted. The hash secret can be set explicitly with `TOKEN_HASH_SECRET`, otherwise Buzzdrop falls back to `FLASK_SECRET_KEY` when it is configured and to a stable built-in development fallback when it is not. Existing legacy token digests remain valid and are migrated on successful validation. Logged-in users can list their active tokens with `GET /api/tokens` and revoke one with `POST /api/tokens/<token_id>/revoke`. Admins can also review and revoke active tokens for any user from the **Manage Users** page.
+Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; the raw value is never persisted. The hash secret can be set explicitly with `TOKEN_HASH_SECRET`, otherwise Buzzdrop falls back to `FLASK_SECRET_KEY` when it is configured and to a stable built-in development fallback when it is not. **Breaking change:** legacy API tokens generated before the PBKDF2 migration are no longer accepted; users must generate replacement tokens with `POST /api/token`. Logged-in users can list their active tokens with `GET /api/tokens` and revoke one with `POST /api/tokens/<token_id>/revoke`. Admins can also review and revoke active tokens for any user from the **Manage Users** page.
 
 
 The application is built with:
