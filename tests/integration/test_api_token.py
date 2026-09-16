@@ -19,10 +19,11 @@ def user_client(client):
 
 
 @pytest.fixture
-def clear_user_cache():
+def clear_user_cache(monkeypatch):
     from auth import get_users
     get_users.cache_clear()
     yield
+    monkeypatch.undo()
     get_users.cache_clear()
 
 

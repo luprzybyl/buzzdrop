@@ -3,10 +3,11 @@ import pytest
 
 
 @pytest.fixture
-def clear_user_cache():
+def clear_user_cache(monkeypatch):
     from auth import get_users
     get_users.cache_clear()
     yield
+    monkeypatch.undo()
     get_users.cache_clear()
 
 
@@ -63,6 +64,22 @@ def test_token_stored_as_hash_not_plaintext(app):
         assert entry.get('token_hash') != token
         expected_hash = _hash_token(token)
         assert entry['token_hash'] == expected_hash
+
+
+def test_validate_api_token_accepts_legacy_sha256_hash(app):
+    with app.app_context():
+        from app import get_db
+        from tokens import _legacy_hash_token, validate_api_token
+
+        token = 'a' * 64
+        get_db().table('api_tokens').insert({
+            'token_hash': _legacy_hash_token(token),
+            'username': 'testuser',
+            'created_at': '2026-09-16T00:00:00',
+            'last_used_at': None,
+        })
+
+        assert validate_api_token(token) == 'testuser'
 
 
 def test_validate_updates_last_used_at(app):

@@ -7,10 +7,11 @@ from flask import session, url_for, get_flashed_messages
 
 
 @pytest.fixture
-def clear_user_cache():
+def clear_user_cache(monkeypatch):
     from auth import get_users
     get_users.cache_clear()
     yield
+    monkeypatch.undo()
     get_users.cache_clear()
 
 def test_login_page_loads(client):
@@ -189,3 +190,20 @@ def test_admin_required_logs_out_removed_admin(client, monkeypatch, clear_user_c
     with client.session_transaction() as sess:
         assert 'username' not in sess
         assert 'is_admin' not in sess
+
+
+def test_admin_required_revokes_session_admin_on_demotion(client, monkeypatch, clear_user_cache):
+    client.post(url_for('login'), data={'username': 'adminuser', 'password': 'adminpass'})
+
+    monkeypatch.setenv('FLASK_USER_2', 'adminuser:adminpass:false')
+    from auth import get_users
+    get_users.cache_clear()
+
+    response = client.get(url_for('manage_users'), follow_redirects=True)
+
+    assert response.status_code == 200
+    assert url_for('index') in response.request.path
+    assert b'Admin access required' in response.data
+    with client.session_transaction() as sess:
+        assert sess['username'] == 'adminuser'
+        assert sess['is_admin'] is False
