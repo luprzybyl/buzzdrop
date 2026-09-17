@@ -9,6 +9,18 @@ from flask import g, session, flash, redirect, url_for, request
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
+def _is_bool_token(value: str) -> bool:
+    return value.strip().lower() in {'true', 'false'}
+
+
+def _looks_like_email(value: str) -> bool:
+    value = value.strip()
+    if '@' not in value or ' ' in value:
+        return False
+    _, _, domain = value.rpartition('@')
+    return bool(domain and '.' in domain)
+
+
 def hash_password(password: str) -> str:
     """
     Hash a password using PBKDF2-SHA256 with salt.
@@ -29,7 +41,7 @@ def get_users() -> dict:
     Results are cached to avoid repeated hashing.
     
     Environment variables should be in format:
-        FLASK_USER_N=username:password:is_admin
+        FLASK_USER_N=username:password:is_admin[:email[:email_verified]]
     
     Example:
         FLASK_USER_1=admin:secretpass:true
@@ -50,10 +62,36 @@ def get_users() -> dict:
         if key.startswith('FLASK_USER_'):
             try:
                 # Extract parts from the value
-                username, password, is_admin_str = value.split(':', 2)
+                username, remainder = value.split(':', 1)
+                parts = remainder.rsplit(':', 3)
+                if len(parts) < 2:
+                    raise ValueError
+
+                email = None
+                email_verified = False
+                if (
+                    len(parts) >= 4
+                    and _is_bool_token(parts[-3])
+                    and _looks_like_email(parts[-2])
+                    and _is_bool_token(parts[-1])
+                ):
+                    password = ':'.join(parts[:-3])
+                    is_admin_str = parts[-3]
+                    email = parts[-2].strip() or None
+                    email_verified = parts[-1].strip().lower() == 'true'
+                elif len(parts) >= 3 and _is_bool_token(parts[-2]) and _looks_like_email(parts[-1]):
+                    password = ':'.join(parts[:-2])
+                    is_admin_str = parts[-2]
+                    email = parts[-1].strip() or None
+                else:
+                    password = ':'.join(parts[:-1])
+                    is_admin_str = parts[-1]
+
                 users[username] = {
                     'password': hash_password(password),
-                    'is_admin': is_admin_str.lower() == 'true'
+                    'is_admin': is_admin_str.lower() == 'true',
+                    'email': email,
+                    'email_verified': email_verified,
                 }
             except ValueError:
                 # Handle cases where the value might not have enough parts
@@ -119,7 +157,9 @@ def get_current_user() -> dict:
 
     return {
         'username': username,
-        'is_admin': user.get('is_admin', False)
+        'is_admin': user.get('is_admin', False),
+        'email': user.get('email'),
+        'email_verified': user.get('email_verified', False),
     }
 
 

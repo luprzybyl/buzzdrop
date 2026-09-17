@@ -16,6 +16,7 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)),
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app import app as flask_app, get_db, get_files_table, limiter # Import necessary items from your app
+from auth import get_users
 
 @pytest.fixture(scope='session')
 def app():
@@ -84,6 +85,14 @@ def reset_rate_limiter():
     limiter.reset()
     yield
     limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def reset_user_cache():
+    """Reset cached environment-backed users between tests."""
+    get_users.cache_clear()
+    yield
+    get_users.cache_clear()
 
 @pytest.fixture(scope='function')
 def db_instance(app):

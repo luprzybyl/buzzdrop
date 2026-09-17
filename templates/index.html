@@ -81,6 +81,39 @@
                 <textarea id="shared-private-note" name="private_note" rows="2" class="field-input" placeholder="Visible only to you in your shared items list"></textarea>
             </div>
 
+            <div class="surface-card-soft space-y-4 p-4">
+                <label class="flex items-start gap-3 text-sm text-slate-700">
+                    <input id="notify-on-open" name="notify_on_open" type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400">
+                    <span>
+                        <span class="font-semibold text-slate-900">Notify me when this is opened</span>
+                        <span class="mt-1 block text-slate-500">Buzzdrop sends one email after the recipient attempts decryption. Delivery failures are logged only.</span>
+                    </span>
+                </label>
+                <div>
+                    <label for="notification-email" class="field-label">Verified account email</label>
+                    <input
+                        id="notification-email"
+                        name="notification_email"
+                        type="email"
+                        class="field-input"
+                        placeholder="Configure this in FLASK_USER_N"
+                        value="{{ configured_notification_email or '' }}"
+                        readonly
+                    >
+                    <p class="field-help">
+                        {% if configured_notification_email %}
+                            {% if configured_notification_email_verified %}
+                                Open notifications are sent only to this verified account email.
+                            {% else %}
+                                Your configured account email is not marked verified yet, so notifications stay unavailable until it is verified.
+                            {% endif %}
+                        {% else %}
+                            Configure a verified account email in your user record before enabling notifications.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
             <div class="surface-card-soft grid gap-4 p-4 sm:grid-cols-[1fr,auto] sm:items-center">
                 <div class="text-sm text-slate-600">
                     <p class="font-semibold text-slate-900">One-time buzz</p>
