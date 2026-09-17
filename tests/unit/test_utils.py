@@ -82,6 +82,13 @@ def test_get_users_optional_email_metadata():
     assert users["user1"]["email"] == "user1@example.com"
     assert users["user1"]["email_verified"] is True
 
+@mock.patch.dict(os.environ, {
+    "FLASK_USER_1": "user1:pa:ss:false",
+}, clear=True)
+def test_get_users_password_with_colon():
+    users = get_users()
+    assert check_password_hash(users["user1"]["password"], "pa:ss")
+
 @mock.patch.dict(os.environ, {"FLASK_USER_1": "user1:pass1:invalid_bool"}, clear=True)
 def test_get_users_invalid_admin_flag():
     users = get_users()

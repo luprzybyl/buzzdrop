@@ -76,6 +76,14 @@ limiter = Limiter(
 )
 
 
+class NotificationPreferenceError(Exception):
+    """Safe validation error for uploader notification inputs."""
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
 def _get_csrf_token():
     token = session.get('csrf_token')
     if not token:
@@ -138,7 +146,7 @@ def _get_notification_preferences(username: str) -> tuple[bool, str | None]:
         return False, None
 
     if not _notifications_configured():
-        raise ValueError('Open notifications are not configured on this server')
+        raise NotificationPreferenceError('Open notifications are not configured on this server')
 
     requested_email = (request.form.get('notification_email') or '').strip()
     user = get_users().get(username, {})
@@ -149,12 +157,12 @@ def _get_notification_preferences(username: str) -> tuple[bool, str | None]:
     elif configured_email:
         notification_email = configured_email
     elif user.get('email') and not user.get('email_verified', False):
-        raise ValueError('Your configured email must be marked verified before it can receive notifications')
+        raise NotificationPreferenceError('Your configured email must be marked verified before it can receive notifications')
     else:
-        raise ValueError('Enter a notification email or configure a verified account email')
+        raise NotificationPreferenceError('Enter a notification email or configure a verified account email')
 
     if not _is_valid_notification_email(notification_email):
-        raise ValueError('Enter a valid notification email')
+        raise NotificationPreferenceError('Enter a valid notification email')
 
     return True, notification_email
 
@@ -574,10 +582,10 @@ def upload_file():
 
     try:
         notify_on_open, notification_email = _get_notification_preferences(g.username)
-    except ValueError as exc:
+    except NotificationPreferenceError as exc:
         if wants_json:
-            return {'error': str(exc)}, 400
-        flash(str(exc))
+            return {'error': exc.message}, 400
+        flash(exc.message)
         return redirect(url_for('index'))
 
     if upload_type == 'text' and note_text:

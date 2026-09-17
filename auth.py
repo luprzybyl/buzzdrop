@@ -9,6 +9,10 @@ from flask import g, session, flash, redirect, url_for, request
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
+def _is_bool_token(value: str) -> bool:
+    return value.strip().lower() in {'true', 'false'}
+
+
 def hash_password(password: str) -> str:
     """
     Hash a password using PBKDF2-SHA256 with salt.
@@ -50,13 +54,26 @@ def get_users() -> dict:
         if key.startswith('FLASK_USER_'):
             try:
                 # Extract parts from the value
-                parts = value.split(':')
-                if len(parts) < 3:
+                username, remainder = value.split(':', 1)
+                parts = remainder.rsplit(':', 3)
+                if len(parts) < 2:
                     raise ValueError
 
-                username, password, is_admin_str = parts[:3]
-                email = parts[3].strip() if len(parts) >= 4 and parts[3].strip() else None
-                email_verified = len(parts) >= 5 and parts[4].strip().lower() == 'true'
+                email = None
+                email_verified = False
+                if len(parts) >= 4 and _is_bool_token(parts[-3]) and _is_bool_token(parts[-1]):
+                    password = ':'.join(parts[:-3])
+                    is_admin_str = parts[-3]
+                    email = parts[-2].strip() or None
+                    email_verified = parts[-1].strip().lower() == 'true'
+                elif len(parts) >= 3 and _is_bool_token(parts[-2]):
+                    password = ':'.join(parts[:-2])
+                    is_admin_str = parts[-2]
+                    email = parts[-1].strip() or None
+                else:
+                    password = ':'.join(parts[:-1])
+                    is_admin_str = parts[-1]
+
                 users[username] = {
                     'password': hash_password(password),
                     'is_admin': is_admin_str.lower() == 'true',
