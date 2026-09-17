@@ -157,7 +157,7 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 ### Open Notification Configuration:
 - Extend user records to optionally include an account email in `.env`: `FLASK_USER_N=username:password:is_admin[:email[:email_verified]]`
 - Configure SMTP with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_USE_TLS`, `SMTP_USE_SSL`, and `SMTP_TIMEOUT_SECONDS`
-- If the upload form's notification email is left blank, Buzzdrop uses the logged-in user's configured email only when it is marked as verified
+- Open notifications are sent only to the logged-in user's configured email when it is marked as verified
 - If email delivery fails, Buzzdrop logs the failure and keeps the share available in the dashboard without retrying automatically
 
 ## S3? No Problem!

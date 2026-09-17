@@ -308,6 +308,8 @@ def test_upload_file_uses_verified_account_notification_email(client, app, files
 
 
 def test_report_decryption_sends_notification_once(client, app, files_table, monkeypatch):
+    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com:true')
+    get_users.cache_clear()
     login_user(client, 'testuser', 'password')
     sent_messages = []
     app.config.update({
@@ -321,7 +323,6 @@ def test_report_decryption_sends_notification_once(client, app, files_table, mon
         data={
             'file': (io.BytesIO(b"content"), "notify_once.txt"),
             'notify_on_open': 'true',
-            'notification_email': 'notify@example.com',
         },
         content_type='multipart/form-data',
         headers={'X-Requested-With': 'XMLHttpRequest'},
@@ -337,7 +338,7 @@ def test_report_decryption_sends_notification_once(client, app, files_table, mon
     assert res.status_code == 200
 
     assert len(sent_messages) == 1
-    assert sent_messages[0][0] == 'notify@example.com'
+    assert sent_messages[0][0] == 'testuser@example.com'
     assert 'notify_once.txt' in sent_messages[0][1]
     assert 'Decryption status: successful' in sent_messages[0][2]
 
@@ -358,6 +359,18 @@ def test_report_decryption_requires_boolean_success(client, app, files_table, pa
     file_id = upload_file_for_user(client, app, files_table, 'bool.txt', 'content', 'testuser')
 
     res = client.post(url_for('report_decryption', file_id=file_id), json=payload)
+    assert res.status_code == 400
+
+
+@pytest.mark.parametrize('request_kwargs', [
+    {},
+    {'data': 'success=true', 'content_type': 'application/x-www-form-urlencoded'},
+])
+def test_report_decryption_requires_json_body(client, app, files_table, request_kwargs):
+    login_user(client, 'testuser', 'password')
+    file_id = upload_file_for_user(client, app, files_table, 'bool-json.txt', 'content', 'testuser')
+
+    res = client.post(url_for('report_decryption', file_id=file_id), **request_kwargs)
     assert res.status_code == 400
 
 

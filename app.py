@@ -148,23 +148,23 @@ def _get_notification_preferences(username: str) -> tuple[bool, str | None]:
     if not _notifications_configured():
         raise NotificationPreferenceError('Open notifications are not configured on this server')
 
-    requested_email = (request.form.get('notification_email') or '').strip()
     user = get_users().get(username, {})
-    configured_email = user.get('email') if user.get('email_verified') else None
+    configured_email = (user.get('email') or '').strip()
+    requested_email = (request.form.get('notification_email') or '').strip()
 
-    if requested_email:
-        notification_email = requested_email
-    elif configured_email:
-        notification_email = configured_email
-    elif user.get('email') and not user.get('email_verified', False):
+    if user.get('email') and not user.get('email_verified', False):
         raise NotificationPreferenceError('Your configured email must be marked verified before it can receive notifications')
-    else:
-        raise NotificationPreferenceError('Enter a notification email or configure a verified account email')
 
-    if not _is_valid_notification_email(notification_email):
-        raise NotificationPreferenceError('Enter a valid notification email')
+    if not configured_email:
+        raise NotificationPreferenceError('Configure a verified account email before enabling open notifications')
 
-    return True, notification_email
+    if not _is_valid_notification_email(configured_email):
+        raise NotificationPreferenceError('Your configured account email is invalid')
+
+    if requested_email and requested_email != configured_email:
+        raise NotificationPreferenceError('Open notifications can only be sent to your verified account email')
+
+    return True, configured_email
 
 
 def _send_email(recipient: str, subject: str, body: str):
@@ -820,9 +820,11 @@ def report_decryption(file_id):
         file_repo.update_decryption_status(file_id, data['success'])
         file_info['decryption_success'] = data['success']
 
-    if file_info.get('downloaded_at') and not file_info.get('notification_sent_at'):
+    latest_file_info = file_repo.get_by_id(file_id) or file_info
+
+    if not latest_file_info.get('notification_sent_at'):
         try:
-            send_open_notification_email(file_info)
+            send_open_notification_email(latest_file_info)
         except Exception as exc:
             current_app.logger.warning(
                 'Failed to send open notification for %s: %s',

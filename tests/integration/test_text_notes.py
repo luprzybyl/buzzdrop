@@ -292,6 +292,9 @@ def test_report_decryption_for_text_note(client, app, files_table):
 
 def test_report_decryption_for_text_note_sends_failed_notification(client, app, files_table, monkeypatch):
     """Test reporting a failed decryption sends one notification for text notes."""
+    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com:true')
+    from auth import get_users
+    get_users.cache_clear()
     login_user(client, 'testuser', 'password')
     app.config.update({
         'SMTP_HOST': 'smtp.example.com',
@@ -306,7 +309,6 @@ def test_report_decryption_for_text_note_sends_failed_notification(client, app, 
             'note_text': base64.b64encode(b"Test note").decode('utf-8'),
             'type': 'text',
             'notify_on_open': 'true',
-            'notification_email': 'note@example.com',
         },
         headers={'X-Requested-With': 'XMLHttpRequest'}
     )
@@ -321,7 +323,7 @@ def test_report_decryption_for_text_note_sends_failed_notification(client, app, 
     assert response.status_code == 200
 
     assert len(sent_messages) == 1
-    assert sent_messages[0][0] == 'note@example.com'
+    assert sent_messages[0][0] == 'testuser@example.com'
     assert 'Secret Note' in sent_messages[0][1]
     assert 'Decryption status: failed' in sent_messages[0][2]
 
