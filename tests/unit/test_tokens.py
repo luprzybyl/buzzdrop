@@ -1,7 +1,18 @@
 """Unit tests for API token generation and validation."""
+import hashlib
 from datetime import datetime, timedelta
 
 import pytest
+
+
+def _historical_legacy_token_hash(raw_token: str) -> str:
+    return hashlib.pbkdf2_hmac(
+        'sha256',
+        raw_token.encode(),
+        b'buzzdrop-api-token-legacy-v1',
+        120_000,
+        dklen=32,
+    ).hex()
 
 
 @pytest.fixture
@@ -101,8 +112,9 @@ def test_validate_api_token_rejects_legacy_hash(app, db_instance):
         from tokens import validate_api_token
 
         token = 'a' * 64
+        legacy_hash = _historical_legacy_token_hash(token)
         get_db().table('api_tokens').insert({
-            'token_hash': 'legacy-token-hash',
+            'token_hash': legacy_hash,
             'token_hash_version': 'legacy-pbkdf2-sha256-v1',
             'username': 'testuser',
             'created_at': datetime.now().isoformat(),
@@ -111,7 +123,7 @@ def test_validate_api_token_rejects_legacy_hash(app, db_instance):
 
         assert validate_api_token(token) is None
         stored_entry = get_db().table('api_tokens').all()[-1]
-        assert stored_entry['token_hash'] == 'legacy-token-hash'
+        assert stored_entry['token_hash'] == legacy_hash
         assert stored_entry['token_hash_version'] == 'legacy-pbkdf2-sha256-v1'
         assert stored_entry.get('last_used_at') is None
 
@@ -172,9 +184,10 @@ def test_revoke_api_token_does_not_remove_legacy_hash(app, db_instance):
         from tokens import revoke_api_token
 
         token = 'a' * 64
+        legacy_hash = _historical_legacy_token_hash(token)
         table = get_db().table('api_tokens')
         table.insert({
-            'token_hash': 'legacy-token-hash',
+            'token_hash': legacy_hash,
             'token_hash_version': 'legacy-pbkdf2-sha256-v1',
             'username': 'testuser',
             'created_at': datetime.now().isoformat(),
@@ -182,7 +195,7 @@ def test_revoke_api_token_does_not_remove_legacy_hash(app, db_instance):
         })
 
         assert revoke_api_token(token) is False
-        assert table.get(Query().token_hash == 'legacy-token-hash') is not None
+        assert table.get(Query().token_hash == legacy_hash) is not None
 
 
 def test_revoke_nonexistent_token(app):
