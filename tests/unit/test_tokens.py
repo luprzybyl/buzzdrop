@@ -1,7 +1,18 @@
 """Unit tests for API token generation and validation."""
+import hashlib
 from datetime import datetime, timedelta
 
 import pytest
+
+
+def _historical_legacy_token_hash(raw_token: str) -> str:
+    return hashlib.pbkdf2_hmac(
+        'sha256',
+        raw_token.encode(),
+        b'buzzdrop-api-token-legacy-v1',
+        120_000,
+        dklen=32,
+    ).hex()
 
 
 @pytest.fixture
@@ -95,46 +106,48 @@ def test_token_hash_does_not_depend_on_temporary_session_key(app, monkeypatch):
         assert first_hash == second_hash
 
 
-def test_validate_api_token_accepts_legacy_hash(app, db_instance):
+def test_validate_api_token_rejects_legacy_hash(app, db_instance):
+    with app.app_context():
+        from app import get_db
+        from tokens import validate_api_token
+
+        token = 'a' * 64
+        legacy_hash = _historical_legacy_token_hash(token)
+        get_db().table('api_tokens').insert({
+            'token_hash': legacy_hash,
+            'token_hash_version': 'legacy-pbkdf2-sha256-v1',
+            'username': 'testuser',
+            'created_at': datetime.now().isoformat(),
+            'last_used_at': None,
+        })
+
+        assert validate_api_token(token) is None
+        stored_entry = get_db().table('api_tokens').all()[-1]
+        assert stored_entry['token_hash'] == legacy_hash
+        assert stored_entry['token_hash_version'] == 'legacy-pbkdf2-sha256-v1'
+        assert stored_entry.get('last_used_at') is None
+
+
+def test_validate_api_token_sets_missing_hash_version(app, db_instance):
     with app.app_context():
         from app import get_db
         from tinydb import Query
-        from tokens import (
-            LEGACY_TOKEN_HASH_VERSION,
-            TOKEN_HASH_VERSION,
-            _hash_token,
-            _hash_token_legacy,
-            validate_api_token,
-        )
+        from tokens import TOKEN_HASH_VERSION, _hash_token, validate_api_token
 
-        token = 'a' * 64
-        legacy_hash = _hash_token_legacy(token)
-        get_db().table('api_tokens').insert({
-            'token_hash': legacy_hash,
-            'token_hash_version': LEGACY_TOKEN_HASH_VERSION,
+        token = 'b' * 64
+        token_hash = _hash_token(token)
+        table = get_db().table('api_tokens')
+        table.insert({
+            'token_hash': token_hash,
             'username': 'testuser',
             'created_at': datetime.now().isoformat(),
             'last_used_at': None,
         })
 
         assert validate_api_token(token) == 'testuser'
-        migrated_entry = get_db().table('api_tokens').get(Query().token_hash == _hash_token(token))
-        assert migrated_entry is not None
-        assert migrated_entry['token_hash_version'] == TOKEN_HASH_VERSION
-        assert migrated_entry['expires_at'] is not None
-        assert migrated_entry['last_used_at'] is not None
-
-
-def test_validate_api_token_skips_legacy_hash_when_no_legacy_tokens_exist(app, monkeypatch):
-    with app.app_context():
-        from tokens import validate_api_token
-
-        def fail_if_called(raw_token):
-            raise AssertionError(f'legacy hash should not be computed for {raw_token}')
-
-        monkeypatch.setattr('tokens._hash_token_legacy', fail_if_called)
-
-        assert validate_api_token('0' * 64) is None
+        entry = table.get(Query().token_hash == token_hash)
+        assert entry['token_hash_version'] == TOKEN_HASH_VERSION
+        assert entry['last_used_at'] is not None
 
 
 def test_validate_updates_last_used_at(app, db_instance):
@@ -164,25 +177,25 @@ def test_revoke_api_token(app):
         assert validate_api_token(token) is None
 
 
-def test_revoke_api_token_removes_legacy_hash(app, db_instance):
+def test_revoke_api_token_does_not_remove_legacy_hash(app, db_instance):
     with app.app_context():
         from app import get_db
         from tinydb import Query
-        from tokens import LEGACY_TOKEN_HASH_VERSION, _hash_token_legacy, revoke_api_token
+        from tokens import revoke_api_token
 
         token = 'a' * 64
-        legacy_hash = _hash_token_legacy(token)
+        legacy_hash = _historical_legacy_token_hash(token)
         table = get_db().table('api_tokens')
         table.insert({
             'token_hash': legacy_hash,
-            'token_hash_version': LEGACY_TOKEN_HASH_VERSION,
+            'token_hash_version': 'legacy-pbkdf2-sha256-v1',
             'username': 'testuser',
             'created_at': datetime.now().isoformat(),
             'last_used_at': None,
         })
 
-        assert revoke_api_token(token) is True
-        assert table.get(Query().token_hash == legacy_hash) is None
+        assert revoke_api_token(token) is False
+        assert table.get(Query().token_hash == legacy_hash) is not None
 
 
 def test_revoke_nonexistent_token(app):

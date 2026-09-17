@@ -1,8 +1,7 @@
 """
 API token management for Buzzdrop.
 Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests with a stable
-hash secret; the raw token is shown only once at generation. Legacy PBKDF2
-token hashes remain valid and are migrated on successful validation.
+hash secret; the raw token is shown only once at generation.
 """
 import hashlib
 import os
@@ -17,9 +16,6 @@ TOKEN_HASH_ITERATIONS = 310_000
 TOKEN_HASH_BYTES = 32
 DEFAULT_TOKEN_HASH_SECRET = b'buzzdrop-api-token-v1'
 TOKEN_HASH_VERSION = 'pbkdf2-sha256-v1'
-LEGACY_TOKEN_HASH_ITERATIONS = 120_000
-LEGACY_TOKEN_HASH_SECRET = b'buzzdrop-api-token-legacy-v1'
-LEGACY_TOKEN_HASH_VERSION = 'legacy-pbkdf2-sha256-v1'
 
 
 def _get_tokens_table():
@@ -86,24 +82,6 @@ def _hash_token(raw_token: str) -> str:
     return digest.hex()
 
 
-def _hash_token_legacy(raw_token: str) -> str:
-    """Derive deterministic legacy digest for backward-compatible token migration."""
-    digest = hashlib.pbkdf2_hmac(
-        'sha256',
-        raw_token.encode(),
-        LEGACY_TOKEN_HASH_SECRET,
-        LEGACY_TOKEN_HASH_ITERATIONS,
-        dklen=TOKEN_HASH_BYTES,
-    )
-    return digest.hex()
-
-
-def _has_legacy_token_hashes(table) -> bool:
-    """Return whether any stored API tokens still use the legacy hash version."""
-    Q = Query()
-    return table.contains(Q.token_hash_version == LEGACY_TOKEN_HASH_VERSION)
-
-
 def generate_api_token(username: str, expires_at: Optional[datetime] = None) -> str:
     """
     Generate a new API token for a user, store its hash, and return the raw token.
@@ -150,16 +128,7 @@ def validate_api_token(raw_token: str) -> Optional[str]:
 
     entry = table.get(Q.token_hash == token_hash)
     if not entry:
-        if not _has_legacy_token_hashes(table):
-            return None
-        legacy_token_hash = _hash_token_legacy(raw_token)
-        entry = table.get(
-            (Q.token_hash == legacy_token_hash)
-            & (Q.token_hash_version == LEGACY_TOKEN_HASH_VERSION)
-        )
-        if not entry:
-            return None
-        token_hash = legacy_token_hash
+        return None
 
     from auth import get_users
     if entry['username'] not in get_users():
@@ -174,10 +143,7 @@ def validate_api_token(raw_token: str) -> Optional[str]:
     if expires_at is not None and not entry.get('expires_at'):
         updates['expires_at'] = expires_at.isoformat()
 
-    if entry.get('token_hash_version') == LEGACY_TOKEN_HASH_VERSION:
-        updates['token_hash'] = _hash_token(raw_token)
-        updates['token_hash_version'] = TOKEN_HASH_VERSION
-    elif not entry.get('token_hash_version'):
+    if not entry.get('token_hash_version'):
         updates['token_hash_version'] = TOKEN_HASH_VERSION
 
     table.update(updates, doc_ids=[entry.doc_id])
@@ -241,9 +207,4 @@ def revoke_api_token(raw_token: str) -> bool:
     Q = Query()
     table = _get_tokens_table()
     removed = table.remove(Q.token_hash == token_hash)
-    if removed:
-        return True
-    if not _has_legacy_token_hashes(table):
-        return False
-    removed = table.remove(Q.token_hash == _hash_token_legacy(raw_token))
     return bool(removed)
