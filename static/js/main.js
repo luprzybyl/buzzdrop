@@ -145,11 +145,19 @@ if (fileUploadForm) {
         formData.append('file', new File([encBlob], file.name));
         const expiryInput = document.getElementById('shared-expiry');
         const privateNoteInput = document.getElementById('shared-private-note');
+        const notifyOnOpenInput = document.getElementById('notify-on-open');
+        const notificationEmailInput = document.getElementById('notification-email');
         if (expiryInput && expiryInput.value) {
             formData.append('expiry', expiryInput.value);
         }
         if (privateNoteInput && privateNoteInput.value.trim()) {
             formData.append('private_note', privateNoteInput.value.trim());
+        }
+        if (notifyOnOpenInput && notifyOnOpenInput.checked) {
+            formData.append('notify_on_open', 'true');
+        }
+        if (notificationEmailInput && notificationEmailInput.value.trim()) {
+            formData.append('notification_email', notificationEmailInput.value.trim());
         }
 
         // Upload with progress
@@ -169,6 +177,8 @@ async function uploadNote() {
     const password = document.getElementById('shared-password').value;
     const expiry = document.getElementById('shared-expiry').value;
     const privateNote = document.getElementById('shared-private-note').value.trim();
+    const notifyOnOpen = document.getElementById('notify-on-open').checked;
+    const notificationEmail = document.getElementById('notification-email').value.trim();
 
     if (!noteText || !password) {
         alert('Please enter both text and password');
@@ -190,6 +200,12 @@ async function uploadNote() {
     }
     if (privateNote) {
         formData.append('private_note', privateNote);
+    }
+    if (notifyOnOpen) {
+        formData.append('notify_on_open', 'true');
+    }
+    if (notificationEmail) {
+        formData.append('notification_email', notificationEmail);
     }
 
     // Upload with progress

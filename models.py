@@ -58,6 +58,9 @@ class FileRepository:
             'type': file_data.get('type', 'file'),
             'private_note': file_data.get('private_note'),
             'shared_with': file_data.get('shared_with', []),
+            'notify_on_open': file_data.get('notify_on_open', False),
+            'notification_email': file_data.get('notification_email'),
+            'notification_sent_at': file_data.get('notification_sent_at'),
         }
         
         self.table.insert(entry)
@@ -160,6 +163,10 @@ class FileRepository:
             file_id: File UUID
         """
         self.table.remove(self.query.id == file_id)
+
+    def mark_notification_sent(self, file_id: str):
+        """Mark uploader notification as sent."""
+        self.table.update({'notification_sent_at': datetime.now().isoformat()}, self.query.id == file_id)
     
     def get_downloaded_before(self, cutoff_datetime: datetime) -> List[dict]:
         """

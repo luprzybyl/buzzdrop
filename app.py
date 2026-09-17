@@ -1,8 +1,11 @@
 import math
 import os
 import secrets
+import smtplib
 import uuid
 from datetime import datetime, timedelta
+from email.message import EmailMessage
+from email.utils import parseaddr
 from io import BytesIO
 from flask import (
     Flask,
@@ -112,6 +115,106 @@ def _parse_positive_integer(value):
     if parsed_value < 1:
         raise ValueError
     return parsed_value
+
+
+def _notifications_configured() -> bool:
+    return bool(current_app.config.get('SMTP_HOST') and current_app.config.get('SMTP_FROM_EMAIL'))
+
+
+def _notification_requested() -> bool:
+    return (request.form.get('notify_on_open') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _is_valid_notification_email(email_address: str) -> bool:
+    parsed = parseaddr(email_address)[1]
+    if parsed != email_address or '@' not in parsed or ' ' in parsed:
+        return False
+    local_part, _, domain = parsed.rpartition('@')
+    return bool(local_part and '.' in domain)
+
+
+def _get_notification_preferences(username: str) -> tuple[bool, str | None]:
+    if not _notification_requested():
+        return False, None
+
+    if not _notifications_configured():
+        raise ValueError('Open notifications are not configured on this server')
+
+    requested_email = (request.form.get('notification_email') or '').strip()
+    user = get_users().get(username, {})
+    configured_email = user.get('email') if user.get('email_verified') else None
+
+    if requested_email:
+        notification_email = requested_email
+    elif configured_email:
+        notification_email = configured_email
+    elif user.get('email') and not user.get('email_verified', False):
+        raise ValueError('Your configured email must be marked verified before it can receive notifications')
+    else:
+        raise ValueError('Enter a notification email or configure a verified account email')
+
+    if not _is_valid_notification_email(notification_email):
+        raise ValueError('Enter a valid notification email')
+
+    return True, notification_email
+
+
+def _send_email(recipient: str, subject: str, body: str):
+    message = EmailMessage()
+    message['Subject'] = subject
+    message['From'] = current_app.config['SMTP_FROM_EMAIL']
+    message['To'] = recipient
+    message.set_content(body)
+
+    smtp_class = smtplib.SMTP_SSL if current_app.config.get('SMTP_USE_SSL') else smtplib.SMTP
+    with smtp_class(
+        current_app.config['SMTP_HOST'],
+        current_app.config['SMTP_PORT'],
+        timeout=current_app.config.get('SMTP_TIMEOUT_SECONDS', 10),
+    ) as server:
+        if current_app.config.get('SMTP_USE_TLS') and not current_app.config.get('SMTP_USE_SSL'):
+            server.starttls()
+        if current_app.config.get('SMTP_USERNAME'):
+            server.login(
+                current_app.config['SMTP_USERNAME'],
+                current_app.config.get('SMTP_PASSWORD', ''),
+            )
+        server.send_message(message)
+
+
+def send_open_notification_email(file_info: dict) -> bool:
+    if (
+        not file_info.get('notify_on_open')
+        or not file_info.get('notification_email')
+        or file_info.get('notification_sent_at')
+    ):
+        return False
+
+    decryption_success = file_info.get('decryption_success')
+    if decryption_success is True:
+        decryption_status = 'successful'
+    elif decryption_success is False:
+        decryption_status = 'failed'
+    else:
+        decryption_status = 'not reported'
+
+    share_type = 'Secret Note' if file_info.get('type') == 'text' else 'File'
+    subject = f'Buzzdrop {share_type.lower()} opened: {file_info["original_name"]}'
+    body = '\n'.join([
+        'Your Buzzdrop share was opened.',
+        '',
+        f'Type: {share_type}',
+        f'Original name: {file_info["original_name"]}',
+        f'Opened at: {file_info.get("downloaded_at") or datetime.now().isoformat()}',
+        f'Decryption status: {decryption_status}',
+        '',
+        'Buzzdrop intentionally omits recipient-sensitive details from this notification.',
+    ])
+
+    _send_email(file_info['notification_email'], subject, body)
+    file_repo.mark_notification_sent(file_info['id'])
+    file_info['notification_sent_at'] = datetime.now().isoformat()
+    return True
 
 # --- SRI HASH HELPER ---
 @app.context_processor
@@ -300,7 +403,9 @@ def index():
             user_files=user_files, 
             shared_files=shared_files,
             allowed_extensions=list(current_app.config.get('ALLOWED_EXTENSIONS')),
-            max_content_length=current_app.config.get('MAX_CONTENT_LENGTH')
+            max_content_length=current_app.config.get('MAX_CONTENT_LENGTH'),
+            configured_notification_email=current_user.get('email'),
+            configured_notification_email_verified=current_user.get('email_verified', False),
         )
     
     return render_template(
@@ -465,6 +570,15 @@ def upload_file():
     note_text = request.form.get('note_text')
     upload_type = request.form.get('type', 'file')
     private_note = (request.form.get('private_note') or '').strip() or None
+    wants_json = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    try:
+        notify_on_open, notification_email = _get_notification_preferences(g.username)
+    except ValueError as exc:
+        if wants_json:
+            return {'error': str(exc)}, 400
+        flash(str(exc))
+        return redirect(url_for('index'))
 
     if upload_type == 'text' and note_text:
         # Handle text note upload
@@ -493,11 +607,13 @@ def upload_file():
             'uploaded_by': g.username,
             'expiry_at': expiry_iso,
             'type': 'text',
-            'private_note': private_note
+            'private_note': private_note,
+            'notify_on_open': notify_on_open,
+            'notification_email': notification_email,
         }, file_id=unique_id)
         
         share_link = url_for('view_file', file_id=unique_id, _external=True)
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        if wants_json:
             return {
                 'file_id': unique_id,
                 'share_link': share_link,
@@ -538,11 +654,13 @@ def upload_file():
             'uploaded_by': g.username,
             'expiry_at': expiry_iso,
             'type': 'file',
-            'private_note': private_note
+            'private_note': private_note,
+            'notify_on_open': notify_on_open,
+            'notification_email': notification_email,
         }, file_id=unique_id)
         
         share_link = url_for('view_file', file_id=unique_id, _external=True)
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        if wants_json:
             return {
                 'file_id': unique_id,
                 'share_link': share_link,
@@ -676,11 +794,22 @@ def report_decryption(file_id):
         return {'error': 'File not found'}, 404
 
     data = request.get_json(silent=True) or {}
-    if 'success' not in data:
+    if 'success' not in data or not isinstance(data['success'], bool):
         return {'error': 'Invalid request'}, 400
 
     if file_info.get('decryption_success') is None:
-        file_repo.update_decryption_status(file_id, bool(data['success']))
+        file_repo.update_decryption_status(file_id, data['success'])
+        file_info['decryption_success'] = data['success']
+
+    if file_info.get('downloaded_at') and not file_info.get('notification_sent_at'):
+        try:
+            send_open_notification_email(file_info)
+        except Exception as exc:
+            current_app.logger.warning(
+                'Failed to send open notification for %s: %s',
+                file_id,
+                exc,
+            )
     return {'status': 'recorded'}
 
 

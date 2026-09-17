@@ -81,6 +81,37 @@
                 <textarea id="shared-private-note" name="private_note" rows="2" class="field-input" placeholder="Visible only to you in your shared items list"></textarea>
             </div>
 
+            <div class="surface-card-soft space-y-4 p-4">
+                <label class="flex items-start gap-3 text-sm text-slate-700">
+                    <input id="notify-on-open" type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400">
+                    <span>
+                        <span class="font-semibold text-slate-900">Notify me when this is opened</span>
+                        <span class="mt-1 block text-slate-500">Buzzdrop sends one email after the recipient attempts decryption. Delivery failures are logged only.</span>
+                    </span>
+                </label>
+                <div>
+                    <label for="notification-email" class="field-label">Notification email</label>
+                    <input
+                        id="notification-email"
+                        type="email"
+                        class="field-input"
+                        placeholder="you@example.com"
+                        value="{{ configured_notification_email or '' }}"
+                    >
+                    <p class="field-help">
+                        {% if configured_notification_email %}
+                            {% if configured_notification_email_verified %}
+                                Leave this as-is to use your verified account email.
+                            {% else %}
+                                Your configured account email is not marked verified yet, so enter another address if you want notifications.
+                            {% endif %}
+                        {% else %}
+                            Optional unless you enable notifications.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
             <div class="surface-card-soft grid gap-4 p-4 sm:grid-cols-[1fr,auto] sm:items-center">
                 <div class="text-sm text-slate-600">
                     <p class="font-semibold text-slate-900">One-time buzz</p>

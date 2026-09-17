@@ -1,6 +1,7 @@
 import base64
 from flask import url_for
 from tinydb import Query
+from unittest import mock
 
 def login_user(client, username, password):
     """Helper function to log in a user."""
@@ -287,3 +288,39 @@ def test_report_decryption_for_text_note(client, app, files_table):
     File = Query()
     note_info = files_table.get(File.id == note_id)
     assert note_info['decryption_success'] is True
+
+
+def test_report_decryption_for_text_note_sends_failed_notification(client, app, files_table, monkeypatch):
+    """Test reporting a failed decryption sends one notification for text notes."""
+    login_user(client, 'testuser', 'password')
+    app.config.update({
+        'SMTP_HOST': 'smtp.example.com',
+        'SMTP_FROM_EMAIL': 'buzzdrop@example.com',
+    })
+    sent_messages = []
+    monkeypatch.setattr('app._send_email', lambda recipient, subject, body: sent_messages.append((recipient, subject, body)))
+
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'note_text': base64.b64encode(b"Test note").decode('utf-8'),
+            'type': 'text',
+            'notify_on_open': 'true',
+            'notification_email': 'note@example.com',
+        },
+        headers={'X-Requested-With': 'XMLHttpRequest'}
+    )
+    note_id = response.get_json()['file_id']
+
+    client.get(url_for('download_file', file_id=note_id))
+
+    response = client.post(
+        url_for('report_decryption', file_id=note_id),
+        json={'success': False}
+    )
+    assert response.status_code == 200
+
+    assert len(sent_messages) == 1
+    assert sent_messages[0][0] == 'note@example.com'
+    assert 'Secret Note' in sent_messages[0][1]
+    assert 'Decryption status: failed' in sent_messages[0][2]

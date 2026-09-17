@@ -29,7 +29,7 @@ def get_users() -> dict:
     Results are cached to avoid repeated hashing.
     
     Environment variables should be in format:
-        FLASK_USER_N=username:password:is_admin
+        FLASK_USER_N=username:password:is_admin[:email[:email_verified]]
     
     Example:
         FLASK_USER_1=admin:secretpass:true
@@ -50,10 +50,18 @@ def get_users() -> dict:
         if key.startswith('FLASK_USER_'):
             try:
                 # Extract parts from the value
-                username, password, is_admin_str = value.split(':', 2)
+                parts = value.split(':')
+                if len(parts) < 3:
+                    raise ValueError
+
+                username, password, is_admin_str = parts[:3]
+                email = parts[3].strip() if len(parts) >= 4 and parts[3].strip() else None
+                email_verified = len(parts) >= 5 and parts[4].strip().lower() == 'true'
                 users[username] = {
                     'password': hash_password(password),
-                    'is_admin': is_admin_str.lower() == 'true'
+                    'is_admin': is_admin_str.lower() == 'true',
+                    'email': email,
+                    'email_verified': email_verified,
                 }
             except ValueError:
                 # Handle cases where the value might not have enough parts
@@ -119,7 +127,9 @@ def get_current_user() -> dict:
 
     return {
         'username': username,
-        'is_admin': user.get('is_admin', False)
+        'is_admin': user.get('is_admin', False),
+        'email': user.get('email'),
+        'email_verified': user.get('email_verified', False),
     }
 
 

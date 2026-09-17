@@ -21,6 +21,7 @@
 - 🔗 **Smart Sharing**: Generate links with embedded passwords for one-click access, or share separately for extra security.
 - ☁️ **Local or S3 Storage**: Choose your hive—local or Amazon S3.
 - 👩‍💻 **Configurable**: File types, size limits, and users—tweak in `.env`.
+- 📬 **Optional open notifications**: Ask Buzzdrop to email you when a file or secret note is opened, along with the reported decryption result.
 - 🛡️ **Security First**: PBKDF2 password hashing, security headers, rate limiting, and IP tracking for accountability.
 - 😎 **Modern UI**: Slick, responsive, and buzzing with style.
 
@@ -93,12 +94,14 @@ Stop the swarm with `docker-compose down`—no mess, no leftovers.
    - **🔒 Separate Sharing**: Share link and password via different channels (maximum security)
 5. Recipient opens link, confirms download, enters password (or auto-filled from URL), and decrypts.
 6. First download zaps the file from existence—BZZT!
+7. Optionally enable **"Notify me when this is opened"** to receive a single email after the recipient attempts decryption.
 
 ### For Secret Text Notes:
 1. Log in and switch to **"Share Text Note"** tab.
 2. Type or paste your secret text (passwords, API keys, confidential messages).
 3. Set a strong password and optional expiry date.
 4. Share the link—recipient views the text once, then it vanishes!
+5. Optionally enable an uploader notification email for the first open attempt.
 
 ### Security Tips:
 - For maximum security, use **separate sharing**: send the link via email and password via SMS/Signal.
@@ -136,6 +139,7 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 ### Audit & Accountability:
 - **IP Tracking**: Records client IP addresses for all downloads (displayed in your dashboard).
 - **Download Timestamps**: Track exactly when files were accessed.
+- **Optional uploader notifications**: A one-time email can include the share name/type, open timestamp, and whether client-side decryption was reported as successful or failed.
 - **Sanitized Logging**: No sensitive data (bucket names, file paths) exposed in logs.
 
 ### Rate Limiting:
@@ -149,6 +153,12 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 - Base64 validation with size limits on encrypted uploads.
 - File type and size restrictions (configurable in `.env`).
 - Expiry date validation and automatic cleanup.
+
+### Open Notification Configuration:
+- Extend user records to optionally include an account email in `.env`: `FLASK_USER_N=username:password:is_admin[:email[:email_verified]]`
+- Configure SMTP with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_USE_TLS`, `SMTP_USE_SSL`, and `SMTP_TIMEOUT_SECONDS`
+- If the upload form's notification email is left blank, Buzzdrop uses the logged-in user's configured email only when it is marked as verified
+- If email delivery fails, Buzzdrop logs the failure and keeps the share available in the dashboard without retrying automatically
 
 ## S3? No Problem!
 
