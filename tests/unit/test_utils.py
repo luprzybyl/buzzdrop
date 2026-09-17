@@ -89,6 +89,15 @@ def test_get_users_password_with_colon():
     users = get_users()
     assert check_password_hash(users["user1"]["password"], "pa:ss")
 
+@mock.patch.dict(os.environ, {
+    "FLASK_USER_1": "user1:pa:false:true",
+}, clear=True)
+def test_get_users_legacy_format_password_not_misread_as_email():
+    users = get_users()
+    assert check_password_hash(users["user1"]["password"], "pa:false")
+    assert users["user1"]["is_admin"] is True
+    assert users["user1"]["email"] is None
+
 @mock.patch.dict(os.environ, {"FLASK_USER_1": "user1:pass1:invalid_bool"}, clear=True)
 def test_get_users_invalid_admin_flag():
     users = get_users()

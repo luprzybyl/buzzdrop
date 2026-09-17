@@ -13,6 +13,14 @@ def _is_bool_token(value: str) -> bool:
     return value.strip().lower() in {'true', 'false'}
 
 
+def _looks_like_email(value: str) -> bool:
+    value = value.strip()
+    if '@' not in value or ' ' in value:
+        return False
+    _, _, domain = value.rpartition('@')
+    return bool(domain and '.' in domain)
+
+
 def hash_password(password: str) -> str:
     """
     Hash a password using PBKDF2-SHA256 with salt.
@@ -61,12 +69,17 @@ def get_users() -> dict:
 
                 email = None
                 email_verified = False
-                if len(parts) >= 4 and _is_bool_token(parts[-3]) and _is_bool_token(parts[-1]):
+                if (
+                    len(parts) >= 4
+                    and _is_bool_token(parts[-3])
+                    and _looks_like_email(parts[-2])
+                    and _is_bool_token(parts[-1])
+                ):
                     password = ':'.join(parts[:-3])
                     is_admin_str = parts[-3]
                     email = parts[-2].strip() or None
                     email_verified = parts[-1].strip().lower() == 'true'
-                elif len(parts) >= 3 and _is_bool_token(parts[-2]):
+                elif len(parts) >= 3 and _is_bool_token(parts[-2]) and _looks_like_email(parts[-1]):
                     password = ':'.join(parts[:-2])
                     is_admin_str = parts[-2]
                     email = parts[-1].strip() or None

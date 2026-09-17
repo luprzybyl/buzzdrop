@@ -207,12 +207,13 @@ def send_open_notification_email(file_info: dict) -> bool:
         decryption_status = 'not reported'
 
     share_type = 'Secret Note' if file_info.get('type') == 'text' else 'File'
-    subject = f'Buzzdrop {share_type.lower()} opened: {file_info["original_name"]}'
+    original_name = file_info.get('original_name') or ('Secret Note' if share_type == 'Secret Note' else 'Shared file')
+    subject = f'Buzzdrop {share_type.lower()} opened: {original_name}'
     body = '\n'.join([
         'Your Buzzdrop share was opened.',
         '',
         f'Type: {share_type}',
-        f'Original name: {file_info["original_name"]}',
+        f'Original name: {original_name}',
         f'Opened at: {file_info.get("downloaded_at") or datetime.now().isoformat()}',
         f'Decryption status: {decryption_status}',
         '',

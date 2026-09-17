@@ -324,3 +324,38 @@ def test_report_decryption_for_text_note_sends_failed_notification(client, app, 
     assert sent_messages[0][0] == 'note@example.com'
     assert 'Secret Note' in sent_messages[0][1]
     assert 'Decryption status: failed' in sent_messages[0][2]
+
+
+def test_text_note_notifications_can_use_verified_account_email(client, app, files_table, monkeypatch):
+    login_user(client, 'testuser', 'password')
+    app.config.update({
+        'SMTP_HOST': 'smtp.example.com',
+        'SMTP_FROM_EMAIL': 'buzzdrop@example.com',
+    })
+    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com:true')
+    from auth import get_users
+    get_users.cache_clear()
+
+    sent_messages = []
+    monkeypatch.setattr('app._send_email', lambda recipient, subject, body: sent_messages.append((recipient, subject, body)))
+
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'note_text': base64.b64encode(b"Test note").decode('utf-8'),
+            'type': 'text',
+            'notify_on_open': 'true',
+        },
+        headers={'X-Requested-With': 'XMLHttpRequest'}
+    )
+    note_id = response.get_json()['file_id']
+
+    client.get(url_for('download_file', file_id=note_id))
+    response = client.post(
+        url_for('report_decryption', file_id=note_id),
+        json={'success': True}
+    )
+
+    assert response.status_code == 200
+    assert len(sent_messages) == 1
+    assert sent_messages[0][0] == 'testuser@example.com'
