@@ -198,6 +198,9 @@ def send_open_notification_email(file_info: dict) -> bool:
     ):
         return False
 
+    if not file_repo.claim_notification_send(file_info['id']):
+        return False
+
     decryption_success = file_info.get('decryption_success')
     if decryption_success is True:
         decryption_status = 'successful'
@@ -220,8 +223,15 @@ def send_open_notification_email(file_info: dict) -> bool:
         'Buzzdrop intentionally omits recipient-sensitive details from this notification.',
     ])
 
-    _send_email(file_info['notification_email'], subject, body)
+    try:
+        _send_email(file_info['notification_email'], subject, body)
+    except Exception:
+        file_repo.clear_notification_claim(file_info['id'])
+        file_info['notification_claimed_at'] = None
+        raise
+
     file_repo.mark_notification_sent(file_info['id'])
+    file_info['notification_claimed_at'] = None
     file_info['notification_sent_at'] = datetime.now().isoformat()
     return True
 

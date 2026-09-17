@@ -346,11 +346,18 @@ def test_report_decryption_sends_notification_once(client, app, files_table, mon
     assert info['notification_sent_at'] is not None
 
 
-def test_report_decryption_requires_boolean_success(client, app, files_table):
+@pytest.mark.parametrize('payload', [
+    {},
+    {'success': 'false'},
+    {'success': 0},
+    {'success': 1},
+    {'success': None},
+])
+def test_report_decryption_requires_boolean_success(client, app, files_table, payload):
     login_user(client, 'testuser', 'password')
     file_id = upload_file_for_user(client, app, files_table, 'bool.txt', 'content', 'testuser')
 
-    res = client.post(url_for('report_decryption', file_id=file_id), json={'success': 'false'})
+    res = client.post(url_for('report_decryption', file_id=file_id), json=payload)
     assert res.status_code == 400
 
 

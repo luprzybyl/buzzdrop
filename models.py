@@ -61,6 +61,7 @@ class FileRepository:
             'notify_on_open': file_data.get('notify_on_open', False),
             'notification_email': file_data.get('notification_email'),
             'notification_sent_at': file_data.get('notification_sent_at'),
+            'notification_claimed_at': file_data.get('notification_claimed_at'),
         }
         
         self.table.insert(entry)
@@ -166,7 +167,25 @@ class FileRepository:
 
     def mark_notification_sent(self, file_id: str):
         """Mark uploader notification as sent."""
-        self.table.update({'notification_sent_at': datetime.now().isoformat()}, self.query.id == file_id)
+        self.table.update({
+            'notification_sent_at': datetime.now().isoformat(),
+            'notification_claimed_at': None,
+        }, self.query.id == file_id)
+
+    def claim_notification_send(self, file_id: str) -> bool:
+        """Claim a pending notification send slot for a share."""
+        updated_ids = self.table.update({
+            'notification_claimed_at': datetime.now().isoformat(),
+        }, (
+            (self.query.id == file_id)
+            & (self.query.notification_sent_at == None)
+            & (self.query.notification_claimed_at == None)
+        ))
+        return bool(updated_ids)
+
+    def clear_notification_claim(self, file_id: str):
+        """Release a notification claim after a failed send attempt."""
+        self.table.update({'notification_claimed_at': None}, self.query.id == file_id)
     
     def get_downloaded_before(self, cutoff_datetime: datetime) -> List[dict]:
         """
