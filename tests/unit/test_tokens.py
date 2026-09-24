@@ -72,7 +72,7 @@ def test_validate_api_token_rejects_removed_user(app, monkeypatch, clear_user_ca
         assert validate_api_token(token) is None
 
         entry = get_db().table('api_tokens').get(Query().token_hash == token_hash)
-        assert entry['last_used_at'] is None
+        assert entry is None
 
 
 def test_token_stored_as_hash_not_plaintext(app):
@@ -90,7 +90,7 @@ def test_token_stored_as_hash_not_plaintext(app):
         assert entry.get('expires_at') is not None
 
 
-def test_token_hash_does_not_depend_on_temporary_session_key(app, monkeypatch):
+def test_token_hash_uses_current_app_secret_when_no_explicit_hash_secret_is_configured(app, monkeypatch):
     with app.app_context():
         from tokens import _hash_token
 
@@ -103,7 +103,7 @@ def test_token_hash_does_not_depend_on_temporary_session_key(app, monkeypatch):
         app.config['SECRET_KEY'] = 'temporary-session-key-2'
         second_hash = _hash_token('a' * 64)
 
-        assert first_hash == second_hash
+        assert first_hash != second_hash
 
 
 def test_validate_api_token_rejects_legacy_hash(app, db_instance):

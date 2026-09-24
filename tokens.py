@@ -15,7 +15,6 @@ from tinydb import Query
 DEFAULT_TOKEN_EXPIRY_DAYS = 30
 TOKEN_HASH_ITERATIONS = 310_000
 TOKEN_HASH_BYTES = 32
-DEFAULT_TOKEN_HASH_SECRET = b'buzzdrop-api-token-v1'
 TOKEN_HASH_VERSION = 'pbkdf2-sha256-v1'
 
 
@@ -70,9 +69,11 @@ def _get_token_hash_secret() -> bytes:
 
     if not token_hash_secret:
         token_hash_secret = os.getenv('TOKEN_HASH_SECRET') or os.getenv('FLASK_SECRET_KEY')
+    if not token_hash_secret:
+        token_hash_secret = current_app.config.get('SECRET_KEY') if has_app_context() else flask_app.config.get('SECRET_KEY')
     if isinstance(token_hash_secret, str):
         token_hash_secret = token_hash_secret.encode()
-    return token_hash_secret or DEFAULT_TOKEN_HASH_SECRET
+    return token_hash_secret
 
 
 def _hash_token(raw_token: str) -> str:
@@ -137,6 +138,7 @@ def validate_api_token(raw_token: str) -> Optional[str]:
 
     from auth import get_users
     if entry['username'] not in get_users():
+        table.remove(doc_ids=[entry.doc_id])
         return None
 
     if _is_token_expired(entry):
