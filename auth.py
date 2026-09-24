@@ -41,11 +41,14 @@ def get_users() -> dict:
     Results are cached to avoid repeated hashing.
     
     Environment variables should be in format:
-        FLASK_USER_N=username:password:is_admin[:email[:email_verified]]
+        FLASK_USER_N=username:password:is_admin[:email]
     
     Example:
         FLASK_USER_1=admin:secretpass:true
         FLASK_USER_2=user:password:false
+    
+    An email configured here is trusted by the administrator who set it up,
+    so no separate verification flag is needed.
     
     Returns:
         Dictionary mapping usernames to user data:
@@ -63,23 +66,12 @@ def get_users() -> dict:
             try:
                 # Extract parts from the value
                 username, remainder = value.split(':', 1)
-                parts = remainder.rsplit(':', 3)
+                parts = remainder.rsplit(':', 2)
                 if len(parts) < 2:
                     raise ValueError
 
                 email = None
-                email_verified = False
-                if (
-                    len(parts) >= 4
-                    and _is_bool_token(parts[-3])
-                    and _looks_like_email(parts[-2])
-                    and _is_bool_token(parts[-1])
-                ):
-                    password = ':'.join(parts[:-3])
-                    is_admin_str = parts[-3]
-                    email = parts[-2].strip() or None
-                    email_verified = parts[-1].strip().lower() == 'true'
-                elif len(parts) >= 3 and _is_bool_token(parts[-2]) and _looks_like_email(parts[-1]):
+                if len(parts) >= 3 and _is_bool_token(parts[-2]) and _looks_like_email(parts[-1]):
                     password = ':'.join(parts[:-2])
                     is_admin_str = parts[-2]
                     email = parts[-1].strip() or None
@@ -91,7 +83,6 @@ def get_users() -> dict:
                     'password': hash_password(password),
                     'is_admin': is_admin_str.lower() == 'true',
                     'email': email,
-                    'email_verified': email_verified,
                 }
             except ValueError:
                 # Handle cases where the value might not have enough parts
@@ -159,7 +150,6 @@ def get_current_user() -> dict:
         'username': username,
         'is_admin': user.get('is_admin', False),
         'email': user.get('email'),
-        'email_verified': user.get('email_verified', False),
     }
 
 

@@ -152,17 +152,14 @@ def _get_notification_preferences(username: str) -> tuple[bool, str | None]:
     configured_email = (user.get('email') or '').strip()
     requested_email = (request.form.get('notification_email') or '').strip()
 
-    if user.get('email') and not user.get('email_verified', False):
-        raise NotificationPreferenceError('Your configured email must be marked verified before it can receive notifications')
-
     if not configured_email:
-        raise NotificationPreferenceError('Configure a verified account email before enabling open notifications')
+        raise NotificationPreferenceError('Configure an account email before enabling open notifications')
 
     if not _is_valid_notification_email(configured_email):
         raise NotificationPreferenceError('Your configured account email is invalid')
 
     if requested_email and requested_email != configured_email:
-        raise NotificationPreferenceError('Open notifications can only be sent to your verified account email')
+        raise NotificationPreferenceError('Open notifications can only be sent to your configured account email')
 
     return True, configured_email
 
@@ -424,7 +421,6 @@ def index():
             allowed_extensions=list(current_app.config.get('ALLOWED_EXTENSIONS')),
             max_content_length=current_app.config.get('MAX_CONTENT_LENGTH'),
             configured_notification_email=current_user.get('email'),
-            configured_notification_email_verified=current_user.get('email_verified', False),
         )
     
     return render_template(

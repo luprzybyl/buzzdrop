@@ -281,7 +281,7 @@ def test_report_decryption_success(client, app, files_table):
 
 
 def test_upload_file_uses_verified_account_notification_email(client, app, files_table, monkeypatch):
-    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com:true')
+    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     get_users.cache_clear()
     login_user(client, 'testuser', 'password')
     app.config.update({
@@ -308,7 +308,7 @@ def test_upload_file_uses_verified_account_notification_email(client, app, files
 
 
 def test_report_decryption_sends_notification_once(client, app, files_table, monkeypatch):
-    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com:true')
+    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     get_users.cache_clear()
     login_user(client, 'testuser', 'password')
     sent_messages = []

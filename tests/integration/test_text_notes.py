@@ -294,7 +294,7 @@ def test_report_decryption_for_text_note(client, app, files_table):
 
 def test_report_decryption_for_text_note_sends_failed_notification(client, app, files_table, monkeypatch):
     """Test reporting a failed decryption sends one notification for text notes."""
-    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com:true')
+    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     from auth import get_users
     get_users.cache_clear()
     login_user(client, 'testuser', 'password')
@@ -336,7 +336,7 @@ def test_text_note_notifications_can_use_verified_account_email(client, app, fil
         'SMTP_HOST': 'smtp.example.com',
         'SMTP_FROM_EMAIL': 'buzzdrop@example.com',
     })
-    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com:true')
+    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     from auth import get_users
     get_users.cache_clear()
 
