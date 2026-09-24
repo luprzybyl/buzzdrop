@@ -84,3 +84,6 @@ dmypy.json
 .pytest_cache/
 
 db.json
+
+# Node build artifacts
+node_modules/

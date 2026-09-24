@@ -39,6 +39,15 @@ class Config:
     # Timezone
     DEFAULT_TIMEZONE = os.getenv('DEFAULT_TIMEZONE', 'Europe/Warsaw')
 
+    # Email notifications
+    SMTP_HOST = os.getenv('SMTP_HOST')
+    SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+    SMTP_USERNAME = os.getenv('SMTP_USERNAME')
+    SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
+    SMTP_FROM_EMAIL = os.getenv('SMTP_FROM_EMAIL')
+    SMTP_USE_TLS = _env_bool('SMTP_USE_TLS', True)
+    SMTP_USE_SSL = _env_bool('SMTP_USE_SSL', False)
+    SMTP_TIMEOUT_SECONDS = int(os.getenv('SMTP_TIMEOUT_SECONDS', '10'))
     # Rate limiting
     RATE_LIMIT_ENABLED = _env_bool('RATE_LIMIT_ENABLED', True)
     RATE_LIMIT_HEADERS_ENABLED = _env_bool('RATE_LIMIT_HEADERS_ENABLED', True)
@@ -70,6 +79,15 @@ class Config:
         # Validate max content length
         if cls.MAX_CONTENT_LENGTH < 1024:  # Minimum 1KB
             raise ValueError("MAX_CONTENT_LENGTH must be at least 1024 bytes")
+
+        if cls.SMTP_PORT < 1:
+            raise ValueError("SMTP_PORT must be greater than 0")
+
+        if cls.SMTP_TIMEOUT_SECONDS < 1:
+            raise ValueError("SMTP_TIMEOUT_SECONDS must be greater than 0")
+
+        if cls.SMTP_USE_TLS and cls.SMTP_USE_SSL:
+            raise ValueError("SMTP_USE_TLS and SMTP_USE_SSL cannot both be enabled")
     
     @classmethod
     def get_display_info(cls) -> dict:
@@ -93,6 +111,7 @@ class Config:
             'public_file_rate_limit': cls.PUBLIC_FILE_RATE_LIMIT,
             's3_configured': bool(cls.S3_BUCKET) if cls.STORAGE_BACKEND == 's3' else False,
             's3_region': cls.S3_REGION if cls.STORAGE_BACKEND == 's3' else 'N/A',
+            'email_notifications_configured': bool(cls.SMTP_HOST and cls.SMTP_FROM_EMAIL),
         }
 
 

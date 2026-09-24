@@ -1,0 +1,12 @@
+{
+  "name": "buzzdrop",
+  "version": "1.0.0",
+  "description": "Buzzdrop UI asset build tooling",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./static/css/tailwind.css -o ./static/css/app.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
+  }
+}

@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-xl mx-auto mt-8">
-    <div class="bg-white shadow-md rounded-lg p-6 text-center">
-        <p class="mb-2 text-lg font-semibold text-gray-700">{% if file_type == 'text' %}Secret Note{% else %}File: {{ original_name }}{% endif %}</p>
-        <h2 class="text-2xl font-bold mb-4">Ready to {% if file_type == 'text' %}View{% else %}Download{% endif %}?</h2>
-        <p class="mb-4 text-red-600 font-semibold">Warning: {% if file_type == 'text' %}Viewing{% else %}Downloading{% endif %} will immediately delete this {% if file_type == 'text' %}note{% else %}file{% endif %} from the server. Make sure you are ready and have the correct decryption password.</p>
+<div class="mx-auto mt-8 max-w-xl">
+    <div class="surface-card p-6 text-center sm:p-8">
+        <span class="eyebrow">⚡ One-time action</span>
+        <p class="mt-4 text-lg font-semibold text-slate-700">{% if file_type == 'text' %}Secret Note{% else %}File: {{ original_name }}{% endif %}</p>
+        <h2 class="mt-2 text-2xl font-bold text-slate-950">Ready to {% if file_type == 'text' %}View{% else %}Download{% endif %}?</h2>
+        <p class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 font-semibold text-rose-700">Warning: {% if file_type == 'text' %}Viewing{% else %}Downloading{% endif %} will immediately delete this {% if file_type == 'text' %}note{% else %}file{% endif %} from the server. If the sender shared the password separately, have it ready before you continue. One-click links already include it.</p>
         <form id="confirm-form" method="POST" action="/view/{{ file_id }}/confirm">
-            <button type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+            <button type="submit" class="btn-primary mt-6 w-full sm:w-auto">
                 Proceed to {% if file_type == 'text' %}view{% else %}download{% endif %} and decryption
             </button>
         </form>
@@ -20,7 +21,7 @@
                 }
             }
         </script>
-        <p class="mt-4 text-gray-500">This is a one-time {% if file_type == 'text' %}view{% else %}download{% endif %}. You will not be able to access this {% if file_type == 'text' %}note{% else %}file{% endif %} again.</p>
+        <p class="mt-4 text-sm leading-6 text-slate-500">This is a one-time {% if file_type == 'text' %}view{% else %}download{% endif %}. You will not be able to access this {% if file_type == 'text' %}note{% else %}file{% endif %} again.</p>
     </div>
 </div>
 {% endblock %}

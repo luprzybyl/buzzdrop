@@ -54,6 +54,13 @@ jobs:
           body: |
             Automated release of the `buzz` CLI binary.
 
+            ## Breaking change
+
+            API tokens generated before Buzzdrop switched token storage to
+            PBKDF2-HMAC-SHA256 are no longer accepted by this release. Generate
+            a replacement token with `POST /api/token` and update
+            `~/.buzz_token` before using this CLI build.
+
             **Triggered by commit:** ${{ github.sha }}
             **Commit message:** ${{ github.event.head_commit.message }}
 

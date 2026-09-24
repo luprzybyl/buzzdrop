@@ -21,6 +21,7 @@
 - 🔗 **Smart Sharing**: Generate links with embedded passwords for one-click access, or share separately for extra security.
 - ☁️ **Local or S3 Storage**: Choose your hive—local or Amazon S3.
 - 👩‍💻 **Configurable**: File types, size limits, and users—tweak in `.env`.
+- 📬 **Optional open notifications**: Ask Buzzdrop to email you when a file or secret note is opened, along with the reported decryption result.
 - 🛡️ **Security First**: PBKDF2 password hashing, security headers, rate limiting, and IP tracking for accountability.
 - 😎 **Modern UI**: Slick, responsive, and buzzing with style.
 
@@ -41,9 +42,24 @@
    ```
 3. **Start the hive**:
    ```bash
+   npm install
+   npm run build:css
    python app.py
    ```
 4. **Fly to**: [http://localhost:5000](http://localhost:5000)
+
+### Refreshing the local CSS build
+
+Buzzdrop now serves its Tailwind-based styling from a local compiled file at `static/css/app.css` rather than the browser Tailwind CDN.
+
+Whenever you change template classes or the Tailwind source file, rebuild the production CSS with:
+
+```bash
+npm install
+npm run build:css
+```
+
+The editable source lives in `static/css/tailwind.css`, and the compiled output is committed so production deployments do not need Node installed at runtime.
 
 ---
 
@@ -78,12 +94,14 @@ Stop the swarm with `docker-compose down`—no mess, no leftovers.
    - **🔒 Separate Sharing**: Share link and password via different channels (maximum security)
 5. Recipient opens link, confirms download, enters password (or auto-filled from URL), and decrypts.
 6. First download zaps the file from existence—BZZT!
+7. Optionally enable **"Notify me when this is opened"** to receive a single email after the recipient attempts decryption.
 
 ### For Secret Text Notes:
 1. Log in and switch to **"Share Text Note"** tab.
 2. Type or paste your secret text (passwords, API keys, confidential messages).
 3. Set a strong password and optional expiry date.
 4. Share the link—recipient views the text once, then it vanishes!
+5. Optionally enable an uploader notification email for the first open attempt.
 
 ### Security Tips:
 - For maximum security, use **separate sharing**: send the link via email and password via SMS/Signal.
@@ -121,17 +139,26 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 ### Audit & Accountability:
 - **IP Tracking**: Records client IP addresses for all downloads (displayed in your dashboard).
 - **Download Timestamps**: Track exactly when files were accessed.
+- **Optional uploader notifications**: A one-time email can include the share name/type, open timestamp, and whether client-side decryption was reported as successful or failed.
 - **Sanitized Logging**: No sensitive data (bucket names, file paths) exposed in logs.
 
 ### Rate Limiting:
 - **Implemented with Flask-Limiter**: configurable per-route limits protect `/login`, `/api/token`, `/upload`, and public file access (`/view/<id>`, `/view/<id>/confirm`, `/download/<id>`).
 - **Environment configurable**: tune `LOGIN_RATE_LIMIT`, `API_TOKEN_RATE_LIMIT`, `UPLOAD_RATE_LIMIT`, `PUBLIC_FILE_RATE_LIMIT`, `RATE_LIMIT_ENABLED`, and `RATE_LIMIT_STORAGE_URI` in `.env`.
+- **Proxy safety by default**: Buzzdrop intentionally ignores `X-Forwarded-For` for rate-limit enforcement and uses the direct peer address (`request.remote_addr`) instead, so a direct client cannot spoof a new IP on every request to bypass limits.
+- **Reverse proxy caveat**: if you deploy behind nginx, Cloudflare, an ingress, or another proxy without explicit trusted-proxy handling in your stack, `request.remote_addr` may be the proxy address and multiple users behind that proxy may share one rate-limit bucket. Configure your proxy/deployment to pass and trust client IPs correctly rather than enabling blind trust in `X-Forwarded-For`.
 - Recommended: keep these app-level limits and deploy behind nginx/Cloudflare/AWS WAF for defense in depth.
 
 ### Input Validation:
 - Base64 validation with size limits on encrypted uploads.
 - File type and size restrictions (configurable in `.env`).
 - Expiry date validation and automatic cleanup.
+
+### Open Notification Configuration:
+- Extend user records to optionally include an account email in `.env`: `FLASK_USER_N=username:password:is_admin[:email]`
+- Configure SMTP with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_USE_TLS`, `SMTP_USE_SSL`, and `SMTP_TIMEOUT_SECONDS`
+- Open notifications are sent only to the logged-in user's configured email (configuring it in `.env` is treated as trust — there is no separate verification step)
+- If email delivery fails, Buzzdrop logs the failure and keeps the share available in the dashboard without retrying automatically
 
 ## S3? No Problem!
 
@@ -179,6 +206,8 @@ ln -s $(pwd)/cli/buzz ~/.local/bin/buzz
    chmod 600 ~/.buzz_token
    ```
 
+   > **Breaking change:** tokens generated before the PBKDF2-HMAC-SHA256 rollout are no longer accepted in this release. If an older token stops working, generate a replacement with `POST /api/token` and update `~/.buzz_token`.
+
 ### Usage
 
 ```bash
@@ -204,18 +233,20 @@ The recipient opens the share link, enters the password (or uses the one-click l
 
 ## API Token Management
 
-The `/api/token` endpoint lets admins issue API tokens for CLI access.
+The `/api/token` endpoint lets any logged-in user issue an API token for themselves, and lets admins issue API tokens for other users.
 
-**Generate a token** (admin session required):
+**Generate a token** (logged-in session required; admin required only when requesting a different user):
 ```bash
 POST /api/token
 Content-Type: application/json
 
 {"username": "targetuser"}
 ```
-Returns `{"token": "<64-char hex>"}` — **shown once, store it immediately**.
+Returns `{"token": "<64-char hex>", "expires_at": "<ISO-8601 timestamp>"}` — **shown once, store it immediately**.
 
-Tokens are stored as SHA-256 hashes in the database; the raw value is never persisted. To revoke a token, delete the corresponding entry from the `api_tokens` TinyDB table.
+By default, tokens expire after 30 days. You can optionally pass `{"expires_in_days": 7}` when creating a token to shorten or extend that lifetime.
+
+Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; the raw value is never persisted. The hash secret can be set explicitly with `TOKEN_HASH_SECRET`, otherwise Buzzdrop falls back to `FLASK_SECRET_KEY` when it is configured and to a stable built-in development fallback when it is not. **Breaking change:** legacy API tokens generated before the PBKDF2 migration are no longer accepted; users must generate replacement tokens with `POST /api/token`. Logged-in users can list their active tokens with `GET /api/tokens` and revoke one with `POST /api/tokens/<token_id>/revoke`. Admins can also review and revoke active tokens for any user from the **Manage Users** page.
 
 
 The application is built with:
@@ -247,7 +278,7 @@ Before deploying Buzzdrop to production, ensure you:
 
 3. **Enable HTTPS**: Security headers like HSTS require HTTPS. Configure your reverse proxy (nginx/Apache) with valid SSL/TLS certificates.
 
-4. **Configure rate limiting**: Review the built-in Flask-Limiter settings in `.env` and layer nginx, Cloudflare, or AWS WAF limits on top for production-grade protection.
+4. **Configure rate limiting**: Review the built-in Flask-Limiter settings in `.env`, make sure your reverse-proxy deployment preserves the real client IP safely, and layer nginx, Cloudflare, or AWS WAF limits on top for production-grade protection.
 
 5. **Set up S3 (optional)**: For scalable storage, configure `STORAGE_BACKEND=s3` and provide AWS credentials in `.env`.
 

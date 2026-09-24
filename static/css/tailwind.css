@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-slate-100 text-slate-900 antialiased;
+    background-image:
+      radial-gradient(circle at top, rgba(251, 191, 36, 0.18), transparent 32rem),
+      linear-gradient(180deg, rgba(15, 23, 42, 0.03), rgba(15, 23, 42, 0));
+  }
+
+  ::selection {
+    @apply bg-amber-200 text-slate-900;
+  }
+}
+
+@layer components {
+  .container-shell {
+    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .nav-shell {
+    @apply border-b border-slate-200/80 bg-white/90 backdrop-blur;
+  }
+
+  .surface-card {
+    @apply rounded-2xl border border-slate-200/80 bg-white shadow-buzz;
+  }
+
+  .surface-card-soft {
+    @apply rounded-2xl border border-slate-200/80 bg-slate-50/90 shadow-sm;
+  }
+
+  .section-title {
+    @apply text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl;
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700;
+  }
+
+  .field-label {
+    @apply mb-2 block text-sm font-medium text-slate-700;
+  }
+
+  .field-input {
+    @apply block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200;
+  }
+
+  .field-help {
+    @apply mt-2 text-xs leading-5 text-slate-500;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300 focus:ring-offset-2;
+  }
+
+  .share-tab {
+    @apply rounded-full px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-white hover:text-slate-900;
+  }
+
+  .share-tab-active {
+    @apply bg-white text-slate-950 shadow-sm ring-1 ring-slate-200;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold;
+  }
+
+  .status-badge-amber {
+    @apply bg-amber-50 text-amber-700 ring-1 ring-amber-200;
+  }
+
+  .status-badge-slate {
+    @apply bg-slate-100 text-slate-700 ring-1 ring-slate-200;
+  }
+
+  .status-badge-green {
+    @apply bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200;
+  }
+
+  .status-badge-red {
+    @apply bg-rose-50 text-rose-700 ring-1 ring-rose-200;
+  }
+
+  .alert-banner {
+    @apply flex gap-3 rounded-2xl border px-4 py-4 text-sm shadow-sm;
+  }
+
+  .alert-banner-error {
+    @apply border-rose-200 bg-rose-50 text-rose-800;
+  }
+
+  .alert-banner-warning {
+    @apply border-amber-200 bg-amber-50 text-amber-900;
+  }
+
+  .alert-banner-info {
+    @apply border-sky-200 bg-sky-50 text-sky-900;
+  }
+
+  .dropzone {
+    @apply rounded-2xl border border-dashed border-amber-300 bg-gradient-to-br from-amber-50 via-white to-slate-50 p-8 text-center;
+  }
+
+  .metric-card {
+    @apply rounded-2xl border border-slate-200 bg-slate-50 p-4;
+  }
+
+  .copy-field {
+    @apply flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center;
+  }
+
+  .dashboard-item {
+    @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-sm;
+  }
+}

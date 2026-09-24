@@ -46,6 +46,13 @@ def test_index_anonymous_user(client, app):
     assert b'Read the Buzzdrop README on GitHub' in response.data
     assert b'Login' in response.data # Login link in header
     assert b'Your Shared Files' not in response.data # Should not see this section title
+    assert b'/static/css/app.css' in response.data
+    assert b'cdn.jsdelivr.net/npm/@tailwindcss/browser' not in response.data
+
+def test_local_stylesheet_is_served(client):
+    response = client.get('/static/css/app.css')
+    assert response.status_code == 200
+    assert b'.btn-primary' in response.data
 
 def test_index_logged_in_user_no_files(client, app, db_instance):
     login_user(client, 'testuser', 'password')
@@ -86,7 +93,29 @@ def test_index_logged_in_user_with_own_files(client, app, files_table):
     assert response.status_code == 200
     assert b'Your Shared Files' in response.data # This section title should now appear
     assert b'my_document.txt' in response.data
+    assert b'id="shared-files-search"' in response.data
+    assert b'id="shared-files-prev"' in response.data
+    assert b'id="shared-files-next"' in response.data
     # The "Shared With Me" section is missing in the template, so no assertions for it or its placeholders.
+
+def test_index_logged_in_user_sees_own_private_note(client, app, files_table):
+    login_user(client, 'testuser', 'password')
+
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'file': (io.BytesIO(b"Hello world"), "noted_document.txt"),
+            'private_note': 'haslo do wordpressa'
+        },
+        content_type='multipart/form-data',
+        follow_redirects=False
+    )
+    assert response.status_code == 200
+
+    response = client.get(url_for('index'))
+    assert response.status_code == 200
+    assert b'noted_document.txt' in response.data
+    assert b'haslo do wordpressa' in response.data
 
 def test_index_logged_in_user_with_shared_files(client, app, files_table):
     # NOTE: The current index.html template does NOT display files shared with the user.
@@ -112,12 +141,19 @@ def test_index_logged_in_user_with_shared_files(client, app, files_table):
     # Check that user's own files section (if they had any) would still be there or absent if none.
     assert b'Your Shared Files' not in response.data # Assuming testuser has no files of their own here
 
-def test_manage_users_page_for_admin(client, app):
+def test_manage_users_page_for_admin(client, app, db_instance):
     login_user(client, 'adminuser', 'adminpass')
+
+    with app.app_context():
+        from tokens import generate_api_token
+        generate_api_token('testuser')
 
     response = client.get(url_for('manage_users'))
     assert response.status_code == 200
     assert b'User Management' in response.data # Page title from users.html
+    assert b'Active API Tokens' in response.data
+    assert b'Revoke' in response.data
+    assert b'name="csrf_token"' in response.data
 
     assert b'testuser' in response.data
     # From users.html: <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">User</span>

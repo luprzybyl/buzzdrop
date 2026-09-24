@@ -30,6 +30,7 @@ Buzzdrop is a one-time self-destructing file-sharing app where files are encrypt
 - `auth.py` — user loading from env vars, `@login_required`/`@admin_required` decorators
 - `config.py` — `Config`/`DevelopmentConfig`/`TestingConfig`/`ProductionConfig`; selected via `FLASK_ENV`
 - `tokens.py` — `generate_api_token`, `validate_api_token`, `revoke_api_token`; token hashes stored in TinyDB `api_tokens` table
+- `utils.py` — shared helpers: `enhance_file_display()` (formats timestamps + adds `status_display`), `allowed_file()`, `get_client_ip()` (proxy-aware), `cleanup_orphaned_files()`. `DEFAULT_TIMEZONE = 'Europe/Warsaw'`.
 - `cli/buzz` — standalone CLI script (install to `$PATH`; deps in `requirements-cli.txt`)
 - `static/js/main.js` — client-side encryption on upload
 - `static/js/view.js` — client-side decryption on download
@@ -64,3 +65,7 @@ Buzzdrop is a one-time self-destructing file-sharing app where files are encrypt
 **Type field:** DB entries have `type: 'file'` or `type: 'text'` (text notes). Text note content is base64-encoded encrypted data sent via form field `note_text`; file uploads use `multipart/form-data` with field `file`.
 
 **AJAX detection:** Routes check `request.headers.get('X-Requested-With') == 'XMLHttpRequest'` to decide between JSON and redirect responses.
+
+**`sdk/` directory:** Contains a vendored copy of the Dagger Python SDK used by the Dagger-based CI pipeline. It is not part of the web application and should not be modified.
+
+**CLI binary releases:** Pushing to `main` with changes under `cli/` or `requirements-cli.txt` triggers `.github/workflows/release-cli.yml`, which builds a PyInstaller single-file binary and publishes it to GitHub Releases automatically.

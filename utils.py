@@ -131,19 +131,13 @@ def allowed_file(filename: str) -> bool:
 
 def get_client_ip() -> str:
     """
-    Get client IP address, handling proxies.
+    Get the client address for server-side enforcement.
     
     Returns:
         Client IP address as string
     """
     from flask import request
-    
-    # Check for X-Forwarded-For header (behind proxy)
-    if request.headers.get('X-Forwarded-For'):
-        # X-Forwarded-For can contain multiple IPs, first one is the client
-        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
-    
-    # Fallback to direct remote address
+
     return request.remote_addr or 'unknown'
 
 

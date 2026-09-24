@@ -3,9 +3,22 @@ Authentication module for Buzzdrop.
 Handles user management and authentication decorators.
 """
 import os
+import secrets
 from functools import wraps, lru_cache
 from flask import g, session, flash, redirect, url_for, request
 from werkzeug.security import generate_password_hash, check_password_hash
+
+
+def _is_bool_token(value: str) -> bool:
+    return value.strip().lower() in {'true', 'false'}
+
+
+def _looks_like_email(value: str) -> bool:
+    value = value.strip()
+    if '@' not in value or ' ' in value:
+        return False
+    _, _, domain = value.rpartition('@')
+    return bool(domain and '.' in domain)
 
 
 def hash_password(password: str) -> str:
@@ -28,11 +41,14 @@ def get_users() -> dict:
     Results are cached to avoid repeated hashing.
     
     Environment variables should be in format:
-        FLASK_USER_N=username:password:is_admin
+        FLASK_USER_N=username:password:is_admin[:email]
     
     Example:
         FLASK_USER_1=admin:secretpass:true
         FLASK_USER_2=user:password:false
+    
+    An email configured here is trusted by the administrator who set it up,
+    so no separate verification flag is needed.
     
     Returns:
         Dictionary mapping usernames to user data:
@@ -49,10 +65,24 @@ def get_users() -> dict:
         if key.startswith('FLASK_USER_'):
             try:
                 # Extract parts from the value
-                username, password, is_admin_str = value.split(':', 2)
+                username, remainder = value.split(':', 1)
+                parts = remainder.rsplit(':', 2)
+                if len(parts) < 2:
+                    raise ValueError
+
+                email = None
+                if len(parts) >= 3 and _is_bool_token(parts[-2]) and _looks_like_email(parts[-1]):
+                    password = ':'.join(parts[:-2])
+                    is_admin_str = parts[-2]
+                    email = parts[-1].strip() or None
+                else:
+                    password = ':'.join(parts[:-1])
+                    is_admin_str = parts[-1]
+
                 users[username] = {
                     'password': hash_password(password),
-                    'is_admin': is_admin_str.lower() == 'true'
+                    'is_admin': is_admin_str.lower() == 'true',
+                    'email': email,
                 }
             except ValueError:
                 # Handle cases where the value might not have enough parts
@@ -111,15 +141,34 @@ def get_current_user() -> dict:
             'is_admin': bool
         }
     """
-    username = session.get('username')
-    
+    username, user = _get_active_session_user()
+
     if not username:
         return None
-    
+
     return {
         'username': username,
-        'is_admin': session.get('is_admin', False)
+        'is_admin': user.get('is_admin', False),
+        'email': user.get('email'),
     }
+
+
+def _get_active_session_user():
+    """Return the current session user if still configured, otherwise clear session."""
+    username = session.get('username')
+
+    if not username:
+        return None, None
+
+    users = get_users()
+    user = users.get(username)
+
+    if not user:
+        logout_user()
+        return None, None
+
+    session['is_admin'] = user.get('is_admin', False)
+    return username, user
 
 
 def login_required(f):
@@ -135,7 +184,8 @@ def login_required(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session:
+        username, _ = _get_active_session_user()
+        if not username:
             flash('Please log in to access this page')
             return redirect(url_for('login'))
         return f(*args, **kwargs)
@@ -176,10 +226,11 @@ def api_auth_required(f):
             return f(*args, **kwargs)
 
         # No Bearer header: require session login
-        if 'username' not in session:
+        username, _ = _get_active_session_user()
+        if not username:
             flash('Please log in to access this page')
             return redirect(url_for('login'))
-        g.username = session['username']
+        g.username = username
         return f(*args, **kwargs)
 
     return decorated_function
@@ -199,14 +250,12 @@ def admin_required(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session:
+        username, user = _get_active_session_user()
+        if not username:
             flash('Please log in to access this page')
             return redirect(url_for('login'))
-        
-        users = get_users()
-        user = users.get(session['username'])
-        
-        if not user or not user['is_admin']:
+
+        if not user['is_admin']:
             flash('Admin access required')
             return redirect(url_for('index'))
         
@@ -235,6 +284,7 @@ def login_user(username: str, password: str) -> bool:
     # Set session data
     session['username'] = username
     session['is_admin'] = user.get('is_admin', False)
+    session['csrf_token'] = secrets.token_urlsafe(32)
     
     return True
 
@@ -243,3 +293,4 @@ def logout_user():
     """Log out the current user by clearing session."""
     session.pop('username', None)
     session.pop('is_admin', None)
+    session.pop('csrf_token', None)

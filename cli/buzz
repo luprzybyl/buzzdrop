@@ -3,6 +3,7 @@
 buzz — Buzzdrop CLI for sharing files from the command line.
 
 Authentication: reads ~/.buzz_token (JSON with 'token' and 'server' fields).
+Tokens created before the PBKDF2 API-token rollout must be regenerated.
 Encryption: AES-GCM with PBKDF2-SHA256 key derivation, compatible with the
 Buzzdrop web UI.
 
@@ -147,11 +148,18 @@ def _render_progress(done: int, total: int, label: str = "") -> None:
     )
 
 
-def _zip_file(path: str) -> bytes:
-    """Return an in-memory ZIP archive containing the given file."""
+def _zip_path(path: str) -> bytes:
+    """Return an in-memory ZIP archive of a file or directory (recursive)."""
     buf = BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        zf.write(path, os.path.basename(path))
+        if os.path.isdir(path):
+            base = os.path.dirname(os.path.abspath(path))
+            for root, _dirs, files in os.walk(path):
+                for fname in files:
+                    full = os.path.join(root, fname)
+                    zf.write(full, os.path.relpath(full, base))
+        else:
+            zf.write(path, os.path.basename(path))
     return buf.getvalue()
 
 
@@ -405,7 +413,8 @@ def upload(server: str, token: str, filename: str, encrypted: bytes, expiry: str
 
     if resp.status_code == 401:
         print(
-            "Error: authentication failed — check your token in ~/.buzz_token",
+            "Error: authentication failed — check your token in ~/.buzz_token "
+            "or generate a new one with /api/token if it predates the PBKDF2 rollout",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -435,7 +444,7 @@ def main():
     parser.add_argument(
         '-z', '--zip',
         action='store_true',
-        help='Zip the file before uploading (useful for blocked extensions like .sqlite)',
+        help='Zip the file before uploading (automatic for folders; useful for blocked extensions like .sqlite)',
     )
     parser.add_argument(
         '--expiry',
@@ -451,9 +460,12 @@ def main():
 
     token, server = read_token_file(server_override=args.server)
 
-    if not os.path.isfile(args.file):
-        print(f"Error: file not found: {args.file}", file=sys.stderr)
+    if not os.path.exists(args.file):
+        print(f"Error: file or directory not found: {args.file}", file=sys.stderr)
         sys.exit(1)
+
+    is_dir = os.path.isdir(args.file)
+    should_zip = args.zip or is_dir
 
     # Determine password
     password = args.password
@@ -462,15 +474,19 @@ def main():
         password = generate_passphrase()
 
     # Zip or read the file
-    if args.zip:
-        orig_size = os.path.getsize(args.file)
+    if should_zip:
+        orig_size = os.path.getsize(args.file) if not is_dir else sum(
+            os.path.getsize(os.path.join(r, f))
+            for r, _, files in os.walk(args.file) for f in files
+        )
+        label = "Zipping   " + ("folder" if is_dir else "file")
         print(
-            f"Zipping    {os.path.basename(args.file)}"
+            f"{label}  {os.path.basename(args.file)}"
             f"  ({_format_size(orig_size)})...",
             end=' ', flush=True,
         )
-        file_bytes = _zip_file(args.file)
-        upload_name = os.path.basename(args.file) + '.zip'
+        file_bytes = _zip_path(args.file)
+        upload_name = os.path.basename(args.file.rstrip('/\\')) + '.zip'
         print(f"done  →  {_format_size(len(file_bytes))}")
     else:
         try:
