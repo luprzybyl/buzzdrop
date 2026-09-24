@@ -798,12 +798,12 @@ def confirm_view_file(file_id):
     if not file_info or file_info['downloaded_at'] is not None:
         flash('File not found')
         return redirect(url_for('index'))
-    if check_and_handle_expiry(file_info):
-        flash('File has expired')
-        return redirect(url_for('index'))
     if not _is_valid_csrf_token():
         flash('Invalid request')
         return redirect(url_for('view_file', file_id=file_id))
+    if check_and_handle_expiry(file_info):
+        flash('File has expired')
+        return redirect(url_for('index'))
     file_type = file_info.get('type', 'file')
     return render_template('view.html', file_id=file_id, original_name=file_info['original_name'], file_type=file_type)
 
