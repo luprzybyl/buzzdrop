@@ -16,6 +16,7 @@ class Config:
     
     # Flask settings
     SECRET_KEY = os.getenv('FLASK_SECRET_KEY')
+    TOKEN_HASH_SECRET = os.getenv('TOKEN_HASH_SECRET')
     
     # Database
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'db.json')
@@ -48,7 +49,6 @@ class Config:
     SMTP_USE_TLS = _env_bool('SMTP_USE_TLS', True)
     SMTP_USE_SSL = _env_bool('SMTP_USE_SSL', False)
     SMTP_TIMEOUT_SECONDS = int(os.getenv('SMTP_TIMEOUT_SECONDS', '10'))
-
     # Rate limiting
     RATE_LIMIT_ENABLED = _env_bool('RATE_LIMIT_ENABLED', True)
     RATE_LIMIT_HEADERS_ENABLED = _env_bool('RATE_LIMIT_HEADERS_ENABLED', True)

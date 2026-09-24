@@ -126,7 +126,7 @@ def test_view_text_note_shows_correct_template(client, app, files_table):
     assert b'If the sender shared the password separately' in response.data
     assert b'One-click links already include it.' in response.data
 
-def test_confirm_view_text_note(client, app, files_table):
+def test_confirm_view_text_note(client, app, files_table, csrf_form_data):
     """Test the confirm view page for text notes."""
     login_user(client, 'testuser', 'password')
 
@@ -140,7 +140,7 @@ def test_confirm_view_text_note(client, app, files_table):
     note_id = response.get_json()['file_id']
 
     # Confirm view
-    response = client.post(url_for('confirm_view_file', file_id=note_id))
+    response = client.post(url_for('confirm_view_file', file_id=note_id), data=csrf_form_data())
     assert response.status_code == 200
     assert b'Decrypt and View' in response.data
     assert b'window.fileType = "text"' in response.data
@@ -223,7 +223,7 @@ def test_text_note_deletion_after_view(client, app, files_table):
     response = client.get(url_for('view_file', file_id=note_id), follow_redirects=False)
     assert response.status_code == 302  # Redirect because already downloaded
 
-def test_delete_text_note_before_view(client, app, files_table):
+def test_delete_text_note_before_view(client, app, files_table, csrf_form_data):
     """Test manual deletion of text note before it's viewed."""
     login_user(client, 'testuser', 'password')
 
@@ -237,7 +237,7 @@ def test_delete_text_note_before_view(client, app, files_table):
     note_id = response.get_json()['file_id']
 
     # Delete the note
-    response = client.post(url_for('delete_file', file_id=note_id), follow_redirects=True)
+    response = client.post(url_for('delete_file', file_id=note_id), data=csrf_form_data(), follow_redirects=True)
     assert response.status_code == 200
 
     # Verify it's removed from database

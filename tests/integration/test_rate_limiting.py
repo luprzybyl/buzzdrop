@@ -92,7 +92,7 @@ def test_upload_rate_limit_returns_json(client, app, restore_rate_limits):
     assert second.get_json()['error'] == 'Too many requests. Please try again later.'
 
 
-def test_public_file_rate_limit_is_shared_across_view_and_download(client, app, files_table, restore_rate_limits):
+def test_public_file_rate_limit_is_shared_across_view_and_download(client, app, files_table, restore_rate_limits, csrf_form_data):
     app.config['PUBLIC_FILE_RATE_LIMIT'] = '2 per minute'
     login_user(client, 'testuser', 'password')
 
@@ -109,7 +109,7 @@ def test_public_file_rate_limit_is_shared_across_view_and_download(client, app, 
     first = client.get(url_for('view_file', file_id=file_info['id']))
     assert first.status_code == 200
 
-    confirm = client.post(url_for('confirm_view_file', file_id=file_info['id']))
+    confirm = client.post(url_for('confirm_view_file', file_id=file_info['id']), data=csrf_form_data())
     assert confirm.status_code == 200
 
     second = client.get(url_for('download_file', file_id=file_info['id']))

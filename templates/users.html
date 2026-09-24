@@ -74,9 +74,9 @@
                             <tbody class="bg-white divide-y divide-gray-200">
                                 {% for token in user_tokens %}
                                 <tr>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ token.created_at }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ token.last_used_at or 'Never' }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ token.expires_at }}</td>
+                                    <td class="px-4 py-3 break-words text-sm text-gray-900">{{ token.created_at }}</td>
+                                    <td class="px-4 py-3 break-words text-sm text-gray-500">{{ token.last_used_at or 'Never' }}</td>
+                                    <td class="px-4 py-3 break-words text-sm text-gray-500">{{ token.expires_at }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                         <form method="post" action="{{ url_for('revoke_api_token_route', token_id=token.id) }}" class="inline-block">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

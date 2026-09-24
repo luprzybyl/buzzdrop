@@ -170,7 +170,7 @@ def test_view_file_success(client, app, files_table):
     assert file_name.encode() in response.data
     assert file_id.encode() in response.data
 
-def test_public_views_do_not_show_private_note(client, files_table):
+def test_public_views_do_not_show_private_note(client, files_table, csrf_form_data):
     login_user(client, 'testuser', 'password')
 
     response = client.post(
@@ -194,7 +194,7 @@ def test_public_views_do_not_show_private_note(client, files_table):
     assert public_response.status_code == 200
     assert b'Only uploader should see this' not in public_response.data
 
-    confirm_response = client.post(url_for('confirm_view_file', file_id=file_info['id']))
+    confirm_response = client.post(url_for('confirm_view_file', file_id=file_info['id']), data=csrf_form_data())
     assert confirm_response.status_code == 200
     assert b'Only uploader should see this' not in confirm_response.data
 
@@ -210,7 +210,7 @@ def test_delete_file_requires_login(client):
     assert b'Please log in to access this page' in response.data
 
 
-def test_delete_file_before_download(client, app, files_table):
+def test_delete_file_before_download(client, app, files_table, csrf_form_data):
     login_user(client, 'testuser', 'password')
 
     file_id = upload_file_for_user(client, app, files_table, 'del.txt', 'hi', 'testuser')
@@ -219,14 +219,26 @@ def test_delete_file_before_download(client, app, files_table):
     file_path = file_info['path']
     assert os.path.exists(file_path)
 
-    response = client.post(url_for('delete_file', file_id=file_id), follow_redirects=True)
+    response = client.post(url_for('delete_file', file_id=file_id), data=csrf_form_data(), follow_redirects=True)
     assert response.status_code == 200
     assert b'File deleted successfully' in response.data
     assert files_table.get(File.id == file_id) is None
     assert not os.path.exists(file_path)
 
 
-def test_delete_file_after_download(client, app, files_table):
+def test_delete_file_requires_csrf(client, app, files_table):
+    login_user(client, 'testuser', 'password')
+
+    file_id = upload_file_for_user(client, app, files_table, 'needs_csrf.txt', 'hi', 'testuser')
+    response = client.post(url_for('delete_file', file_id=file_id), follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b'Invalid request' in response.data
+    File = Query()
+    assert files_table.get(File.id == file_id) is not None
+
+
+def test_delete_file_after_download(client, app, files_table, csrf_form_data):
     login_user(client, 'testuser', 'password')
 
     file_id = upload_file_for_user(client, app, files_table, 'del_after.txt', 'content', 'testuser')
@@ -239,7 +251,7 @@ def test_delete_file_after_download(client, app, files_table):
     file_path = file_info['path']
     assert not os.path.exists(file_path)
 
-    response = client.post(url_for('delete_file', file_id=file_id), follow_redirects=True)
+    response = client.post(url_for('delete_file', file_id=file_id), data=csrf_form_data(), follow_redirects=True)
     assert response.status_code == 200
     assert b'File deleted successfully' in response.data
     assert files_table.get(File.id == file_id) is None
