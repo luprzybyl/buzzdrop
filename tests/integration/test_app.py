@@ -162,7 +162,8 @@ def test_manage_users_page_for_admin(client, app, db_instance):
     assert b'Revoke' in response.data
     assert b'name="csrf_token"' in response.data
     assert b'data-token-card="true"' in response.data
-    assert b'<table' not in response.data
+    assert b'meta-label">Created<' in response.data
+    assert b'meta-label">Expires<' in response.data
 
     assert b'testuser' in response.data
     # From users.html: <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">User</span>

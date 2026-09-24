@@ -66,20 +66,20 @@
                         {% for token in user_tokens %}
                         <article class="dashboard-item" data-token-card="true">
                             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                <div class="token-grid flex-1">
+                                <dl class="token-grid flex-1">
                                     <div class="meta-pair">
-                                        <p class="meta-label">Created</p>
-                                        <p class="meta-value">{{ token.created_at }}</p>
+                                        <dt class="meta-label">Created</dt>
+                                        <dd class="meta-value">{{ token.created_at }}</dd>
                                     </div>
                                     <div class="meta-pair">
-                                        <p class="meta-label">Last Used</p>
-                                        <p class="meta-value">{{ token.last_used_at or 'Never' }}</p>
+                                        <dt class="meta-label">Last Used</dt>
+                                        <dd class="meta-value">{{ token.last_used_at or 'Never' }}</dd>
                                     </div>
                                     <div class="meta-pair">
-                                        <p class="meta-label">Expires</p>
-                                        <p class="meta-value">{{ token.expires_at }}</p>
+                                        <dt class="meta-label">Expires</dt>
+                                        <dd class="meta-value">{{ token.expires_at }}</dd>
                                     </div>
-                                </div>
+                                </dl>
                                 <form method="post" action="{{ url_for('revoke_api_token_route', token_id=token.id) }}" class="lg:pl-4">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn-danger w-full lg:w-auto">
