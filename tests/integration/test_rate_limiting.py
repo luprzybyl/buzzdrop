@@ -109,7 +109,13 @@ def test_public_file_rate_limit_is_shared_across_view_and_download(client, app, 
     first = client.get(url_for('view_file', file_id=file_info['id']))
     assert first.status_code == 200
 
-    confirm = client.post(url_for('confirm_view_file', file_id=file_info['id']))
+    with client.session_transaction() as sess:
+        csrf_token = sess['csrf_token']
+
+    confirm = client.post(
+        url_for('confirm_view_file', file_id=file_info['id']),
+        data={'csrf_token': csrf_token},
+    )
     assert confirm.status_code == 200
 
     second = client.get(url_for('download_file', file_id=file_info['id']))

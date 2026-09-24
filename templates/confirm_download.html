@@ -24,6 +24,7 @@
             </div>
         </div>
         <form id="confirm-form" method="POST" action="/view/{{ file_id }}/confirm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn-primary mt-6 w-full sm:w-auto">
                 Proceed to {% if file_type == 'text' %}view{% else %}download{% endif %} and decryption
             </button>

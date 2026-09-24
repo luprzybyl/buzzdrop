@@ -41,7 +41,7 @@ def test_view_page_has_sri_for_view_js(client, db_instance, files_table):
     with client.session_transaction() as sess:
         sess['username'] = 'testuser'
         sess['is_admin'] = False
-    
+
     # Upload a test file
     client.post('/upload', data={
         'file': (BytesIO(b'test content'), 'test.txt'),
@@ -54,9 +54,18 @@ def test_view_page_has_sri_for_view_js(client, db_instance, files_table):
     file_info = files_table.get(File.original_name == 'test.txt')
     assert file_info is not None
     file_id = file_info['id']
-    
+
+    # Load the confirmation page first so the session has a CSRF token, then submit it.
+    client.get(f'/view/{file_id}')
+    with client.session_transaction() as sess:
+        csrf_token = sess['csrf_token']
+
     # Visit the confirm view page (this renders view.html)
-    response = client.post(f'/view/{file_id}/confirm', follow_redirects=False)
+    response = client.post(
+        f'/view/{file_id}/confirm',
+        data={'csrf_token': csrf_token},
+        follow_redirects=False,
+    )
     assert response.status_code == 200
     
     html = response.data.decode('utf-8')

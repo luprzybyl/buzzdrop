@@ -139,8 +139,15 @@ def test_confirm_view_text_note(client, app, files_table):
     )
     note_id = response.get_json()['file_id']
 
+    client.get(url_for('view_file', file_id=note_id))
+    with client.session_transaction() as sess:
+        csrf_token = sess['csrf_token']
+
     # Confirm view
-    response = client.post(url_for('confirm_view_file', file_id=note_id))
+    response = client.post(
+        url_for('confirm_view_file', file_id=note_id),
+        data={'csrf_token': csrf_token},
+    )
     assert response.status_code == 200
     assert b'Decrypt and View' in response.data
     assert b'window.fileType = "text"' in response.data
