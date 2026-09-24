@@ -50,16 +50,16 @@
 
 ### Refreshing the local CSS build
 
-Buzzdrop now serves its Tailwind-based styling from a local compiled file at `static/css/app.css` rather than the browser Tailwind CDN.
+Buzzdrop now serves its Bulma-based styling from a local compiled file at `static/css/app.css`.
 
-Whenever you change template classes or the Tailwind source file, rebuild the production CSS with:
+Whenever you change template classes or the Bulma override source file, rebuild the production CSS with:
 
 ```bash
 npm install
 npm run build:css
 ```
 
-The editable source lives in `static/css/tailwind.css`, and the compiled output is committed so production deployments do not need Node installed at runtime.
+The editable source lives in `static/css/bulma-overrides.css`, and the compiled output is committed so production deployments do not need Node installed at runtime.
 
 ---
 
@@ -255,7 +255,7 @@ The application is built with:
 - **TinyDB** (lightweight JSON database)
 - **Flask-Limiter** (rate limiting middleware)
 - **Boto3** (AWS S3 integration)
-- **Tailwind CSS** (modern responsive styling)
+- **Bulma CSS** (modern responsive styling)
 - **Web Crypto API** (client-side AES-GCM encryption)
 
 ### Test Coverage:

@@ -4,9 +4,9 @@
   "description": "Buzzdrop UI asset build tooling",
   "private": true,
   "scripts": {
-    "build:css": "tailwindcss -i ./static/css/tailwind.css -o ./static/css/app.css --minify"
+    "build:css": "cat ./node_modules/bulma/css/bulma.min.css ./static/css/bulma-overrides.css > ./static/css/app.css"
   },
   "devDependencies": {
-    "tailwindcss": "^3.4.19"
+    "bulma": "^1.0.4"
   }
 }

@@ -2,104 +2,108 @@
 
 {% block content %}
 {% if session.get('username') %}
-<div class="mx-auto max-w-5xl">
-    <div class="surface-card p-6 sm:p-8">
-        <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-            <div class="space-y-3">
+<div class="mx-auto" style="max-width: 70rem;">
+    <div class="surface-card p-5">
+        <div class="columns is-variable is-6 is-vcentered mb-2">
+            <div class="column">
                 <span class="eyebrow">🐝 Secure handoff</span>
-                <h1 class="section-title">Share Securely</h1>
-                <p class="max-w-2xl text-sm leading-6 text-slate-600">
+                <h1 class="section-title mt-4">Share Securely</h1>
+                <p class="section-subtitle mt-3">
                     Create a one-time buzz for files or secret notes. Encryption happens in your browser first, and the drop disappears after the first successful open.
                 </p>
             </div>
-            <div class="surface-card-soft p-4 text-sm text-slate-600 sm:max-w-xs">
-                <p class="font-semibold text-slate-900">Drop secured</p>
-                <p class="mt-2">For the strongest setup, send the share link and password in different channels.</p>
+            <div class="column is-4-desktop">
+                <div class="surface-card-soft p-4">
+                    <p class="has-text-weight-semibold has-text-dark">Drop secured</p>
+                    <p class="mt-2 has-text-grey">For the strongest setup, send the share link and password in different channels.</p>
+                </div>
             </div>
         </div>
 
-        <div class="mt-8 rounded-full bg-slate-100 p-1">
-            <div class="flex flex-wrap gap-2">
-                <button id="file-tab" onclick="showFileUpload()" class="share-tab share-tab-active">
-                    Upload File
-                </button>
-                <button id="text-tab" onclick="showTextNote()" class="share-tab">
-                    Share Text Note
-                </button>
-            </div>
+        <div class="upload-tabs mt-5 mb-5">
+            <button id="file-tab" onclick="showFileUpload()" class="share-tab share-tab-active" type="button">Upload File</button>
+            <button id="text-tab" onclick="showTextNote()" class="share-tab" type="button">Share Text Note</button>
         </div>
 
-        <div id="file-upload-section" class="mt-6">
-            <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="space-y-6">
+        <div id="file-upload-section" class="mt-5">
+            <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
                 <div class="dropzone">
-                    <div class="space-y-3">
-                        <svg class="mx-auto h-12 w-12 text-amber-500" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                    <div class="content">
+                        <svg class="mx-auto mb-4" style="width: 3rem; height: 3rem; color: #f59e0b;" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
-                        <div class="text-slate-600">
-                            <label for="file" class="relative cursor-pointer rounded-md font-semibold text-slate-950 hover:text-amber-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-amber-300 focus-within:ring-offset-2">
-                                <span>Select a file to encrypt</span>
-                                <input id="file" name="file" type="file" class="sr-only" required>
-                            </label>
-                            <p class="mt-2">or drag and drop it here before you make it buzz away.</p>
-                        </div>
-                        <p class="text-xs text-slate-500">
-                            Supported formats: {{ allowed_extensions|join(', ')|upper }}
-                        </p>
-                        <p class="text-xs text-slate-500">
-                            Maximum file size: {{ (max_content_length / 1024 / 1024)|int }}MB
-                        </p>
+                        <label for="file" class="dropzone-label">
+                            <span>Select a file to encrypt</span>
+                            <input id="file" name="file" type="file" class="is-hidden" required>
+                        </label>
+                        <p class="has-text-grey mt-3">or drag and drop it here before you make it buzz away.</p>
+                        <p class="is-size-7 has-text-grey mt-3">Supported formats: {{ allowed_extensions|join(', ')|upper }}</p>
+                        <p class="is-size-7 has-text-grey">Maximum file size: {{ (max_content_length / 1024 / 1024)|int }}MB</p>
                     </div>
                 </div>
             </form>
         </div>
 
-        <div id="text-note-section" style="display:none;" class="mt-6 space-y-6">
-            <div>
+        <div id="text-note-section" style="display:none;" class="mt-5">
+            <div class="field">
                 <label for="note-text" class="field-label">Secret Text</label>
-                <textarea id="note-text" rows="8" class="field-input min-h-[13rem]" placeholder="Paste the note you want to protect with a one-time buzz..." required></textarea>
+                <div class="control">
+                    <textarea id="note-text" rows="8" class="textarea field-textarea" style="min-height: 13rem;" placeholder="Paste the note you want to protect with a one-time buzz..." required></textarea>
+                </div>
                 <p class="field-help">Your text is encrypted in the browser before it reaches the server.</p>
             </div>
         </div>
 
-        <div class="mt-8 grid gap-6 border-t border-slate-200 pt-6">
-            <div class="grid gap-6 md:grid-cols-2">
-                <div>
-                    <label for="shared-password" class="field-label">Password</label>
-                    <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" required>
-                    <p class="field-help">Share it separately for the strongest handoff.</p>
+        <div class="mt-6 pt-5" style="border-top: 1px solid rgba(219, 223, 230, 0.92);">
+            <div class="columns is-variable is-5">
+                <div class="column">
+                    <div class="field">
+                        <label for="shared-password" class="field-label">Password</label>
+                        <div class="control">
+                            <input id="shared-password" type="password" class="input field-input" placeholder="Enter a strong password" required>
+                        </div>
+                        <p class="field-help">Share it separately for the strongest handoff.</p>
+                    </div>
                 </div>
-                <div>
-                    <label for="shared-expiry" class="field-label">Expiry Date (optional)</label>
-                    <input id="shared-expiry" name="expiry" type="datetime-local" class="field-input">
-                    <p class="field-help">Optional for time-sensitive drops.</p>
+                <div class="column">
+                    <div class="field">
+                        <label for="shared-expiry" class="field-label">Expiry Date (optional)</label>
+                        <div class="control">
+                            <input id="shared-expiry" name="expiry" type="datetime-local" class="input field-input">
+                        </div>
+                        <p class="field-help">Optional for time-sensitive drops.</p>
+                    </div>
                 </div>
             </div>
 
-            <div>
+            <div class="field mt-2">
                 <label for="shared-private-note" class="field-label">Private note (optional)</label>
-                <textarea id="shared-private-note" name="private_note" rows="2" class="field-input" placeholder="Visible only to you in your shared items list"></textarea>
+                <div class="control">
+                    <textarea id="shared-private-note" name="private_note" rows="2" class="textarea field-textarea" placeholder="Visible only to you in your shared items list"></textarea>
+                </div>
             </div>
 
-            <div class="surface-card-soft space-y-4 p-4">
-                <label class="flex items-start gap-3 text-sm text-slate-700">
-                    <input id="notify-on-open" name="notify_on_open" type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400">
+            <div class="surface-card-soft p-4 mt-5">
+                <label class="is-flex is-align-items-flex-start" style="gap: 0.85rem;">
+                    <input id="notify-on-open" name="notify_on_open" type="checkbox" style="margin-top: 0.25rem;">
                     <span>
-                        <span class="font-semibold text-slate-900">Notify me when this is opened</span>
-                        <span class="mt-1 block text-slate-500">Buzzdrop sends one email after the recipient attempts decryption. Delivery failures are logged only.</span>
+                        <span class="has-text-weight-semibold has-text-dark">Notify me when this is opened</span>
+                        <span class="is-block mt-1 has-text-grey">Buzzdrop sends one email after the recipient attempts decryption. Delivery failures are logged only.</span>
                     </span>
                 </label>
-                <div>
+                <div class="field mt-4 mb-0">
                     <label for="notification-email" class="field-label">Verified account email</label>
-                    <input
-                        id="notification-email"
-                        name="notification_email"
-                        type="email"
-                        class="field-input"
-                        placeholder="Configure this in FLASK_USER_N"
-                        value="{{ configured_notification_email or '' }}"
-                        readonly
-                    >
+                    <div class="control">
+                        <input
+                            id="notification-email"
+                            name="notification_email"
+                            type="email"
+                            class="input field-input"
+                            placeholder="Configure this in FLASK_USER_N"
+                            value="{{ configured_notification_email or '' }}"
+                            readonly
+                        >
+                    </div>
                     <p class="field-help">
                         {% if configured_notification_email %}
                             {% if configured_notification_email_verified %}
@@ -114,172 +118,192 @@
                 </div>
             </div>
 
-            <div class="surface-card-soft grid gap-4 p-4 sm:grid-cols-[1fr,auto] sm:items-center">
-                <div class="text-sm text-slate-600">
-                    <p class="font-semibold text-slate-900">One-time buzz</p>
-                    <p class="mt-1">The file is stored only as ciphertext and self-destructs after the first successful open.</p>
-                </div>
-                <button id="share-action-btn" type="button" aria-label="Upload file" class="btn-primary w-full sm:w-auto">
-                    Upload File
-                </button>
-                <div id="share-progress-container" class="col-span-full w-full" style="display:none; align-items:center;">
-                    <div class="w-full rounded-full bg-slate-200">
-                        <div id="share-progress-bar" class="h-4 rounded-full bg-amber-400 transition-all" style="width: 0%"></div>
+            <div class="surface-card-soft p-4 mt-5">
+                <div class="columns is-variable is-4 is-vcentered mb-0">
+                    <div class="column">
+                        <p class="has-text-weight-semibold has-text-dark">One-time buzz</p>
+                        <p class="mt-2 has-text-grey">The file is stored only as ciphertext and self-destructs after the first successful open.</p>
                     </div>
-                    <span id="share-progress-text" class="ml-2 text-sm font-semibold text-slate-700">0%</span>
+                    <div class="column is-narrow">
+                        <button id="share-action-btn" type="button" aria-label="Upload file" class="button btn-primary">
+                            Upload File
+                        </button>
+                    </div>
+                </div>
+                <div id="share-progress-container" class="progress-shell mt-4" style="display:none;">
+                    <progress id="share-progress-bar" class="progress is-warning" value="0" max="100">0%</progress>
+                    <span id="share-progress-text" class="has-text-weight-semibold has-text-grey-dark">0%</span>
                 </div>
             </div>
         </div>
     </div>
 </div>
 {% else %}
-<div class="max-w-6xl mx-auto space-y-8">
-    <section class="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-2xl">
-        <div class="grid gap-10 px-8 py-10 lg:grid-cols-[1.4fr,1fr] lg:px-12 lg:py-14">
-            <div class="space-y-6">
-                <span class="inline-flex items-center rounded-full bg-white/10 px-4 py-1 text-sm font-medium ring-1 ring-white/20">
-                    Zero-knowledge sharing for files and secret notes
-                </span>
-                <div class="space-y-4">
-                    <img src="{{ url_for('static', filename='logo.png') }}" alt="Buzzdrop bee logo" class="h-20"/>
-                    <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">Buzzdrop: file sharing that stings—just once.</h1>
-                    <p class="max-w-2xl text-lg text-indigo-100">
+<div class="mx-auto" style="max-width: 75rem;">
+    <section class="hero-shell p-5">
+        <div class="columns is-variable is-7 is-vcentered">
+            <div class="column is-7-desktop">
+                <span class="hero-chip">Zero-knowledge sharing for files and secret notes</span>
+                <div class="mt-5">
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="Buzzdrop bee logo" style="height: 5rem;">
+                    <h1 class="title is-1 has-text-white mt-4 mb-4">Buzzdrop: file sharing that stings—just once.</h1>
+                    <p class="is-size-5 has-text-white-bis">
                         BuzzDrop: secure, one-time file sharing. Upload encrypted files or secret notes, send a link, and let them vanish after a single successful view.
                     </p>
                 </div>
-                <div class="grid gap-3 text-sm text-indigo-100 sm:grid-cols-3">
-                    <div class="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/10">
-                        <p class="font-semibold text-white"><span aria-hidden="true" class="mr-1">🔒</span>Encrypted in the browser</p>
-                        <p class="mt-1 text-indigo-100">AES-GCM + PBKDF2 protection happens before upload starts.</p>
+                <div class="columns is-multiline mt-5">
+                    <div class="column is-4-desktop is-6-tablet">
+                        <div class="feature-card">
+                            <p class="has-text-weight-semibold has-text-white"><span aria-hidden="true" class="mr-1">🔒</span>Encrypted in the browser</p>
+                            <p class="mt-2 has-text-white-bis">AES-GCM + PBKDF2 protection happens before upload starts.</p>
+                        </div>
                     </div>
-                    <div class="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/10">
-                        <p class="font-semibold text-white"><span aria-hidden="true" class="mr-1">💥</span>Self-destructing links</p>
-                        <p class="mt-1 text-indigo-100">Shared files disappear after the first successful download or view.</p>
+                    <div class="column is-4-desktop is-6-tablet">
+                        <div class="feature-card">
+                            <p class="has-text-weight-semibold has-text-white"><span aria-hidden="true" class="mr-1">💥</span>Self-destructing links</p>
+                            <p class="mt-2 has-text-white-bis">Shared files disappear after the first successful download or view.</p>
+                        </div>
                     </div>
-                    <div class="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/10">
-                        <p class="font-semibold text-white"><span aria-hidden="true" class="mr-1">📝</span>Secret notes included</p>
-                        <p class="mt-1 text-indigo-100">Send encrypted text notes when a file would be overkill.</p>
+                    <div class="column is-4-desktop is-6-tablet">
+                        <div class="feature-card">
+                            <p class="has-text-weight-semibold has-text-white"><span aria-hidden="true" class="mr-1">📝</span>Secret notes included</p>
+                            <p class="mt-2 has-text-white-bis">Send encrypted text notes when a file would be overkill.</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="rounded-3xl bg-white/10 p-6 shadow-lg ring-1 ring-white/15 backdrop-blur">
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-100">Why Buzzdrop</p>
-                <div class="mt-4 space-y-4">
-                    <div class="rounded-2xl bg-slate-950/20 p-4">
-                        <p class="text-lg font-semibold">One link. One view. Gone.</p>
-                        <p class="mt-1 text-sm text-indigo-100">Perfect for contracts, credentials, handoffs, and anything else that should not linger in an inbox forever.</p>
-                    </div>
-                    <div class="rounded-2xl bg-slate-950/20 p-4">
-                        <p class="text-lg font-semibold">Your server never sees plaintext.</p>
-                        <p class="mt-1 text-sm text-indigo-100">Encryption happens before upload, so Buzzdrop stores only ciphertext and metadata.</p>
-                    </div>
-                    <div class="rounded-2xl bg-slate-950/20 p-4">
-                        <p class="text-lg font-semibold">Built for flexible deployment.</p>
-                        <p class="mt-1 text-sm text-indigo-100">Run it with local storage or S3, and tune file type and size rules for your team.</p>
+            <div class="column is-5-desktop">
+                <div class="hero-panel">
+                    <p class="is-size-7 has-text-weight-semibold has-text-white-bis is-uppercase" style="letter-spacing: 0.2em;">Why Buzzdrop</p>
+                    <div class="mt-4">
+                        <div class="feature-card mb-4">
+                            <p class="title is-5 has-text-white mb-2">One link. One view. Gone.</p>
+                            <p class="has-text-white-bis">Perfect for contracts, credentials, handoffs, and anything else that should not linger in an inbox forever.</p>
+                        </div>
+                        <div class="feature-card mb-4">
+                            <p class="title is-5 has-text-white mb-2">Your server never sees plaintext.</p>
+                            <p class="has-text-white-bis">Encryption happens before upload, so Buzzdrop stores only ciphertext and metadata.</p>
+                        </div>
+                        <div class="feature-card">
+                            <p class="title is-5 has-text-white mb-2">Built for flexible deployment.</p>
+                            <p class="has-text-white-bis">Run it with local storage or S3, and tune file type and size rules for your team.</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="grid gap-6 lg:grid-cols-[1.3fr,1fr]">
-        <div class="rounded-3xl bg-white p-8 shadow-md">
-            <h2 class="text-2xl font-bold text-gray-900">How it works</h2>
-            <div class="mt-6 grid gap-4 md:grid-cols-3">
-                <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                    <p class="text-sm font-semibold text-indigo-600">1. Encrypt before upload</p>
-                    <p class="mt-2 text-sm text-gray-600">Choose a file or write a note, set a password, and let the browser encrypt everything locally.</p>
-                </div>
-                <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                    <p class="text-sm font-semibold text-indigo-600">2. Share the generated link</p>
-                    <p class="mt-2 text-sm text-gray-600">Send the one-time link and share the password separately when you want the strongest protection.</p>
-                </div>
-                <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                    <p class="text-sm font-semibold text-indigo-600">3. Watch it self-destruct</p>
-                    <p class="mt-2 text-sm text-gray-600">After the first successful download or view, the encrypted payload is deleted automatically.</p>
+    <section class="columns is-variable is-6 mt-6">
+        <div class="column is-7-desktop">
+            <div class="info-card p-5">
+                <h2 class="title is-3 has-text-dark">How it works</h2>
+                <div class="columns is-variable is-4 mt-2 is-multiline">
+                    <div class="column is-4-desktop">
+                        <div class="metric-card">
+                            <p class="has-text-weight-semibold has-text-link">1. Encrypt before upload</p>
+                            <p class="mt-2 has-text-grey">Choose a file or write a note, set a password, and let the browser encrypt everything locally.</p>
+                        </div>
+                    </div>
+                    <div class="column is-4-desktop">
+                        <div class="metric-card">
+                            <p class="has-text-weight-semibold has-text-link">2. Share the generated link</p>
+                            <p class="mt-2 has-text-grey">Send the one-time link and share the password separately when you want the strongest protection.</p>
+                        </div>
+                    </div>
+                    <div class="column is-4-desktop">
+                        <div class="metric-card">
+                            <p class="has-text-weight-semibold has-text-link">3. Watch it self-destruct</p>
+                            <p class="mt-2 has-text-grey">After the first successful download or view, the encrypted payload is deleted automatically.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="rounded-3xl border border-amber-200 bg-amber-50 p-8 shadow-md">
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Open source</p>
-            <h2 class="mt-3 text-2xl font-bold text-gray-900">Star Buzzdrop on GitHub</h2>
-            <p class="mt-3 text-sm leading-6 text-gray-700">
-                Like the idea? Explore the code, follow releases, or drop a star to support the project and help more people find secure one-time sharing.
-            </p>
-            <ul class="mt-5 space-y-3 text-sm text-gray-700">
-                <li><span aria-hidden="true" class="mr-1">🐝</span> Read the full feature list and security notes in the README.</li>
-                <li><span aria-hidden="true" class="mr-1">🚀</span> Grab the <code class="rounded bg-white px-2 py-1 text-xs">buzz</code> CLI for encrypted uploads from your terminal.</li>
-                <li><span aria-hidden="true" class="mr-1">✅</span> Track the latest build status and ongoing improvements in the repository.</li>
-            </ul>
-            <div class="mt-6 flex flex-col gap-3">
-                <a href="https://github.com/luprzybyl/buzzdrop" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-gray-900 px-5 py-3 font-semibold text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2">
-                    <span>Open Buzzdrop on GitHub</span>
-                    <span class="ml-2 text-xs font-medium text-gray-300">(new tab)</span>
-                </a>
-                <a href="https://github.com/luprzybyl/buzzdrop/blob/main/README.md" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg border border-gray-300 px-5 py-3 font-semibold text-gray-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2">
-                    <span>Read the Buzzdrop README on GitHub</span>
-                    <span class="ml-2 text-xs font-medium text-gray-500">(new tab)</span>
-                </a>
+        <div class="column is-5-desktop">
+            <div class="info-card github-card p-5">
+                <p class="is-size-7 has-text-weight-semibold is-uppercase has-text-warning-dark" style="letter-spacing: 0.2em;">Open source</p>
+                <h2 class="title is-3 has-text-dark mt-3">Star Buzzdrop on GitHub</h2>
+                <p class="mt-3 has-text-grey-dark">
+                    Like the idea? Explore the code, follow releases, or drop a star to support the project and help more people find secure one-time sharing.
+                </p>
+                <ul class="mt-5 has-text-grey-dark">
+                    <li class="mb-3"><span aria-hidden="true" class="mr-1">🐝</span> Read the full feature list and security notes in the README.</li>
+                    <li class="mb-3"><span aria-hidden="true" class="mr-1">🚀</span> Grab the <code class="has-background-white px-2 py-1" style="border-radius: 0.5rem;">buzz</code> CLI for encrypted uploads from your terminal.</li>
+                    <li><span aria-hidden="true" class="mr-1">✅</span> Track the latest build status and ongoing improvements in the repository.</li>
+                </ul>
+                <div class="buttons mt-5 is-flex is-flex-direction-column is-align-items-stretch">
+                    <a href="https://github.com/luprzybyl/buzzdrop" target="_blank" rel="noopener noreferrer" class="button btn-primary is-fullwidth">
+                        <span>Open Buzzdrop on GitHub</span>
+                        <span class="ml-2 is-size-7 has-text-white-ter">(new tab)</span>
+                    </a>
+                    <a href="https://github.com/luprzybyl/buzzdrop/blob/main/README.md" target="_blank" rel="noopener noreferrer" class="button btn-secondary is-fullwidth">
+                        <span>Read the Buzzdrop README on GitHub</span>
+                        <span class="ml-2 is-size-7 has-text-grey">(new tab)</span>
+                    </a>
+                </div>
             </div>
         </div>
     </section>
 </div>
 {% endif %}
 {% if session.get('username') and user_files %}
-<div class="mt-8">
-    <div class="surface-card p-6 sm:p-8">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+<div class="mt-6">
+    <div class="surface-card p-5">
+        <div class="is-flex is-flex-direction-column is-justify-content-space-between is-align-items-flex-start mb-5" style="gap: 1rem;">
             <div>
-                <h2 class="text-xl font-semibold text-slate-950">Your Shared Files</h2>
-                <p class="mt-1 text-sm text-slate-600">Track the status of each drop and copy links without exposing your private notes.</p>
+                <h2 class="title is-4 has-text-dark mb-2">Your Shared Files</h2>
+                <p class="has-text-grey">Track the status of each drop and copy links without exposing your private notes.</p>
             </div>
-            <span class="status-badge status-badge-slate">{{ user_files|length }} active or historical drops</span>
+            <span class="status-badge status-badge-slate file-count">{{ user_files|length }} active or historical drops</span>
         </div>
-        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <label class="block sm:max-w-xs sm:flex-1">
-                <span class="field-label mb-1">Quick search</span>
-                <input id="shared-files-search" type="search" class="field-input py-2.5" placeholder="Search by name, note, or status">
-            </label>
-            <div id="shared-files-summary" class="text-sm text-slate-500"></div>
+        <div class="columns is-variable is-4 is-vcentered mb-4">
+            <div class="column is-4-desktop">
+                <label class="field-label mb-2">Quick search</label>
+                <input id="shared-files-search" type="search" class="input field-input" placeholder="Search by name, note, or status">
+            </div>
+            <div class="column">
+                <div id="shared-files-summary" class="has-text-grey"></div>
+            </div>
         </div>
-        <div id="shared-files-list" class="mt-4 space-y-3" data-page-size="5">
+        <div id="shared-files-list" class="mt-4" data-page-size="5">
             {% for file in user_files %}
-            <article class="dashboard-item shared-file-row" data-search-text="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.status ~ ' ' ~ file.status_display ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or '') ~ ' ' ~ (file.downloaded_by_ip or ''))|lower }}">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div class="min-w-0 flex-1">
-                        <div>
-                            <a href="#" class="copy-url text-base font-semibold text-slate-950 hover:text-amber-600" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}">{{ file.original_name }}</a>
-                            {% if file.private_note %}
-                                <p class="mt-2 text-sm text-slate-500">{{ file.private_note }}</p>
-                            {% endif %}
-                        </div>
-                        <div class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
-                            <span><span class="font-semibold text-slate-700">Uploaded:</span> {{ file.created_at }}</span>
-                            <span><span class="font-semibold text-slate-700">Expiry:</span> {{ file.expiry_at or 'No expiry' }}</span>
-                            <span><span class="font-semibold text-slate-700">Downloaded:</span> {{ file.downloaded_at or 'No' }}</span>
-                            <span class="break-all"><span class="font-semibold text-slate-700">Downloaded By:</span> {{ file.downloaded_by_ip or '-' }}</span>
+            <article class="dashboard-item shared-file-row mb-3" data-search-text="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.status ~ ' ' ~ file.status_display ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or '') ~ ' ' ~ (file.downloaded_by_ip or ''))|lower }}">
+                <div class="columns is-variable is-4 is-vcentered mb-0">
+                    <div class="column">
+                        <a href="#" class="copy-url has-text-weight-semibold has-text-dark is-size-5" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}">{{ file.original_name }}</a>
+                        {% if file.private_note %}
+                            <p class="mt-2 has-text-grey">{{ file.private_note }}</p>
+                        {% endif %}
+                        <div class="dashboard-meta mt-3">
+                            <span><strong>Uploaded:</strong> {{ file.created_at }}</span>
+                            <span><strong>Expiry:</strong> {{ file.expiry_at or 'No expiry' }}</span>
+                            <span><strong>Downloaded:</strong> {{ file.downloaded_at or 'No' }}</span>
+                            <span><strong>Downloaded By:</strong> {{ file.downloaded_by_ip or '-' }}</span>
                         </div>
                     </div>
-                    <div class="flex flex-wrap items-center gap-3 lg:justify-end">
-                        <span class="status-badge {% if file.downloaded_at %}status-badge-green{% elif file.status == 'expired' %}status-badge-red{% else %}status-badge-amber{% endif %}">
-                            {{ file.status_display or 'Active' }}
-                        </span>
-                        <form method="post" action="{{ url_for('delete_file', file_id=file.id) }}" class="inline-block">
-                            <button type="submit" class="btn-secondary px-4 py-2 text-rose-700 hover:bg-rose-50" onclick="return confirm('Delete this file?');">Delete</button>
-                        </form>
+                    <div class="column is-narrow">
+                        <div class="is-flex is-flex-direction-column is-align-items-stretch" style="gap: 0.75rem; min-width: 10rem;">
+                            <span class="status-badge {% if file.downloaded_at %}status-badge-green{% elif file.status == 'expired' %}status-badge-red{% else %}status-badge-amber{% endif %}">
+                                {{ file.status_display or 'Active' }}
+                            </span>
+                            <form method="post" action="{{ url_for('delete_file', file_id=file.id) }}" class="inline-button-form">
+                                <button type="submit" class="button btn-secondary has-text-danger" onclick="return confirm('Delete this file?');">Delete</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </article>
             {% endfor %}
         </div>
-        <p id="shared-files-empty-state" class="mt-4 hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">No drops match this search.</p>
-        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span id="shared-files-page" class="text-sm font-medium text-slate-500"></span>
-            <div class="flex gap-2">
-                <button id="shared-files-prev" type="button" class="btn-secondary px-4 py-2">Previous</button>
-                <button id="shared-files-next" type="button" class="btn-secondary px-4 py-2">Next</button>
+        <p id="shared-files-empty-state" class="notification is-light mt-4 is-hidden">No drops match this search.</p>
+        <div class="is-flex is-flex-direction-column is-justify-content-space-between is-align-items-flex-start mt-5" style="gap: 1rem;">
+            <span id="shared-files-page" class="has-text-weight-medium has-text-grey"></span>
+            <div class="buttons mb-0">
+                <button id="shared-files-prev" type="button" class="button btn-secondary">Previous</button>
+                <button id="shared-files-next" type="button" class="button btn-secondary">Next</button>
             </div>
         </div>
     </div>
@@ -291,6 +315,4 @@
 window.uploadUrl = "{{ url_for('upload_file') }}";
 </script>
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}" integrity="{{ sri_hash('js/main.js') }}" crossorigin="anonymous"></script>
-
-
 {% endblock %}

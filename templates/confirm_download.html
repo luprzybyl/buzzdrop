@@ -1,19 +1,20 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="mx-auto mt-8 max-w-xl">
-    <div class="surface-card p-6 text-center sm:p-8">
+<div class="mx-auto" style="max-width: 42rem;">
+    <div class="surface-card p-5 has-text-centered">
         <span class="eyebrow">⚡ One-time action</span>
-        <p class="mt-4 text-lg font-semibold text-slate-700">{% if file_type == 'text' %}Secret Note{% else %}File: {{ original_name }}{% endif %}</p>
-        <h2 class="mt-2 text-2xl font-bold text-slate-950">Ready to {% if file_type == 'text' %}View{% else %}Download{% endif %}?</h2>
-        <p class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 font-semibold text-rose-700">Warning: {% if file_type == 'text' %}Viewing{% else %}Downloading{% endif %} will immediately delete this {% if file_type == 'text' %}note{% else %}file{% endif %} from the server. If the sender shared the password separately, have it ready before you continue. One-click links already include it.</p>
-        <form id="confirm-form" method="POST" action="/view/{{ file_id }}/confirm">
-            <button type="submit" class="btn-primary mt-6 w-full sm:w-auto">
+        <p class="is-size-5 has-text-weight-semibold has-text-grey-dark mt-4">{% if file_type == 'text' %}Secret Note{% else %}File: {{ original_name }}{% endif %}</p>
+        <h2 class="title is-3 has-text-dark mt-3 mb-4">Ready to {% if file_type == 'text' %}View{% else %}Download{% endif %}?</h2>
+        <p class="notification is-danger is-light has-text-weight-semibold">
+            Warning: {% if file_type == 'text' %}Viewing{% else %}Downloading{% endif %} will immediately delete this {% if file_type == 'text' %}note{% else %}file{% endif %} from the server. If the sender shared the password separately, have it ready before you continue. One-click links already include it.
+        </p>
+        <form id="confirm-form" method="POST" action="/view/{{ file_id }}/confirm" class="mt-5">
+            <button type="submit" class="button btn-primary is-medium">
                 Proceed to {% if file_type == 'text' %}view{% else %}download{% endif %} and decryption
             </button>
         </form>
         <script>
-            // Preserve password from URL fragment if present
             if (window.location.hash) {
                 const password = decodeURIComponent(window.location.hash.substring(1));
                 if (password) {
@@ -21,7 +22,7 @@
                 }
             }
         </script>
-        <p class="mt-4 text-sm leading-6 text-slate-500">This is a one-time {% if file_type == 'text' %}view{% else %}download{% endif %}. You will not be able to access this {% if file_type == 'text' %}note{% else %}file{% endif %} again.</p>
+        <p class="mt-4 has-text-grey">This is a one-time {% if file_type == 'text' %}view{% else %}download{% endif %}. You will not be able to access this {% if file_type == 'text' %}note{% else %}file{% endif %} again.</p>
     </div>
 </div>
 {% endblock %}
