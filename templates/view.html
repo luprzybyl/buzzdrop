@@ -2,10 +2,22 @@
 
 {% block content %}
 <div class="mx-auto max-w-2xl">
-    <div class="surface-card p-6 text-center sm:p-8">
+    <div class="surface-card-hero p-6 text-center sm:p-8">
         <span class="eyebrow">🔓 Recipient step</span>
         <h2 class="mt-4 text-2xl font-bold tracking-tight text-slate-950">{{ original_name }}</h2>
-        <p id="status" class="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-600">Enter password to {% if file_type == 'text' %}view{% else %}download and decrypt{% endif %}.</p>
+        <p id="status" class="section-copy mx-auto mt-3 max-w-xl">Enter password to {% if file_type == 'text' %}view{% else %}download and decrypt{% endif %}.</p>
+        <div class="mt-6 grid gap-3 text-left sm:grid-cols-2">
+            <div class="surface-card-soft p-4">
+                <span class="bee-accent">Quiet by design</span>
+                <p class="mt-3 text-sm font-semibold text-slate-900">The server still only holds ciphertext.</p>
+                <p class="mt-1 text-sm text-slate-500">Decryption happens on this device after you provide the password.</p>
+            </div>
+            <div class="surface-card-soft p-4">
+                <span class="bee-accent">One-time open</span>
+                <p class="mt-3 text-sm font-semibold text-slate-900">Use a stable connection.</p>
+                <p class="mt-1 text-sm text-slate-500">Once the payload is consumed, the link cannot be opened again.</p>
+            </div>
+        </div>
         <div class="mt-6 space-y-4">
             <input id="password-input" type="password" placeholder="Enter password" class="field-input">
         </div>

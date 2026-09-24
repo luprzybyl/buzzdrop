@@ -2,14 +2,14 @@
 
 {% block content %}
 <div class="mx-auto max-w-3xl">
-    <div class="surface-card p-6 sm:p-8">
+    <div class="surface-card-hero p-6 sm:p-8">
         <div class="text-center">
             <span class="eyebrow">✅ Drop secured</span>
             <svg class="mx-auto mt-4 h-12 w-12 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
             <h2 class="mt-4 text-2xl font-bold text-slate-950">{% if file_type == 'text' %}Text Note{% else %}File{% endif %} Shared Successfully!</h2>
-            <p class="mt-2 text-sm leading-6 text-slate-600">Share this link with others. The {% if file_type == 'text' %}note{% else %}file{% endif %} will be deleted after the first view.</p>
+            <p class="section-copy mt-2">Share this link with others. The {% if file_type == 'text' %}note{% else %}file{% endif %} will be deleted after the first view.</p>
         </div>
 
         <div class="mt-8 alert-banner alert-banner-info">
@@ -17,7 +17,7 @@
             <p>Choose convenience or maximum caution. One-click links are quick, but separate sharing keeps the password out of the link itself.</p>
         </div>
 
-        <div class="mt-6 rounded-3xl border border-sky-200 bg-sky-50 p-5">
+        <div class="mt-6 surface-card-info p-5">
             <h3 class="text-sm font-semibold text-slate-900">Option 1: Link with Password (One-Click)</h3>
             <p class="mt-2 text-xs leading-5 text-slate-600">This link contains the password. Recipient only needs to confirm download.</p>
             <div class="copy-field mt-4">
@@ -28,7 +28,7 @@
             </div>
         </div>
 
-        <div class="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-5">
+        <div class="mt-6 surface-card-warning p-5">
             <h3 class="text-sm font-semibold text-slate-900">Option 2: Link and Password Separately (More Secure)</h3>
             <p class="mt-2 text-xs leading-5 text-slate-600">Share link and password through different channels for better security.</p>
 
@@ -50,6 +50,21 @@
                         Show
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <div class="mt-6 grid gap-3 sm:grid-cols-3">
+            <div class="metric-card">
+                <p class="text-sm font-semibold text-slate-900">Best for phones</p>
+                <p class="mt-1 text-sm text-slate-500">Each share option stacks cleanly, so you can copy details without pinching or zooming.</p>
+            </div>
+            <div class="metric-card">
+                <p class="text-sm font-semibold text-slate-900">Most secure path</p>
+                <p class="mt-1 text-sm text-slate-500">Send the share link in one channel and the password in another.</p>
+            </div>
+            <div class="metric-card">
+                <p class="text-sm font-semibold text-slate-900">Bee-simple handoff</p>
+                <p class="mt-1 text-sm text-slate-500">The recipient gets a clear confirm screen before the link is consumed.</p>
             </div>
         </div>
 

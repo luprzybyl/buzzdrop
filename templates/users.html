@@ -7,6 +7,7 @@
             <div>
                 <span class="eyebrow">🛠️ Admin area</span>
                 <h1 class="mt-3 text-2xl font-bold text-slate-950">User Management</h1>
+                <p class="section-copy mt-2">Review access and revoke active API tokens from a layout that stays readable on phones as well as desktops.</p>
             </div>
             <a href="{{ url_for('index') }}" class="btn-secondary">
                 Back to Home
@@ -24,7 +25,7 @@
 
         <div>
             <h2 class="mb-4 text-lg font-semibold text-slate-800">System Users</h2>
-            <div class="space-y-3">
+            <div class="grid gap-3 md:grid-cols-2">
                 {% for username, user in users.items() %}
                 <article class="dashboard-item">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -48,51 +49,49 @@
         </div>
 
         <div class="mt-8">
-            <h2 class="text-lg font-semibold text-gray-700 mb-4">Active API Tokens</h2>
+            <h2 class="mb-4 text-lg font-semibold text-gray-700">Active API Tokens</h2>
             <div class="space-y-6">
                 {% for username, user in users.items() %}
                 {% set user_tokens = tokens_by_user.get(username, []) %}
-                <div class="border border-gray-200 rounded-lg">
-                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                <div class="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70">
+                    <div class="honeycomb-band flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <h3 class="text-sm font-semibold text-gray-900">{{ username }}</h3>
                             <p class="text-xs text-gray-500">{{ 'Admin' if user.is_admin else 'User' }}</p>
                         </div>
-                        <span class="text-xs text-gray-500">{{ user_tokens|length }} active token{{ '' if user_tokens|length == 1 else 's' }}</span>
+                        <span class="status-badge status-badge-slate">{{ user_tokens|length }} active token{{ '' if user_tokens|length == 1 else 's' }}</span>
                     </div>
                     {% if user_tokens %}
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-white">
-                                <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Used</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expires</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                {% for token in user_tokens %}
-                                <tr>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ token.created_at }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ token.last_used_at or 'Never' }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ token.expires_at }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                        <form method="post" action="{{ url_for('revoke_api_token_route', token_id=token.id) }}" class="inline-block">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit"
-                                                    class="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
-                                                Revoke
-                                            </button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="space-y-3 p-4">
+                        {% for token in user_tokens %}
+                        <article class="dashboard-item" data-token-card="true">
+                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                <div class="token-grid flex-1">
+                                    <div class="meta-pair">
+                                        <p class="meta-label">Created</p>
+                                        <p class="meta-value">{{ token.created_at }}</p>
+                                    </div>
+                                    <div class="meta-pair">
+                                        <p class="meta-label">Last Used</p>
+                                        <p class="meta-value">{{ token.last_used_at or 'Never' }}</p>
+                                    </div>
+                                    <div class="meta-pair">
+                                        <p class="meta-label">Expires</p>
+                                        <p class="meta-value">{{ token.expires_at }}</p>
+                                    </div>
+                                </div>
+                                <form method="post" action="{{ url_for('revoke_api_token_route', token_id=token.id) }}" class="lg:pl-4">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn-danger w-full lg:w-auto">
+                                        Revoke
+                                    </button>
+                                </form>
+                            </div>
+                        </article>
+                        {% endfor %}
                     </div>
                     {% else %}
-                    <p class="px-4 py-3 text-sm text-gray-500">No active API tokens.</p>
+                    <p class="px-4 py-4 text-sm text-gray-500">No active API tokens.</p>
                     {% endif %}
                 </div>
                 {% endfor %}

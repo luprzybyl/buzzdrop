@@ -54,6 +54,13 @@ def test_local_stylesheet_is_served(client):
     assert response.status_code == 200
     assert b'.btn-primary' in response.data
 
+def test_login_page_has_security_guardrails(client):
+    response = client.get(url_for('login'))
+    assert response.status_code == 200
+    assert b'Buzzdrop guardrails' in response.data
+    assert b'Encrypt before upload' in response.data
+    assert b'Share the password separately' in response.data
+
 def test_index_logged_in_user_no_files(client, app, db_instance):
     login_user(client, 'testuser', 'password')
     response = client.get(url_for('index'))
@@ -154,6 +161,8 @@ def test_manage_users_page_for_admin(client, app, db_instance):
     assert b'Active API Tokens' in response.data
     assert b'Revoke' in response.data
     assert b'name="csrf_token"' in response.data
+    assert b'data-token-card="true"' in response.data
+    assert b'<table' not in response.data
 
     assert b'testuser' in response.data
     # From users.html: <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">User</span>
