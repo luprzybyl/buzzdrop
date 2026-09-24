@@ -123,6 +123,8 @@ def test_view_text_note_shows_correct_template(client, app, files_table):
     assert b'Secret Note' in response.data
     assert b'Ready to View?' in response.data
     assert b'Viewing will immediately delete this note' in response.data
+    assert b'If the sender shared the password separately' in response.data
+    assert b'One-click links already include it.' in response.data
 
 def test_confirm_view_text_note(client, app, files_table):
     """Test the confirm view page for text notes."""
