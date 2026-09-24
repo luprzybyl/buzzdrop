@@ -488,14 +488,15 @@ def create_api_token():
     """
     from tokens import DEFAULT_TOKEN_EXPIRY_DAYS, generate_api_token
     data = request.get_json(silent=True) or {}
-    requested_username = data.get('username') or session['username']
+    current_user = get_current_user()
+    current_username = current_user['username']
+    requested_username = data.get('username') or current_username
     requested_expiry_days = data.get('expires_in_days', DEFAULT_TOKEN_EXPIRY_DAYS)
 
     users = get_users()
-    current_user = users.get(session['username'], {})
     is_current_admin = current_user.get('is_admin', False)
 
-    if requested_username != session['username'] and not is_current_admin:
+    if requested_username != current_username and not is_current_admin:
         return {'error': 'Admin access required to generate tokens for other users'}, 403
 
     if requested_username not in users:
@@ -517,8 +518,8 @@ def list_api_tokens_route():
     from tokens import list_api_tokens
 
     users = get_users()
-    current_username = session['username']
-    current_user = users.get(current_username, {})
+    current_user = get_current_user()
+    current_username = current_user['username']
     requested_username = request.args.get('username') or current_username
 
     if requested_username != current_username and not current_user.get('is_admin', False):
@@ -540,9 +541,8 @@ def revoke_api_token_route(token_id):
         or request.is_json
     )
 
-    users = get_users()
-    current_username = session['username']
-    current_user = users.get(current_username, {})
+    current_user = get_current_user()
+    current_username = current_user['username']
 
     if not _is_valid_csrf_token():
         if wants_json:
@@ -739,9 +739,15 @@ def download_file(file_id):
 @login_required
 def delete_file(file_id):
     """Delete a file entry and remove the file if it still exists."""
+    current_user = get_current_user()
+    current_username = current_user['username']
     file_info = file_repo.get_by_id(file_id)
 
-    if not file_info or file_info.get('uploaded_by') != session['username']:
+    if not _is_valid_csrf_token():
+        flash('Invalid request')
+        return redirect(url_for('index'))
+
+    if not file_info or file_info.get('uploaded_by') != current_username:
         flash('File not found')
         return redirect(url_for('index'))
 
@@ -797,6 +803,9 @@ def confirm_view_file(file_id):
     if check_and_handle_expiry(file_info):
         flash('File has expired')
         return redirect(url_for('index'))
+    if not _is_valid_csrf_token():
+        flash('Invalid request')
+        return redirect(url_for('view_file', file_id=file_id))
     file_type = file_info.get('type', 'file')
     return render_template('view.html', file_id=file_id, original_name=file_info['original_name'], file_type=file_type)
 

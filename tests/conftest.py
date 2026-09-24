@@ -79,6 +79,20 @@ def client(app):
     return app.test_client()
 
 
+@pytest.fixture
+def csrf_form_data(client):
+    """Return form data containing a valid session-backed CSRF token."""
+    def _csrf_form_data():
+        with client.session_transaction() as session:
+            csrf_token = session.get('csrf_token')
+            if not csrf_token:
+                csrf_token = 'test-csrf-token'
+                session['csrf_token'] = csrf_token
+        return {'csrf_token': csrf_token}
+
+    return _csrf_form_data
+
+
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
     """Reset in-memory rate limit state between tests."""

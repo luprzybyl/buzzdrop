@@ -8,6 +8,7 @@
         <h2 class="mt-2 text-2xl font-bold text-slate-950">Ready to {% if file_type == 'text' %}View{% else %}Download{% endif %}?</h2>
         <p class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 font-semibold text-rose-700">Warning: {% if file_type == 'text' %}Viewing{% else %}Downloading{% endif %} will immediately delete this {% if file_type == 'text' %}note{% else %}file{% endif %} from the server. If the sender shared the password separately, have it ready before you continue. One-click links already include it.</p>
         <form id="confirm-form" method="POST" action="/view/{{ file_id }}/confirm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn-primary mt-6 w-full sm:w-auto">
                 Proceed to {% if file_type == 'text' %}view{% else %}download{% endif %} and decryption
             </button>
