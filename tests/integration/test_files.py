@@ -193,6 +193,7 @@ def test_public_views_do_not_show_private_note(client, files_table):
     public_response = client.get(url_for('view_file', file_id=file_info['id']))
     assert public_response.status_code == 200
     assert b'Only uploader should see this' not in public_response.data
+    assert b'name="csrf_token"' in public_response.data
 
     with client.session_transaction() as sess:
         csrf_token = sess['csrf_token']

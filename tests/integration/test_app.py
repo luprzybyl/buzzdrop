@@ -157,13 +157,14 @@ def test_manage_users_page_for_admin(client, app, db_instance):
 
     response = client.get(url_for('manage_users'))
     assert response.status_code == 200
+    html = response.data.decode('utf-8')
     assert b'User Management' in response.data # Page title from users.html
     assert b'Active API Tokens' in response.data
     assert b'Revoke' in response.data
     assert b'name="csrf_token"' in response.data
-    assert b'data-token-card="true"' in response.data
-    assert b'meta-label">Created<' in response.data
-    assert b'meta-label">Expires<' in response.data
+    assert html.count('data-token-card="true"') == 1
+    assert 'meta-label">Created<' in html
+    assert 'meta-value">Never<' in html
 
     assert b'testuser' in response.data
     # From users.html: <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">User</span>
