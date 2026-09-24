@@ -155,9 +155,9 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 - Expiry date validation and automatic cleanup.
 
 ### Open Notification Configuration:
-- Extend user records to optionally include an account email in `.env`: `FLASK_USER_N=username:password:is_admin[:email[:email_verified]]`
+- Extend user records to optionally include an account email in `.env`: `FLASK_USER_N=username:password:is_admin[:email]`
 - Configure SMTP with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_USE_TLS`, `SMTP_USE_SSL`, and `SMTP_TIMEOUT_SECONDS`
-- Open notifications are sent only to the logged-in user's configured email when it is marked as verified
+- Open notifications are sent only to the logged-in user's configured email (configuring it in `.env` is treated as trust — there is no separate verification step)
 - If email delivery fails, Buzzdrop logs the failure and keeps the share available in the dashboard without retrying automatically
 
 ## S3? No Problem!

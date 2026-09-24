@@ -75,12 +75,11 @@ def test_get_users_multiple_users():
     assert check_password_hash(users["admin"]["password"], "adminpass")
 
 @mock.patch.dict(os.environ, {
-    "FLASK_USER_1": "user1:pass1:false:user1@example.com:true",
+    "FLASK_USER_1": "user1:pass1:false:user1@example.com",
 }, clear=True)
 def test_get_users_optional_email_metadata():
     users = get_users()
     assert users["user1"]["email"] == "user1@example.com"
-    assert users["user1"]["email_verified"] is True
 
 @mock.patch.dict(os.environ, {
     "FLASK_USER_1": "user1:pa:ss:false",
