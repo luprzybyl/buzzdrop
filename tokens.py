@@ -60,12 +60,7 @@ def _serialize_token(entry: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _get_token_hash_secret() -> bytes:
-    token_hash_secret = None
-    if has_app_context():
-        token_hash_secret = current_app.config.get('TOKEN_HASH_SECRET')
-    else:
-        from app import app as flask_app
-        token_hash_secret = flask_app.config.get('TOKEN_HASH_SECRET')
+    token_hash_secret = current_app.config.get('TOKEN_HASH_SECRET') if has_app_context() else None
 
     if not token_hash_secret:
         token_hash_secret = os.getenv('TOKEN_HASH_SECRET') or os.getenv('FLASK_SECRET_KEY')
