@@ -52,7 +52,7 @@
             <div class="space-y-6">
                 {% for username, user in users.items() %}
                 {% set user_tokens = tokens_by_user.get(username, []) %}
-                <div class="border border-gray-200 rounded-lg">
+                <div class="rounded-2xl border border-gray-200">
                     <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
                         <div>
                             <h3 class="text-sm font-semibold text-gray-900">{{ username }}</h3>
@@ -81,7 +81,7 @@
                                         <form method="post" action="{{ url_for('revoke_api_token_route', token_id=token.id) }}" class="inline-block">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit"
-                                                    class="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                                                    class="rounded-xl bg-red-500 px-3 py-1 text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
                                                 Revoke
                                             </button>
                                         </form>
