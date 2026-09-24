@@ -70,7 +70,7 @@ def _get_token_hash_secret() -> bytes:
     if not token_hash_secret:
         token_hash_secret = os.getenv('TOKEN_HASH_SECRET') or os.getenv('FLASK_SECRET_KEY')
     if not token_hash_secret:
-        token_hash_secret = current_app.config.get('SECRET_KEY') if has_app_context() else flask_app.config.get('SECRET_KEY')
+        raise RuntimeError('API token hashing requires TOKEN_HASH_SECRET or FLASK_SECRET_KEY')
     if isinstance(token_hash_secret, str):
         token_hash_secret = token_hash_secret.encode()
     return token_hash_secret

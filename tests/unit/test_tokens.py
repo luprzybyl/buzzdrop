@@ -90,7 +90,7 @@ def test_token_stored_as_hash_not_plaintext(app):
         assert entry.get('expires_at') is not None
 
 
-def test_token_hash_uses_current_app_secret_when_no_explicit_hash_secret_is_configured(app, monkeypatch):
+def test_token_hash_requires_stable_secret_configuration(app, monkeypatch):
     with app.app_context():
         from tokens import _hash_token
 
@@ -98,12 +98,8 @@ def test_token_hash_uses_current_app_secret_when_no_explicit_hash_secret_is_conf
         app.config.pop('TOKEN_HASH_SECRET', None)
 
         app.config['SECRET_KEY'] = 'temporary-session-key-1'
-        first_hash = _hash_token('a' * 64)
-
-        app.config['SECRET_KEY'] = 'temporary-session-key-2'
-        second_hash = _hash_token('a' * 64)
-
-        assert first_hash != second_hash
+        with pytest.raises(RuntimeError, match='TOKEN_HASH_SECRET or FLASK_SECRET_KEY'):
+            _hash_token('a' * 64)
 
 
 def test_validate_api_token_rejects_legacy_hash(app, db_instance):

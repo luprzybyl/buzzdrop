@@ -544,12 +544,6 @@ def revoke_api_token_route(token_id):
     current_user = get_current_user()
     current_username = current_user['username']
 
-    if not _is_valid_csrf_token():
-        if wants_json:
-            return {'error': 'CSRF validation failed'}, 403
-        flash('Invalid request')
-        return redirect(url_for('manage_users' if current_user.get('is_admin', False) else 'index'))
-
     token = get_api_token(token_id)
 
     if not token:
@@ -563,6 +557,12 @@ def revoke_api_token_route(token_id):
             return {'error': 'Admin access required to revoke tokens for other users'}, 403
         flash('Admin access required')
         return redirect(url_for('index'))
+
+    if not _is_valid_csrf_token():
+        if wants_json:
+            return {'error': 'CSRF validation failed'}, 403
+        flash('Invalid request')
+        return redirect(url_for('manage_users' if current_user.get('is_admin', False) else 'index'))
 
     revoke_api_token_by_id(token_id)
 
