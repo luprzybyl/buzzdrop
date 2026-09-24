@@ -4,6 +4,7 @@ from flask import url_for, session, current_app
 from tinydb import Query
 import io # For creating dummy file content for uploads
 from datetime import datetime, timedelta
+from auth import get_users
 # Fixtures: 'app', 'client', 'db_instance', 'files_table' from conftest.py
 # Test users from conftest.py: 'testuser:password:false', 'adminuser:adminpass:true'
 
@@ -277,6 +278,100 @@ def test_report_decryption_success(client, app, files_table):
     File = Query()
     info = files_table.get(File.id == file_id)
     assert info['decryption_success'] is True
+
+
+def test_upload_file_uses_verified_account_notification_email(client, app, files_table, monkeypatch):
+    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
+    get_users.cache_clear()
+    login_user(client, 'testuser', 'password')
+    app.config.update({
+        'SMTP_HOST': 'smtp.example.com',
+        'SMTP_FROM_EMAIL': 'buzzdrop@example.com',
+    })
+
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'file': (io.BytesIO(b"test content"), "notify_me.txt"),
+            'notify_on_open': 'true',
+        },
+        content_type='multipart/form-data',
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+
+    assert response.status_code == 200
+
+    File = Query()
+    info = files_table.get(File.original_name == 'notify_me.txt')
+    assert info['notify_on_open'] is True
+    assert info['notification_email'] == 'testuser@example.com'
+
+
+def test_report_decryption_sends_notification_once(client, app, files_table, monkeypatch):
+    monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
+    get_users.cache_clear()
+    login_user(client, 'testuser', 'password')
+    sent_messages = []
+    app.config.update({
+        'SMTP_HOST': 'smtp.example.com',
+        'SMTP_FROM_EMAIL': 'buzzdrop@example.com',
+    })
+    monkeypatch.setattr('app._send_email', lambda recipient, subject, body: sent_messages.append((recipient, subject, body)))
+
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'file': (io.BytesIO(b"content"), "notify_once.txt"),
+            'notify_on_open': 'true',
+        },
+        content_type='multipart/form-data',
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    file_id = response.get_json()['file_id']
+
+    client.get(url_for('download_file', file_id=file_id))
+
+    res = client.post(url_for('report_decryption', file_id=file_id), json={'success': True})
+    assert res.status_code == 200
+
+    res = client.post(url_for('report_decryption', file_id=file_id), json={'success': True})
+    assert res.status_code == 200
+
+    assert len(sent_messages) == 1
+    assert sent_messages[0][0] == 'testuser@example.com'
+    assert 'notify_once.txt' in sent_messages[0][1]
+    assert 'Decryption status: successful' in sent_messages[0][2]
+
+    File = Query()
+    info = files_table.get(File.id == file_id)
+    assert info['notification_sent_at'] is not None
+
+
+@pytest.mark.parametrize('payload', [
+    {},
+    {'success': 'false'},
+    {'success': 0},
+    {'success': 1},
+    {'success': None},
+])
+def test_report_decryption_requires_boolean_success(client, app, files_table, payload):
+    login_user(client, 'testuser', 'password')
+    file_id = upload_file_for_user(client, app, files_table, 'bool.txt', 'content', 'testuser')
+
+    res = client.post(url_for('report_decryption', file_id=file_id), json=payload)
+    assert res.status_code == 400
+
+
+@pytest.mark.parametrize('request_kwargs', [
+    {},
+    {'data': 'success=true', 'content_type': 'application/x-www-form-urlencoded'},
+])
+def test_report_decryption_requires_json_body(client, app, files_table, request_kwargs):
+    login_user(client, 'testuser', 'password')
+    file_id = upload_file_for_user(client, app, files_table, 'bool-json.txt', 'content', 'testuser')
+
+    res = client.post(url_for('report_decryption', file_id=file_id), **request_kwargs)
+    assert res.status_code == 400
 
 
 def test_report_decryption_file_not_found(client):

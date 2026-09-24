@@ -81,6 +81,35 @@
                 <textarea id="shared-private-note" name="private_note" rows="2" class="field-input" placeholder="Visible only to you in your shared items list"></textarea>
             </div>
 
+            <div class="surface-card-soft space-y-4 p-4">
+                <label class="flex items-start gap-3 text-sm text-slate-700">
+                    <input id="notify-on-open" name="notify_on_open" type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400">
+                    <span>
+                        <span class="font-semibold text-slate-900">Notify me when this is opened</span>
+                        <span class="mt-1 block text-slate-500">Buzzdrop sends one email after the recipient attempts decryption. Delivery failures are logged only.</span>
+                    </span>
+                </label>
+                <div>
+                    <label for="notification-email" class="field-label">Account email</label>
+                    <input
+                        id="notification-email"
+                        name="notification_email"
+                        type="email"
+                        class="field-input"
+                        placeholder="Configure this in FLASK_USER_N"
+                        value="{{ configured_notification_email or '' }}"
+                        readonly
+                    >
+                    <p class="field-help">
+                        {% if configured_notification_email %}
+                            Open notifications are sent only to this account email.
+                        {% else %}
+                            Configure an account email in your user record before enabling notifications.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
             <div class="surface-card-soft grid gap-4 p-4 sm:grid-cols-[1fr,auto] sm:items-center">
                 <div class="text-sm text-slate-600">
                     <p class="font-semibold text-slate-900">One-time buzz</p>
@@ -101,7 +130,7 @@
 </div>
 {% else %}
 <div class="max-w-6xl mx-auto space-y-8">
-    <section class="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-2xl">
+    <section class="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-2xl">
         <div class="grid gap-10 px-8 py-10 lg:grid-cols-[1.4fr,1fr] lg:px-12 lg:py-14">
             <div class="space-y-6">
                 <span class="inline-flex items-center rounded-full bg-white/10 px-4 py-1 text-sm font-medium ring-1 ring-white/20">
@@ -130,7 +159,7 @@
                 </div>
             </div>
 
-            <div class="rounded-3xl bg-white/10 p-6 shadow-lg ring-1 ring-white/15 backdrop-blur">
+            <div class="rounded-2xl bg-white/10 p-6 shadow-lg ring-1 ring-white/15 backdrop-blur">
                 <p class="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-100">Why Buzzdrop</p>
                 <div class="mt-4 space-y-4">
                     <div class="rounded-2xl bg-slate-950/20 p-4">
@@ -151,7 +180,7 @@
     </section>
 
     <section class="grid gap-6 lg:grid-cols-[1.3fr,1fr]">
-        <div class="rounded-3xl bg-white p-8 shadow-md">
+        <div class="rounded-2xl bg-white p-8 shadow-md">
             <h2 class="text-2xl font-bold text-gray-900">How it works</h2>
             <div class="mt-6 grid gap-4 md:grid-cols-3">
                 <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5">
@@ -169,7 +198,7 @@
             </div>
         </div>
 
-        <div class="rounded-3xl border border-amber-200 bg-amber-50 p-8 shadow-md">
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-8 shadow-md">
             <p class="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Open source</p>
             <h2 class="mt-3 text-2xl font-bold text-gray-900">Star Buzzdrop on GitHub</h2>
             <p class="mt-3 text-sm leading-6 text-gray-700">
