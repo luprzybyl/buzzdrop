@@ -10,13 +10,25 @@ let uploadInProgress = false;
 const allowedExtensions = JSON.parse(document.getElementById('allowed-extensions-json').textContent);
 
 // --- Tab Switching Logic ---
+// The action button holds an icon alongside its label, so only the label node is rewritten.
+function setShareAction(label) {
+    const button = document.getElementById('share-action-btn');
+    const labelNode = document.getElementById('share-action-label');
+    if (labelNode) {
+        labelNode.textContent = label;
+    }
+    if (button) {
+        button.setAttribute('aria-label', label);
+    }
+}
+
 function showFileUpload() {
     activeShareMode = 'file';
     document.getElementById('file-upload-section').style.display = 'block';
     document.getElementById('text-note-section').style.display = 'none';
     document.getElementById('file-tab').className = 'share-tab share-tab-active';
     document.getElementById('text-tab').className = 'share-tab';
-    document.getElementById('share-action-btn').textContent = 'Upload File';
+    setShareAction('Upload File');
 }
 
 function showTextNote() {
@@ -25,7 +37,7 @@ function showTextNote() {
     document.getElementById('text-note-section').style.display = 'block';
     document.getElementById('file-tab').className = 'share-tab';
     document.getElementById('text-tab').className = 'share-tab share-tab-active';
-    document.getElementById('share-action-btn').textContent = 'Share Text Note';
+    setShareAction('Share Text Note');
 }
 
 // Make functions globally accessible for inline onclick handlers
@@ -112,18 +124,74 @@ function uploadWithProgress(formData, password, uiElements) {
     xhr.send(formData);
 }
 
+// --- Dropzone Logic ---
+function isAllowedFile(name) {
+    return allowedExtensions.includes(name.split('.').pop().toLowerCase());
+}
+
+// Show (or clear) the chip naming the file that is queued for encryption.
+function showSelectedFile(file) {
+    const chip = document.getElementById('file-selected');
+    const chipName = document.getElementById('file-selected-name');
+    if (!chip || !chipName) return;
+    chipName.textContent = file ? file.name : '';
+    chip.classList.toggle('hidden', !file);
+}
+
+const dropzone = document.getElementById('dropzone');
+if (dropzone) {
+    const fileField = document.getElementById('file');
+
+    const setDragging = (isDragging) => dropzone.classList.toggle('dropzone-active', isDragging);
+
+    ['dragenter', 'dragover'].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            setDragging(true);
+        });
+    });
+
+    // dragleave also fires when crossing into a child, so ignore those.
+    dropzone.addEventListener('dragleave', (e) => {
+        if (!dropzone.contains(e.relatedTarget)) {
+            setDragging(false);
+        }
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        setDragging(false);
+        const file = e.dataTransfer && e.dataTransfer.files[0];
+        if (!file) return;
+        if (!isAllowedFile(file.name)) {
+            alert('File type not allowed');
+            return;
+        }
+        // Hand the dropped file to the real input so the form submits it unchanged.
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        fileField.files = transfer.files;
+        showSelectedFile(file);
+    });
+}
+
 // --- File Upload Logic ---
 const fileUploadForm = document.querySelector('#file-upload-section form');
 if (fileUploadForm) {
     // Validate file extension when a file is selected
     document.getElementById('file').addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (!file) return;
-        const ext = file.name.split('.').pop().toLowerCase();
-        if (!allowedExtensions.includes(ext)) {
+        if (!file) {
+            showSelectedFile(null);
+            return;
+        }
+        if (!isAllowedFile(file.name)) {
             alert('File type not allowed');
             e.target.value = '';
+            showSelectedFile(null);
+            return;
         }
+        showSelectedFile(file);
     });
 
     // Handle form submission: encrypt file client-side, then upload
@@ -236,11 +304,21 @@ if (shareActionButton) {
 
 // --- Copy URL to Clipboard Logic ---
 document.querySelectorAll('.copy-url').forEach(el => {
+    const flash = el.querySelector('.copy-flash');
+    let flashTimer;
+
     el.addEventListener('click', (e) => {
         e.preventDefault();
         const url = el.getAttribute('data-url');
         navigator.clipboard.writeText(url).then(() => {
-            alert('url copied to clipboard');
+            if (!flash) {
+                alert('url copied to clipboard');
+                return;
+            }
+            // Inline confirmation beats a modal dialog for something this small.
+            flash.classList.remove('hidden');
+            clearTimeout(flashTimer);
+            flashTimer = setTimeout(() => flash.classList.add('hidden'), 1800);
         });
     });
 });

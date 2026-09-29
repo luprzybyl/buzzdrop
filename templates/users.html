@@ -1,103 +1,98 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="mx-auto max-w-4xl">
-    <div class="surface-card p-6 sm:p-8">
-        <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <span class="eyebrow">🛠️ Admin area</span>
-                <h1 class="mt-3 text-2xl font-bold text-slate-950">User Management</h1>
-            </div>
-            <a href="{{ url_for('index') }}" class="btn-secondary">
-                Back to Home
-            </a>
+<div class="mx-auto max-w-4xl space-y-8">
+    <header class="animate-fade-up flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div class="space-y-3">
+            <span class="eyebrow">Admin area</span>
+            <h1 class="text-3xl font-semibold tracking-tight text-white">User management</h1>
         </div>
+        <a href="{{ url_for('index') }}" class="btn-secondary self-start sm:self-auto">
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M17 10a1 1 0 0 1-1 1H6.414l4.293 4.293a1 1 0 0 1-1.414 1.414l-6-6a1 1 0 0 1 0-1.414l6-6a1 1 0 0 1 1.414 1.414L6.414 9H16a1 1 0 0 1 1 1Z" clip-rule="evenodd"/>
+            </svg>
+            Back to home
+        </a>
+    </header>
 
-        <div class="alert-banner alert-banner-warning mb-6">
-            <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                </svg>
-            </div>
-            <p>Users are managed through environment variables. To add or modify users, update the .env file.</p>
-        </div>
+    <div class="alert-banner alert-banner-warning animate-fade-up delay-1">
+        <svg class="mt-0.5 h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+        <span>Users are managed through environment variables. To add or modify users, update the <code class="rounded border border-white/10 bg-hive-850 px-1.5 py-0.5 text-xs">.env</code> file and redeploy.</span>
+    </div>
 
-        <div>
-            <h2 class="mb-4 text-lg font-semibold text-slate-800">System Users</h2>
-            <div class="space-y-3">
-                {% for username, user in users.items() %}
-                <article class="dashboard-item">
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <section class="surface-card animate-fade-up delay-2 p-6 sm:p-8">
+        <h2 class="text-lg font-semibold tracking-tight text-white">System users</h2>
+        <div class="mt-5 space-y-3">
+            {% for username, user in users.items() %}
+            <article class="dashboard-item">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="hex-step text-xs">{{ username[0]|upper }}</span>
                         <div>
-                            <p class="text-sm font-semibold text-slate-950">{{ username }}</p>
-                            <p class="mt-1 text-sm text-slate-500">Access is configured at deploy time through environment variables.</p>
+                            <p class="text-sm font-semibold text-white">{{ username }}</p>
+                            <p class="mt-0.5 text-xs text-slate-500">Configured at deploy time through environment variables.</p>
                         </div>
-                        {% if user.is_admin %}
-                        <span class="status-badge status-badge-green">
-                            Admin
-                        </span>
-                        {% else %}
-                        <span class="status-badge status-badge-slate">
-                            User
-                        </span>
-                        {% endif %}
                     </div>
-                </article>
-                {% endfor %}
-            </div>
-        </div>
-
-        <div class="mt-8">
-            <h2 class="text-lg font-semibold text-gray-700 mb-4">Active API Tokens</h2>
-            <div class="space-y-6">
-                {% for username, user in users.items() %}
-                {% set user_tokens = tokens_by_user.get(username, []) %}
-                <div class="rounded-2xl border border-gray-200">
-                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-                        <div>
-                            <h3 class="text-sm font-semibold text-gray-900">{{ username }}</h3>
-                            <p class="text-xs text-gray-500">{{ 'Admin' if user.is_admin else 'User' }}</p>
-                        </div>
-                        <span class="text-xs text-gray-500">{{ user_tokens|length }} active token{{ '' if user_tokens|length == 1 else 's' }}</span>
-                    </div>
-                    {% if user_tokens %}
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-white">
-                                <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Used</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expires</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                {% for token in user_tokens %}
-                                <tr>
-                                    <td class="px-4 py-3 break-words text-sm text-gray-900">{{ token.created_at }}</td>
-                                    <td class="px-4 py-3 break-words text-sm text-gray-500">{{ token.last_used_at or 'Never' }}</td>
-                                    <td class="px-4 py-3 break-words text-sm text-gray-500">{{ token.expires_at }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                        <form method="post" action="{{ url_for('revoke_api_token_route', token_id=token.id) }}" class="inline-block">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit"
-                                                    class="rounded-xl bg-red-500 px-3 py-1 text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
-                                                Revoke
-                                            </button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                    {% if user.is_admin %}
+                    <span class="status-badge status-badge-green">Admin</span>
                     {% else %}
-                    <p class="px-4 py-3 text-sm text-gray-500">No active API tokens.</p>
+                    <span class="status-badge status-badge-slate">User</span>
                     {% endif %}
                 </div>
-                {% endfor %}
-            </div>
+            </article>
+            {% endfor %}
         </div>
-    </div>
+    </section>
+
+    <section class="surface-card animate-fade-up delay-3 p-6 sm:p-8">
+        <h2 class="text-lg font-semibold tracking-tight text-white">Active API tokens</h2>
+        <div class="mt-5 space-y-4">
+            {% for username, user in users.items() %}
+            {% set user_tokens = tokens_by_user.get(username, []) %}
+            <div class="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+                <div class="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-white">{{ username }}</h3>
+                        <p class="text-xs text-slate-500">{{ 'Admin' if user.is_admin else 'User' }}</p>
+                    </div>
+                    <span class="status-badge status-badge-slate">{{ user_tokens|length }} token{{ '' if user_tokens|length == 1 else 's' }}</span>
+                </div>
+                {% if user_tokens %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-white/[0.06]">
+                                <th class="px-4 py-3 text-left text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Created</th>
+                                <th class="px-4 py-3 text-left text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Last used</th>
+                                <th class="px-4 py-3 text-left text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Expires</th>
+                                <th class="px-4 py-3 text-right text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for token in user_tokens %}
+                            <tr class="border-b border-white/[0.04] transition last:border-0 hover:bg-white/[0.03]">
+                                <td class="px-4 py-3 tabular-nums text-slate-300">{{ token.created_at }}</td>
+                                <td class="px-4 py-3 tabular-nums text-slate-500">{{ token.last_used_at or 'Never' }}</td>
+                                <td class="px-4 py-3 tabular-nums text-slate-500">{{ token.expires_at }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    <form method="post" action="{{ url_for('revoke_api_token_route', token_id=token.id) }}" class="inline-block">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn-danger px-3 py-1.5 text-xs">Revoke</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="px-4 py-4 text-sm text-slate-500">No active API tokens.</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
 </div>
 {% endblock %}

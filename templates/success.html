@@ -1,60 +1,76 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="mx-auto max-w-3xl">
-    <div class="surface-card p-6 sm:p-8">
+<div class="mx-auto max-w-2xl">
+    <div class="surface-card animate-zoom-in p-8 sm:p-10">
         <div class="text-center">
-            <span class="eyebrow">✅ Drop secured</span>
-            <svg class="mx-auto mt-4 h-12 w-12 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <h2 class="mt-4 text-2xl font-bold text-slate-950">{% if file_type == 'text' %}Text Note{% else %}File{% endif %} Shared Successfully!</h2>
-            <p class="mt-2 text-sm leading-6 text-slate-600">Share this link with others. The {% if file_type == 'text' %}note{% else %}file{% endif %} will be deleted after the first view.</p>
+            <span class="relative mx-auto mb-6 block h-16 w-16">
+                <span class="absolute inset-0 animate-halo-pulse rounded-full bg-emerald-400/20 blur-xl" aria-hidden="true"></span>
+                <svg viewBox="0 0 64 64" class="relative h-16 w-16 text-emerald-300" fill="none" aria-hidden="true">
+                    <path d="M32 4 54 16.7v25.6L32 55 10 42.3V16.7z" stroke="currentColor" stroke-width="1.5" opacity=".4"/>
+                    <path d="M32 11 48 20.2v18.6L32 48l-16-9.2V20.2z" fill="currentColor" opacity=".08"/>
+                    <path class="animate-draw-in" d="m23 32 6.5 6.5L42 26" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="48"/>
+                </svg>
+            </span>
+
+            <span class="eyebrow">Drop secured</span>
+            <h1 class="mt-5 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                {% if file_type == 'text' %}Note{% else %}File{% endif %} is in the hive
+            </h1>
+            <p class="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-400">
+                Share the link below. The {% if file_type == 'text' %}note{% else %}file{% endif %} is destroyed after the first successful open.
+            </p>
         </div>
 
-        <div class="mt-8 alert-banner alert-banner-info">
-            <span class="text-base">🐝</span>
-            <p>Choose convenience or maximum caution. One-click links are quick, but separate sharing keeps the password out of the link itself.</p>
-        </div>
-
-        <div class="mt-6 rounded-2xl border border-sky-200 bg-sky-50 p-5">
-            <h3 class="text-sm font-semibold text-slate-900">Option 1: Link with Password (One-Click)</h3>
-            <p class="mt-2 text-xs leading-5 text-slate-600">This link contains the password. Recipient only needs to confirm download.</p>
-            <div class="copy-field mt-4">
-                <input type="text" id="share-link-with-password" readonly class="field-input flex-1" value="">
-                <button onclick="copyLinkWithPassword()" class="btn-primary px-4 py-3">
-                    Copy
-                </button>
-            </div>
-        </div>
-
-        <div class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-            <h3 class="text-sm font-semibold text-slate-900">Option 2: Link and Password Separately (More Secure)</h3>
-            <p class="mt-2 text-xs leading-5 text-slate-600">Share link and password through different channels for better security.</p>
-
-            <div class="mt-3">
-                <label class="field-label mb-1 text-xs">Link</label>
-                <div class="copy-field">
-                    <input type="text" value="{{ share_link }}" readonly class="field-input flex-1" id="share-link">
-                    <button onclick="copyLink()" class="btn-primary px-4 py-3">
-                        Copy
-                    </button>
+        <div class="mt-8 space-y-4">
+            {# Option 2 leads: it is the one worth defaulting to. #}
+            <section class="relative overflow-hidden rounded-2xl border border-honey-400/25 bg-gradient-to-br from-honey-400/[0.08] to-transparent p-5">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h2 class="text-sm font-semibold text-white">Link and password, separately</h2>
+                    <span class="status-badge status-badge-amber">Recommended</span>
                 </div>
-            </div>
+                <p class="mt-2 text-xs leading-5 text-slate-400">
+                    Send each through a different channel, so one intercepted message is not enough.
+                </p>
 
-            <div class="mt-3">
-                <label class="field-label mb-1 text-xs">Password</label>
-                <div class="copy-field">
-                    <input type="password" id="password-display" readonly class="field-input flex-1">
-                    <button id="toggle-password" onclick="togglePasswordVisibility()" class="btn-secondary px-4 py-3">
-                        Show
-                    </button>
+                <div class="mt-4 space-y-3">
+                    <div>
+                        <label for="share-link" class="field-label">Link</label>
+                        <div class="copy-field">
+                            <input type="text" value="{{ share_link }}" readonly class="field-input flex-1 border-transparent bg-transparent shadow-none" id="share-link">
+                            <button onclick="copyLink()" class="btn-primary shrink-0 px-4 py-2.5">Copy</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="password-display" class="field-label">Password</label>
+                        <div class="copy-field">
+                            <input type="password" id="password-display" readonly class="field-input flex-1 border-transparent bg-transparent font-mono shadow-none">
+                            <button id="toggle-password" onclick="togglePasswordVisibility()" class="btn-secondary shrink-0 px-4 py-2.5">Show</button>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </section>
+
+            <section class="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5">
+                <h2 class="text-sm font-semibold text-white">One-click link</h2>
+                <p class="mt-2 text-xs leading-5 text-slate-400">
+                    The password rides along in the URL fragment. Convenient, but anyone holding the link holds the key.
+                </p>
+                <div class="copy-field mt-4">
+                    <input type="text" id="share-link-with-password" readonly class="field-input flex-1 border-transparent bg-transparent shadow-none" value="">
+                    <button onclick="copyLinkWithPassword()" class="btn-secondary shrink-0 px-4 py-2.5">Copy</button>
+                </div>
+            </section>
         </div>
 
-        <div class="mt-6 text-center">
-            <a href="{{ url_for('index') }}" class="font-semibold text-slate-900 hover:text-amber-600">Upload another file</a>
+        <div class="mt-8 text-center">
+            <a href="{{ url_for('index') }}" class="btn-ghost">
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 0 1 1 1v5h5a1 1 0 1 1 0 2h-5v5a1 1 0 1 1-2 0v-5H4a1 1 0 1 1 0-2h5V4a1 1 0 0 1 1-1Z" clip-rule="evenodd"/>
+                </svg>
+                Create another drop
+            </a>
         </div>
     </div>
 </div>

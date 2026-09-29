@@ -121,8 +121,8 @@ def test_view_text_note_shows_correct_template(client, app, files_table):
     response = client.get(url_for('view_file', file_id=note_id))
     assert response.status_code == 200
     assert b'Secret Note' in response.data
-    assert b'Ready to View?' in response.data
-    assert b'Viewing will immediately delete this note' in response.data
+    assert b'Ready to view?' in response.data
+    assert b'Continuing deletes this note from the server immediately.' in response.data
     assert b'If the sender shared the password separately' in response.data
     assert b'One-click links already include it.' in response.data
 
@@ -142,7 +142,7 @@ def test_confirm_view_text_note(client, app, files_table, csrf_form_data):
     # Confirm view
     response = client.post(url_for('confirm_view_file', file_id=note_id), data=csrf_form_data())
     assert response.status_code == 200
-    assert b'Decrypt and View' in response.data
+    assert b'Decrypt and view' in response.data
     assert b'window.fileType = "text"' in response.data
     assert b'text-display' in response.data  # Text display div should be present
 
@@ -194,8 +194,8 @@ def test_text_note_success_page(client, app):
     )
 
     assert response.status_code == 200
-    assert b'Text Note Shared Successfully!' in response.data
-    assert b'The note will be deleted after the first view' in response.data
+    assert b'Note is in the hive' in response.data
+    assert b'is destroyed after the first successful open' in response.data
 
 def test_text_note_deletion_after_view(client, app, files_table):
     """Test that text note is marked as downloaded after viewing."""

@@ -4,127 +4,383 @@
 
 @layer base {
   :root {
-    color-scheme: light;
+    color-scheme: dark;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
-    @apply bg-slate-100 text-slate-900 antialiased;
-    background-image:
-      radial-gradient(circle at top, rgba(251, 191, 36, 0.18), transparent 32rem),
-      linear-gradient(180deg, rgba(15, 23, 42, 0.03), rgba(15, 23, 42, 0));
+    @apply bg-hive-950 font-sans text-slate-300 antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
 
   ::selection {
-    @apply bg-amber-200 text-slate-900;
+    @apply bg-honey-400/30 text-honey-50;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-honey-400/80 ring-offset-2 ring-offset-hive-950;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-hive-600;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-hive-500;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* datetime-local pickers render a black-on-black icon in dark UIs. */
+  input[type='datetime-local']::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.5;
+    cursor: pointer;
+  }
+
+  input[type='datetime-local']::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
   }
 }
 
 @layer components {
+  /* ---------------------------------------------------------------- Shell */
+
   .container-shell {
-    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+    @apply mx-auto w-full max-w-shell px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Hairline of honey across the very top of the page. */
+  .topline {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-honey-400/70 to-transparent;
+  }
+
+  /* Fixed honeycomb lattice, slowly drifting behind everything. */
+  .hex-veil {
+    @apply pointer-events-none fixed z-0 animate-drift opacity-[0.07];
+    inset: -140px;
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2034.64%2060'%3E%3Cg%20fill='none'%20stroke='%23ffb627'%20stroke-width='0.7'%3E%3Cpath%20d='M17.32%20-20L34.64%20-10L34.64%2010L17.32%2020L0%2010L0%20-10Z'/%3E%3Cpath%20d='M17.32%2040L34.64%2050L34.64%2070L17.32%2080L0%2070L0%2050Z'/%3E%3Cpath%20d='M0%2010L17.32%2020L17.32%2040L0%2050L-17.32%2040L-17.32%2020Z'/%3E%3Cpath%20d='M34.64%2010L51.96%2020L51.96%2040L34.64%2050L17.32%2040L17.32%2020Z'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 48px 83.14px;
+    -webkit-mask-image: radial-gradient(75rem 55rem at 50% 0%, #000 10%, transparent 78%);
+    mask-image: radial-gradient(75rem 55rem at 50% 0%, #000 10%, transparent 78%);
+  }
+
+  /* Warm ambient light pooling at the top of the shell. */
+  .glow-field {
+    @apply pointer-events-none fixed inset-0 z-0;
+    background:
+      radial-gradient(58rem 34rem at 10% -8%, rgba(255, 182, 39, 0.16), transparent 68%),
+      radial-gradient(46rem 32rem at 92% 2%, rgba(217, 119, 6, 0.13), transparent 70%),
+      radial-gradient(60rem 42rem at 50% 108%, rgba(255, 209, 102, 0.06), transparent 72%);
   }
 
   .nav-shell {
-    @apply border-b border-slate-200/80 bg-white/90 backdrop-blur;
+    @apply sticky top-0 z-40 border-b border-white/5 bg-hive-950/80 backdrop-blur-xl;
   }
 
+  .footer-shell {
+    @apply relative z-10 mt-16 border-t border-white/5 bg-hive-950/60 backdrop-blur;
+  }
+
+  /* --------------------------------------------------------------- Shapes */
+
+  .hex {
+    clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
+  }
+
+  .hex-tile {
+    @apply hex grid place-items-center bg-gradient-to-br from-honey-200 via-honey-400 to-honey-600;
+  }
+
+  /* ---------------------------------------------------------------- Cards */
+
   .surface-card {
-    @apply rounded-2xl border border-slate-200/80 bg-white shadow-buzz;
+    @apply relative overflow-hidden rounded-3xl border border-white/[0.07] bg-hive-900/70 shadow-buzz backdrop-blur-xl;
+  }
+
+  /* Lit top edge — reads as light catching the rim of the card. */
+  .surface-card::before {
+    content: '';
+    @apply pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-honey-400/60 to-transparent;
   }
 
   .surface-card-soft {
-    @apply rounded-2xl border border-slate-200/80 bg-slate-50/90 shadow-sm;
+    @apply rounded-2xl border border-white/[0.06] bg-white/[0.02] shadow-hairline;
   }
 
+  .dashboard-item {
+    @apply rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 shadow-hairline transition duration-300 hover:border-honey-400/30 hover:bg-white/[0.04];
+  }
+
+  .metric-card {
+    @apply rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4;
+  }
+
+  .feature-card {
+    @apply relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 transition duration-300 hover:-translate-y-1 hover:border-honey-400/30 hover:shadow-honey;
+  }
+
+  /* ----------------------------------------------------------- Typography */
+
   .section-title {
-    @apply text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl;
+    @apply text-2xl font-semibold tracking-tight text-white sm:text-3xl;
+  }
+
+  .section-lead {
+    @apply text-sm leading-relaxed text-slate-400;
   }
 
   .eyebrow {
-    @apply inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700;
+    @apply inline-flex items-center gap-2 rounded-full border border-honey-400/25 bg-honey-400/10 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-honey-300;
   }
 
+  .honey-text {
+    @apply bg-gradient-to-br from-honey-200 via-honey-300 to-honey-500 bg-clip-text text-transparent;
+  }
+
+  /* ---------------------------------------------------------------- Forms */
+
   .field-label {
-    @apply mb-2 block text-sm font-medium text-slate-700;
+    @apply mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400;
   }
 
   .field-input {
-    @apply block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200;
+    @apply block w-full rounded-xl border border-white/10 bg-hive-850/80 px-4 py-3 text-sm text-slate-100 shadow-hairline outline-none transition duration-200 placeholder:text-slate-600 hover:border-white/20 focus:border-honey-400/70 focus:bg-hive-850 focus:ring-4 focus:ring-honey-400/15;
+  }
+
+  .field-input:read-only {
+    @apply text-slate-400;
   }
 
   .field-help {
     @apply mt-2 text-xs leading-5 text-slate-500;
   }
 
+  .field-check {
+    @apply mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-honey-400;
+  }
+
+  /* -------------------------------------------------------------- Buttons */
+
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-br from-honey-300 via-honey-400 to-honey-500 px-5 py-3 text-sm font-semibold text-hive-950 shadow-honey transition duration-200 hover:-translate-y-0.5 hover:shadow-honey-lg active:translate-y-0 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  /* Light sweeps across the button on hover. */
+  .btn-primary::after {
+    content: '';
+    @apply pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/45 to-transparent transition-transform duration-700;
+  }
+
+  .btn-primary:hover::after {
+    @apply translate-x-full;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:border-honey-400/40 hover:bg-white/[0.07] hover:text-white;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-slate-400 transition duration-200 hover:bg-white/5 hover:text-white;
   }
 
   .btn-danger {
-    @apply inline-flex items-center justify-center rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300 focus:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-300 transition duration-200 hover:border-rose-500/50 hover:bg-rose-500/20 hover:text-rose-200;
   }
 
+  /* ----------------------------------------------------------------- Tabs */
+
+  /* main.js rewrites className wholesale, so these two must stand alone. */
   .share-tab {
-    @apply rounded-full px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-white hover:text-slate-900;
+    @apply relative z-10 flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-400 transition duration-200 hover:text-slate-100 sm:flex-none;
   }
 
+  /* Applied together with .share-tab, so it has to win the hover colour too. */
   .share-tab-active {
-    @apply bg-white text-slate-950 shadow-sm ring-1 ring-slate-200;
+    @apply relative z-10 flex-1 rounded-lg bg-gradient-to-br from-honey-300 to-honey-500 px-4 py-2.5 text-sm font-semibold text-hive-950 shadow-honey transition duration-200 hover:text-hive-950 sm:flex-none;
   }
+
+  .tab-rail {
+    @apply flex gap-1 rounded-xl border border-white/[0.07] bg-hive-850/70 p-1;
+  }
+
+  /* --------------------------------------------------------------- Status */
 
   .status-badge {
-    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold;
+    @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold;
   }
 
   .status-badge-amber {
-    @apply bg-amber-50 text-amber-700 ring-1 ring-amber-200;
+    @apply border-honey-400/25 bg-honey-400/10 text-honey-300;
   }
 
   .status-badge-slate {
-    @apply bg-slate-100 text-slate-700 ring-1 ring-slate-200;
+    @apply border-white/10 bg-white/5 text-slate-300;
   }
 
   .status-badge-green {
-    @apply bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200;
+    @apply border-emerald-400/25 bg-emerald-400/10 text-emerald-300;
   }
 
   .status-badge-red {
-    @apply bg-rose-50 text-rose-700 ring-1 ring-rose-200;
+    @apply border-rose-400/25 bg-rose-400/10 text-rose-300;
   }
 
   .alert-banner {
-    @apply flex gap-3 rounded-2xl border px-4 py-4 text-sm shadow-sm;
+    @apply flex gap-3 rounded-2xl border px-4 py-4 text-sm;
   }
 
   .alert-banner-error {
-    @apply border-rose-200 bg-rose-50 text-rose-800;
+    @apply border-rose-400/25 bg-rose-500/10 text-rose-200;
+  }
+
+  .alert-banner-success {
+    @apply border-emerald-400/25 bg-emerald-500/10 text-emerald-200;
   }
 
   .alert-banner-warning {
-    @apply border-amber-200 bg-amber-50 text-amber-900;
+    @apply border-honey-400/25 bg-honey-400/10 text-honey-100;
   }
 
   .alert-banner-info {
-    @apply border-sky-200 bg-sky-50 text-sky-900;
+    @apply border-sky-400/20 bg-sky-400/10 text-sky-100;
   }
+
+  /* ------------------------------------------------------------- Dropzone */
 
   .dropzone {
-    @apply rounded-2xl border border-dashed border-amber-300 bg-gradient-to-br from-amber-50 via-white to-slate-50 p-8 text-center;
+    @apply relative cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed border-white/10 bg-hive-850/50 px-6 py-12 text-center transition duration-300 hover:border-honey-400/50 hover:bg-honey-400/[0.04];
   }
 
-  .metric-card {
-    @apply rounded-2xl border border-slate-200 bg-slate-50 p-4;
+  .dropzone-active {
+    @apply border-honey-400 bg-honey-400/[0.08] shadow-honey;
   }
+
+  .dropzone-active .dropzone-hint {
+    @apply text-honey-200;
+  }
+
+  /* Oversized honeycomb watermark inside the dropzone. */
+  .dropzone::after {
+    content: '';
+    @apply pointer-events-none absolute inset-0 opacity-[0.045] transition-opacity duration-300;
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2034.64%2060'%3E%3Cg%20fill='none'%20stroke='%23ffb627'%20stroke-width='1'%3E%3Cpath%20d='M17.32%20-20L34.64%20-10L34.64%2010L17.32%2020L0%2010L0%20-10Z'/%3E%3Cpath%20d='M17.32%2040L34.64%2050L34.64%2070L17.32%2080L0%2070L0%2050Z'/%3E%3Cpath%20d='M0%2010L17.32%2020L17.32%2040L0%2050L-17.32%2040L-17.32%2020Z'/%3E%3Cpath%20d='M34.64%2010L51.96%2020L51.96%2040L34.64%2050L17.32%2040L17.32%2020Z'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 72px 124.7px;
+  }
+
+  .dropzone-active::after {
+    @apply opacity-[0.14];
+  }
+
+  .file-chip {
+    @apply inline-flex max-w-full items-center gap-2 rounded-full border border-honey-400/30 bg-honey-400/10 px-4 py-2 text-sm font-medium text-honey-200;
+  }
+
+  /* -------------------------------------------------------------- Copying */
 
   .copy-field {
-    @apply flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center;
+    @apply flex flex-col gap-2 rounded-xl border border-white/[0.07] bg-hive-850/60 p-2 sm:flex-row sm:items-center;
   }
 
-  .dashboard-item {
-    @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-sm;
+  /* ------------------------------------------------------------- Progress */
+
+  .honey-track {
+    @apply h-2.5 w-full overflow-hidden rounded-full border border-white/5 bg-hive-800;
+  }
+
+  /* Honey pouring into the track: moving comb stripes over a warm gradient. */
+  .honey-bar {
+    @apply h-full animate-stripes rounded-full transition-[width] duration-300 ease-out;
+    background-image: linear-gradient(
+        115deg,
+        rgba(255, 255, 255, 0.3) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.3) 50%,
+        rgba(255, 255, 255, 0.3) 75%,
+        transparent 75%
+      ),
+      linear-gradient(90deg, #f59e0b, #ffd166, #ffb627);
+    background-size: 32px 100%, 100% 100%;
+  }
+
+  /* ----------------------------------------------------- Landing visuals */
+
+  /* Numbered hexagon used by the "how it works" rail. */
+  .hex-step {
+    @apply hex grid h-11 w-11 shrink-0 place-items-center bg-gradient-to-br from-honey-300 to-honey-600 text-sm font-bold text-hive-950;
+  }
+
+  /* Bee on patrol: rides the dashed orbit drawn in the hero SVG (r=150 @ 180,180). */
+  .bee-dot {
+    @apply absolute left-0 top-0 h-2.5 w-2.5 animate-bee-fly rounded-full bg-honey-300 shadow-honey;
+    offset-path: path('M 180 30 A 150 150 0 1 0 180 330 A 150 150 0 1 0 180 30');
+    offset-rotate: 0deg;
+  }
+
+  /* The logo artwork bakes in a dark wordmark below the bee; fade it out rather
+     than hard-cropping, so the illustration has no visible cut line. */
+  .logo-crop {
+    -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 97%);
+    mask-image: linear-gradient(to bottom, #000 78%, transparent 97%);
+  }
+
+  .stat-chip {
+    @apply inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-300;
+  }
+}
+
+@layer utilities {
+  /* Staggered entrances — pair with .animate-fade-up / .animate-zoom-in. */
+  .delay-1 {
+    animation-delay: 80ms;
+  }
+
+  .delay-2 {
+    animation-delay: 160ms;
+  }
+
+  .delay-3 {
+    animation-delay: 240ms;
+  }
+
+  .delay-4 {
+    animation-delay: 320ms;
+  }
+
+  .delay-5 {
+    animation-delay: 400ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .btn-primary:hover,
+  .feature-card:hover {
+    transform: none;
   }
 }

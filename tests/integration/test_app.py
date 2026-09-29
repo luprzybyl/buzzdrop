@@ -34,18 +34,18 @@ def test_index_anonymous_user(client, app):
     assert response.status_code == 200
     # Anonymous visitors should see the marketing landing page, not the upload UI.
     assert b'Share Your File' not in response.data
-    assert b'Buzzdrop: file sharing that stings\xe2\x80\x94just once.' in response.data
+    assert b'File sharing that stings' in response.data
     assert b'BuzzDrop: secure, one-time file sharing.' in response.data
-    assert b'Star Buzzdrop on GitHub' in response.data
+    assert b'Read the code. Then trust it.' in response.data
     assert b'Open Buzzdrop on GitHub' in response.data
     assert b'Login to start sharing' not in response.data
     assert b'View on GitHub' not in response.data
     assert b'https://github.com/luprzybyl/buzzdrop' in response.data
     assert b'https://github.com/luprzybyl/buzzdrop/blob/main/README.md' in response.data
     assert b'aria-label="Open Buzzdrop on GitHub (opens in new tab)"' in response.data
-    assert b'Read the Buzzdrop README on GitHub' in response.data
+    assert b'Read the Buzzdrop README on GitHub (opens in new tab)' in response.data
     assert b'Login' in response.data # Login link in header
-    assert b'Your Shared Files' not in response.data # Should not see this section title
+    assert b'Your drops' not in response.data # Should not see this section title
     assert b'/static/css/app.css' in response.data
     assert b'cdn.jsdelivr.net/npm/@tailwindcss/browser' not in response.data
 
@@ -58,14 +58,14 @@ def test_index_logged_in_user_no_files(client, app, db_instance):
     login_user(client, 'testuser', 'password')
     response = client.get(url_for('index'))
     assert response.status_code == 200
-    assert b'Welcome, testuser' in response.data
-    assert b'Share Securely' in response.data # Title for upload form
+    assert b'testuser' in response.data # Username badge in the header
+    assert b'Share Text Note' in response.data # Composer tab, only on the upload form
     assert b'id="shared-password"' in response.data
     assert b'id="note-password"' not in response.data
     assert b'id="note-expiry"' not in response.data
     # Check that "Your Shared Files" section is not present if no files
     # The template has: {% if session.get('username') and user_files %}
-    assert b'Your Shared Files' not in response.data
+    assert b'Your drops' not in response.data
     # And no shared files section means no "No files shared with you" text either.
     # Also, no "No files uploaded yet" text because the section itself is conditional.
 
@@ -91,7 +91,7 @@ def test_index_logged_in_user_with_own_files(client, app, files_table):
 
     response = client.get(url_for('index'))
     assert response.status_code == 200
-    assert b'Your Shared Files' in response.data # This section title should now appear
+    assert b'Your drops' in response.data # This section title should now appear
     assert b'my_document.txt' in response.data
     assert b'id="shared-files-search"' in response.data
     assert b'id="shared-files-sort"' in response.data
@@ -178,7 +178,7 @@ def test_index_logged_in_user_with_shared_files(client, app, files_table):
     assert b'shared_document.pdf' not in response.data
     assert b'(by adminuser)' not in response.data
     # Check that user's own files section (if they had any) would still be there or absent if none.
-    assert b'Your Shared Files' not in response.data # Assuming testuser has no files of their own here
+    assert b'Your drops' not in response.data # Assuming testuser has no files of their own here
 
 def test_manage_users_page_for_admin(client, app, db_instance):
     login_user(client, 'adminuser', 'adminpass')
@@ -189,8 +189,8 @@ def test_manage_users_page_for_admin(client, app, db_instance):
 
     response = client.get(url_for('manage_users'))
     assert response.status_code == 200
-    assert b'User Management' in response.data # Page title from users.html
-    assert b'Active API Tokens' in response.data
+    assert b'User management' in response.data # Page title from users.html
+    assert b'Active API tokens' in response.data
     assert b'Revoke' in response.data
     assert b'name="csrf_token"' in response.data
 
