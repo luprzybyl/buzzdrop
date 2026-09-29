@@ -233,16 +233,26 @@
             </div>
             <span class="status-badge status-badge-slate">{{ user_files|length }} active or historical drops</span>
         </div>
-        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <label class="block sm:max-w-xs sm:flex-1">
-                <span class="field-label mb-1">Quick search</span>
-                <input id="shared-files-search" type="search" class="field-input py-2.5" placeholder="Search by name, note, or status">
-            </label>
+        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label class="block sm:w-72">
+                    <span class="field-label mb-1">Quick search</span>
+                    <input id="shared-files-search" type="search" class="field-input py-2.5" placeholder="Search by name, note, or status">
+                </label>
+                <label class="block sm:w-56">
+                    <span class="field-label mb-1">Sort by</span>
+                    <select id="shared-files-sort" class="field-input py-2.5">
+                        <option value="downloaded:desc" selected>Downloaded (newest first)</option>
+                        <option value="uploaded:desc">Uploaded (newest first)</option>
+                        <option value="expiry:asc">Expiry (soonest first)</option>
+                    </select>
+                </label>
+            </div>
             <div id="shared-files-summary" class="text-sm text-slate-500"></div>
         </div>
         <div id="shared-files-list" class="mt-4 space-y-3" data-page-size="5">
             {% for file in user_files %}
-            <article class="dashboard-item shared-file-row" data-search-text="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.status ~ ' ' ~ file.status_display ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or '') ~ ' ' ~ (file.downloaded_by_ip or ''))|lower }}">
+            <article class="dashboard-item shared-file-row" data-uploaded-at="{{ file.created_at or '' }}" data-expiry-at="{{ file.expiry_at or '' }}" data-downloaded-at="{{ file.downloaded_at or '' }}" data-search-text="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.status ~ ' ' ~ file.status_display ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or '') ~ ' ' ~ (file.downloaded_by_ip or ''))|lower }}">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
                         <div>

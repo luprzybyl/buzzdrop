@@ -35,7 +35,7 @@ def test_index_page_has_sri_for_main_js(client):
     assert re.search(pattern, html), "main.js script tag should have correct SRI attributes"
 
 
-def test_view_page_has_sri_for_view_js(client, db_instance, files_table):
+def test_view_page_has_sri_for_view_js(client, db_instance, files_table, csrf_form_data):
     """Test that view page includes SRI integrity check for view.js."""
     # Login first
     with client.session_transaction() as sess:
@@ -56,7 +56,11 @@ def test_view_page_has_sri_for_view_js(client, db_instance, files_table):
     file_id = file_info['id']
     
     # Visit the confirm view page (this renders view.html)
-    response = client.post(f'/view/{file_id}/confirm', follow_redirects=False)
+    response = client.post(
+        f'/view/{file_id}/confirm',
+        data=csrf_form_data(),
+        follow_redirects=False,
+    )
     assert response.status_code == 200
     
     html = response.data.decode('utf-8')
