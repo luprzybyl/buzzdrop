@@ -248,13 +248,14 @@ document.querySelectorAll('.copy-url').forEach(el => {
 function initializeSharedFilesList() {
     const list = document.getElementById('shared-files-list');
     const searchInput = document.getElementById('shared-files-search');
+    const sortInput = document.getElementById('shared-files-sort');
     const emptyState = document.getElementById('shared-files-empty-state');
     const summary = document.getElementById('shared-files-summary');
     const pageLabel = document.getElementById('shared-files-page');
     const prevButton = document.getElementById('shared-files-prev');
     const nextButton = document.getElementById('shared-files-next');
 
-    if (!list || !searchInput || !emptyState || !summary || !pageLabel || !prevButton || !nextButton) {
+    if (!list || !searchInput || !sortInput || !emptyState || !summary || !pageLabel || !prevButton || !nextButton) {
         return;
     }
 
@@ -268,7 +269,26 @@ function initializeSharedFilesList() {
 
     const render = () => {
         const searchTerm = searchInput.value.trim().toLowerCase();
-        const filteredRows = rows.filter((row) => row.dataset.searchText.includes(searchTerm));
+        const [sortField, sortDirection] = sortInput.value.split(':');
+        const timestampField = {
+            uploaded: 'uploadedAt',
+            expiry: 'expiryAt',
+            downloaded: 'downloadedAt'
+        }[sortField];
+        const sortMultiplier = sortDirection === 'desc' ? -1 : 1;
+        const sortedRows = rows.sort((a, b) => {
+            const aTimestamp = a.dataset[timestampField] || '';
+            const bTimestamp = b.dataset[timestampField] || '';
+            if (!aTimestamp || !bTimestamp) {
+                return aTimestamp ? -1 : bTimestamp ? 1 : 0;
+            }
+            if (aTimestamp === bTimestamp) {
+                return 0;
+            }
+            return (aTimestamp < bTimestamp ? -1 : 1) * sortMultiplier;
+        });
+        sortedRows.forEach((row) => list.appendChild(row));
+        const filteredRows = sortedRows.filter((row) => row.dataset.searchText.includes(searchTerm));
         const totalResults = filteredRows.length;
         const totalPages = Math.max(Math.ceil(totalResults / pageSize), 1);
 
@@ -302,6 +322,11 @@ function initializeSharedFilesList() {
     };
 
     searchInput.addEventListener('input', () => {
+        currentPage = 1;
+        render();
+    });
+
+    sortInput.addEventListener('change', () => {
         currentPage = 1;
         render();
     });
