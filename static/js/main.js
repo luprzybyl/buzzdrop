@@ -1,5 +1,6 @@
 // Import CryptoService for encryption
 import { CryptoService } from './crypto.js';
+import { buildSharedFilesUrl, getSharedFilesPage } from './shared-files.mjs';
 
 const cryptoService = new CryptoService();
 let activeShareMode = 'file';
@@ -265,10 +266,11 @@ function initializeSharedFilesList() {
     }
 
     const pageSize = Math.max(parseInt(list.dataset.pageSize || '5', 10), 1);
-    let currentPage = 1;
+    const params = new URLSearchParams(window.location.search);
+    searchInput.value = params.get('shared_search') || '';
+    let currentPage = Math.max(parseInt(params.get('shared_page'), 10) || 1, 1);
 
     const render = () => {
-        const searchTerm = searchInput.value.trim().toLowerCase();
         const [sortField, sortDirection] = sortInput.value.split(':');
         const timestampField = {
             uploaded: 'uploadedAt',
@@ -276,7 +278,7 @@ function initializeSharedFilesList() {
             downloaded: 'downloadedAt'
         }[sortField];
         const sortMultiplier = sortDirection === 'desc' ? -1 : 1;
-        const sortedRows = rows.sort((a, b) => {
+        const sortedRows = [...rows].sort((a, b) => {
             const aTimestamp = a.dataset[timestampField] || '';
             const bTimestamp = b.dataset[timestampField] || '';
             if (!aTimestamp || !bTimestamp) {
@@ -288,22 +290,15 @@ function initializeSharedFilesList() {
             return (aTimestamp < bTimestamp ? -1 : 1) * sortMultiplier;
         });
         sortedRows.forEach((row) => list.appendChild(row));
-        const filteredRows = sortedRows.filter((row) => row.dataset.searchText.includes(searchTerm));
-        const totalResults = filteredRows.length;
-        const totalPages = Math.max(Math.ceil(totalResults / pageSize), 1);
-
-        if (currentPage > totalPages) {
-            currentPage = totalPages;
-        }
-
-        const startIndex = (currentPage - 1) * pageSize;
-        const endIndex = startIndex + pageSize;
+        const page = getSharedFilesPage(sortedRows, searchInput.value, pageSize, currentPage);
+        const totalResults = page.filteredRows.length;
+        currentPage = page.currentPage;
 
         rows.forEach((row) => {
             row.style.display = 'none';
         });
 
-        filteredRows.slice(startIndex, endIndex).forEach((row) => {
+        page.visibleRows.forEach((row) => {
             row.style.display = '';
         });
 
@@ -313,17 +308,75 @@ function initializeSharedFilesList() {
             summary.textContent = 'No matching drops';
         } else {
             emptyState.style.display = 'none';
-            pageLabel.textContent = `Page ${currentPage} of ${totalPages}`;
-            summary.textContent = `Showing ${startIndex + 1}-${Math.min(endIndex, totalResults)} of ${totalResults} drops`;
+            pageLabel.textContent = `Page ${currentPage} of ${page.totalPages}`;
+            summary.textContent = `Showing ${page.startIndex + 1}-${Math.min(page.startIndex + pageSize, totalResults)} of ${totalResults} drops`;
         }
 
         prevButton.disabled = currentPage <= 1 || totalResults === 0;
-        nextButton.disabled = currentPage >= totalPages || totalResults === 0;
+        nextButton.disabled = currentPage >= page.totalPages || totalResults === 0;
+        return page;
+    };
+
+    const refreshStatuses = async (pageRows) => {
+        const statusUrl = list.dataset.statusUrl;
+        if (!statusUrl || pageRows.length === 0) {
+            return;
+        }
+
+        const params = new URLSearchParams();
+        pageRows.forEach((row) => params.append('id', row.dataset.fileId));
+
+        try {
+            const response = await fetch(`${statusUrl}?${params}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!response.ok) {
+                return;
+            }
+            const { files } = await response.json();
+            let updated = false;
+            files.forEach((file) => {
+                const row = rows.find((item) => item.dataset.fileId === file.id);
+                if (!row) {
+                    return;
+                }
+                const downloadedAt = row.querySelector('[data-file-downloaded-at]');
+                const downloadedBy = row.querySelector('[data-file-downloaded-by]');
+                const statusBadge = row.querySelector('[data-file-status]');
+                downloadedAt.textContent = file.downloaded_at || 'No';
+                downloadedBy.textContent = file.downloaded_by_ip || '-';
+                row.dataset.downloadedAt = file.downloaded_at || '';
+                statusBadge.textContent = file.status_display || 'Active';
+                statusBadge.classList.remove('status-badge-green', 'status-badge-red', 'status-badge-amber');
+                statusBadge.classList.add(file.downloaded_at
+                    ? 'status-badge-green'
+                    : file.status === 'expired'
+                        ? 'status-badge-red'
+                        : 'status-badge-amber');
+                row.dataset.searchText = `${row.dataset.searchBase} ${file.status} ${file.status_display} ${file.downloaded_by_ip || ''}`.toLowerCase();
+                updated = true;
+            });
+            if (updated) {
+                render();
+                window.history.replaceState(
+                    window.history.state,
+                    '',
+                    buildSharedFilesUrl(window.location.href, currentPage, searchInput.value),
+                );
+            }
+        } catch {
+            return;
+        }
     };
 
     searchInput.addEventListener('input', () => {
         currentPage = 1;
         render();
+        window.history.replaceState(
+            window.history.state,
+            '',
+            buildSharedFilesUrl(window.location.href, currentPage, searchInput.value),
+        );
     });
 
     sortInput.addEventListener('change', () => {
@@ -334,17 +387,27 @@ function initializeSharedFilesList() {
     prevButton.addEventListener('click', () => {
         if (currentPage > 1) {
             currentPage -= 1;
-            render();
+            const page = render();
+            window.history.replaceState(
+                window.history.state,
+                '',
+                buildSharedFilesUrl(window.location.href, currentPage, searchInput.value),
+            );
+            refreshStatuses(page.visibleRows);
         }
     });
 
     nextButton.addEventListener('click', () => {
-        const searchTerm = searchInput.value.trim().toLowerCase();
-        const filteredRows = rows.filter((row) => row.dataset.searchText.includes(searchTerm));
-        const totalPages = Math.max(Math.ceil(filteredRows.length / pageSize), 1);
-        if (currentPage < totalPages) {
+        const page = render();
+        if (currentPage < page.totalPages) {
             currentPage += 1;
-            render();
+            const nextPage = render();
+            window.history.replaceState(
+                window.history.state,
+                '',
+                buildSharedFilesUrl(window.location.href, currentPage, searchInput.value),
+            );
+            refreshStatuses(nextPage.visibleRows);
         }
     });
 

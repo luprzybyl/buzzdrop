@@ -101,7 +101,41 @@ def test_index_logged_in_user_with_own_files(client, app, files_table):
     assert b'data-downloaded-at=' in response.data
     assert b'id="shared-files-prev"' in response.data
     assert b'id="shared-files-next"' in response.data
+    assert response.headers['Cache-Control'] == 'no-store'
     # The "Shared With Me" section is missing in the template, so no assertions for it or its placeholders.
+
+def test_user_file_status_endpoint_returns_only_owned_file_statuses(client, app, files_table):
+    login_user(client, 'testuser', 'password')
+    for index in range(6):
+        files_table.insert({
+            'id': f'file-{index}',
+            'original_name': f'file-{index}.txt',
+            'path': f'/fake/file-{index}',
+            'uploaded_by': 'testuser',
+            'created_at': '2025-01-01T12:00:00',
+            'downloaded_at': None,
+            'status': 'active',
+        })
+
+    files_table.update({'downloaded_at': '2025-01-02T12:00:00'}, Query().id == 'file-5')
+    files_table.insert({
+        'id': 'another-users-file',
+        'uploaded_by': 'adminuser',
+        'status': 'active',
+    })
+
+    response = client.get(url_for('user_file_statuses', id=['file-5', 'another-users-file']))
+
+    assert response.status_code == 200
+    assert response.headers['Cache-Control'] == 'no-store'
+    status = response.json['files'][0]
+    assert status == {
+        'id': 'file-5',
+        'status': 'active',
+        'status_display': '',
+        'downloaded_at': '2025-01-02 12:00:00 CET',
+        'downloaded_by_ip': None,
+    }
 
 def test_index_logged_in_user_sees_own_private_note(client, app, files_table):
     login_user(client, 'testuser', 'password')
