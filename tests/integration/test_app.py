@@ -99,7 +99,7 @@ def test_index_logged_in_user_with_own_files(client, app, files_table):
     assert response.headers['Cache-Control'] == 'no-store'
     # The "Shared With Me" section is missing in the template, so no assertions for it or its placeholders.
 
-def test_index_page_navigation_reads_updated_file_status(client, app, files_table):
+def test_user_file_status_endpoint_returns_only_owned_file_statuses(client, app, files_table):
     login_user(client, 'testuser', 'password')
     for index in range(6):
         files_table.insert({
@@ -112,17 +112,25 @@ def test_index_page_navigation_reads_updated_file_status(client, app, files_tabl
             'status': 'active',
         })
 
-    before = client.get(url_for('index'))
-    assert b'file-5.txt' in before.data
-    assert b'Downloaded:</span> No' in before.data.split(b'>file-5.txt</a>')[1].split(b'</article>')[0]
-
     files_table.update({'downloaded_at': '2025-01-02T12:00:00'}, Query().id == 'file-5')
-    after = client.get(url_for('index', shared_page=2))
+    files_table.insert({
+        'id': 'another-users-file',
+        'uploaded_by': 'adminuser',
+        'status': 'active',
+    })
 
-    target_row = after.data.split(b'>file-5.txt</a>')[1].split(b'</article>')[0]
-    assert b'Downloaded:</span> No' not in target_row
-    assert b'status-badge-green' in target_row
-    assert after.headers['Cache-Control'] == 'no-store'
+    response = client.get(url_for('user_file_statuses', id=['file-5', 'another-users-file']))
+
+    assert response.status_code == 200
+    assert response.headers['Cache-Control'] == 'no-store'
+    status = response.json['files'][0]
+    assert status == {
+        'id': 'file-5',
+        'status': 'active',
+        'status_display': '',
+        'downloaded_at': '2025-01-02 12:00:00 CET',
+        'downloaded_by_ip': None,
+    }
 
 def test_index_logged_in_user_sees_own_private_note(client, app, files_table):
     login_user(client, 'testuser', 'password')

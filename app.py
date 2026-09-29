@@ -432,6 +432,35 @@ def index():
         max_content_length=current_app.config.get('MAX_CONTENT_LENGTH'),
     )
 
+@app.route('/api/user/files/status', methods=['GET'])
+@login_required
+def user_file_statuses():
+    requested_ids = list(dict.fromkeys(request.args.getlist('id')))
+    if len(requested_ids) > 50:
+        return {'error': 'Too many file IDs'}, 400
+
+    current_user = get_current_user()
+    query = Query()
+    files = file_repo.table.search(
+        (query.uploaded_by == current_user['username']) &
+        query.id.one_of(requested_ids)
+    )
+    statuses = []
+    for file_info in files:
+        check_and_handle_expiry(file_info)
+        enhance_file_display(file_info)
+        statuses.append({
+            'id': file_info['id'],
+            'status': file_info.get('status', 'active'),
+            'status_display': file_info.get('status_display', ''),
+            'downloaded_at': file_info.get('downloaded_at'),
+            'downloaded_by_ip': file_info.get('downloaded_by_ip'),
+        })
+
+    response = make_response({'files': statuses})
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit(
     lambda: current_app.config['LOGIN_RATE_LIMIT'],
