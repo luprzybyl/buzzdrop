@@ -28,7 +28,7 @@ function showFileUpload() {
     document.getElementById('text-note-section').style.display = 'none';
     document.getElementById('file-tab').className = 'share-tab share-tab-active';
     document.getElementById('text-tab').className = 'share-tab';
-    setShareAction('Upload File');
+    setShareAction('Share file');
 }
 
 function showTextNote() {
@@ -37,7 +37,7 @@ function showTextNote() {
     document.getElementById('text-note-section').style.display = 'block';
     document.getElementById('file-tab').className = 'share-tab';
     document.getElementById('text-tab').className = 'share-tab share-tab-active';
-    setShareAction('Share Text Note');
+    setShareAction('Share note');
 }
 
 // Make functions globally accessible for inline onclick handlers

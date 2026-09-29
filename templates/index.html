@@ -19,12 +19,13 @@
     </header>
 
     <div class="surface-card animate-fade-up delay-1 p-6 sm:p-8">
+        <span class="field-label">What are you sending?</span>
         <div class="tab-rail sm:inline-flex">
             <button id="file-tab" onclick="showFileUpload()" class="share-tab share-tab-active">
-                Upload File
+                File
             </button>
             <button id="text-tab" onclick="showTextNote()" class="share-tab">
-                Share Text Note
+                Text note
             </button>
         </div>
 
@@ -120,10 +121,10 @@
                         <p class="font-semibold text-white">One-time buzz</p>
                         <p class="mt-1 text-slate-400">Stored as ciphertext only, destroyed after the first successful open.</p>
                     </div>
-                    <button id="share-action-btn" type="button" aria-label="Upload file" class="btn-primary w-full shrink-0 sm:w-auto">
-                        <span id="share-action-label" class="relative z-10">Upload File</span>
+                    <button id="share-action-btn" type="button" aria-label="Share file" class="btn-primary w-full shrink-0 sm:w-auto">
+                        <span id="share-action-label" class="relative z-10">Share file</span>
                         <svg class="relative z-10 h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 0 1 1.414 0l5 5a1 1 0 0 1-1.414 1.414L11 5.414V17a1 1 0 1 1-2 0V5.414L4.707 9.707a1 1 0 0 1-1.414-1.414l5-5Z" clip-rule="evenodd"/>
+                            <path fill-rule="evenodd" d="M3 10a1 1 0 0 1 1-1h9.586L9.293 4.707a1 1 0 0 1 1.414-1.414l6 6a1 1 0 0 1 0 1.414l-6 6a1 1 0 0 1-1.414-1.414L13.586 11H4a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
                         </svg>
                     </button>
                 </div>

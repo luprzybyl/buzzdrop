@@ -59,7 +59,7 @@ def test_index_logged_in_user_no_files(client, app, db_instance):
     response = client.get(url_for('index'))
     assert response.status_code == 200
     assert b'testuser' in response.data # Username badge in the header
-    assert b'Share Text Note' in response.data # Composer tab, only on the upload form
+    assert b'What are you sending?' in response.data # Composer, only on the upload form
     assert b'id="shared-password"' in response.data
     assert b'id="note-password"' not in response.data
     assert b'id="note-expiry"' not in response.data
