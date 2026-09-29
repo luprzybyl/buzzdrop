@@ -10,6 +10,7 @@ from io import BytesIO
 from flask import (
     Flask,
     g,
+    make_response,
     request,
     render_template,
     send_from_directory,
@@ -414,14 +415,16 @@ def index():
         # Get files shared with the current user
         shared_files = file_repo.get_shared_files(username)
         
-        return render_template(
+        response = make_response(render_template(
             'index.html', 
             user_files=user_files, 
             shared_files=shared_files,
             allowed_extensions=list(current_app.config.get('ALLOWED_EXTENSIONS')),
             max_content_length=current_app.config.get('MAX_CONTENT_LENGTH'),
             configured_notification_email=current_user.get('email'),
-        )
+        ))
+        response.headers['Cache-Control'] = 'no-store'
+        return response
     
     return render_template(
         'index.html',

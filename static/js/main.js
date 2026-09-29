@@ -264,7 +264,24 @@ function initializeSharedFilesList() {
     }
 
     const pageSize = Math.max(parseInt(list.dataset.pageSize || '5', 10), 1);
-    let currentPage = 1;
+    const params = new URLSearchParams(window.location.search);
+    searchInput.value = params.get('shared_search') || '';
+    let currentPage = Math.max(parseInt(params.get('shared_page'), 10) || 1, 1);
+
+    const pageUrl = (page) => {
+        const url = new URL(window.location.href);
+        if (page > 1) {
+            url.searchParams.set('shared_page', page);
+        } else {
+            url.searchParams.delete('shared_page');
+        }
+        if (searchInput.value.trim()) {
+            url.searchParams.set('shared_search', searchInput.value.trim());
+        } else {
+            url.searchParams.delete('shared_search');
+        }
+        return url;
+    };
 
     const render = () => {
         const searchTerm = searchInput.value.trim().toLowerCase();
@@ -304,12 +321,12 @@ function initializeSharedFilesList() {
     searchInput.addEventListener('input', () => {
         currentPage = 1;
         render();
+        window.history.replaceState(window.history.state, '', pageUrl(currentPage));
     });
 
     prevButton.addEventListener('click', () => {
         if (currentPage > 1) {
-            currentPage -= 1;
-            render();
+            window.location.assign(pageUrl(currentPage - 1));
         }
     });
 
@@ -318,8 +335,7 @@ function initializeSharedFilesList() {
         const filteredRows = rows.filter((row) => row.dataset.searchText.includes(searchTerm));
         const totalPages = Math.max(Math.ceil(filteredRows.length / pageSize), 1);
         if (currentPage < totalPages) {
-            currentPage += 1;
-            render();
+            window.location.assign(pageUrl(currentPage + 1));
         }
     });
 
