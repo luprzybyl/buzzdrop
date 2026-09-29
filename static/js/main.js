@@ -249,13 +249,14 @@ document.querySelectorAll('.copy-url').forEach(el => {
 function initializeSharedFilesList() {
     const list = document.getElementById('shared-files-list');
     const searchInput = document.getElementById('shared-files-search');
+    const sortInput = document.getElementById('shared-files-sort');
     const emptyState = document.getElementById('shared-files-empty-state');
     const summary = document.getElementById('shared-files-summary');
     const pageLabel = document.getElementById('shared-files-page');
     const prevButton = document.getElementById('shared-files-prev');
     const nextButton = document.getElementById('shared-files-next');
 
-    if (!list || !searchInput || !emptyState || !summary || !pageLabel || !prevButton || !nextButton) {
+    if (!list || !searchInput || !sortInput || !emptyState || !summary || !pageLabel || !prevButton || !nextButton) {
         return;
     }
 
@@ -270,7 +271,26 @@ function initializeSharedFilesList() {
     let currentPage = Math.max(parseInt(params.get('shared_page'), 10) || 1, 1);
 
     const render = () => {
-        const page = getSharedFilesPage(rows, searchInput.value, pageSize, currentPage);
+        const [sortField, sortDirection] = sortInput.value.split(':');
+        const timestampField = {
+            uploaded: 'uploadedAt',
+            expiry: 'expiryAt',
+            downloaded: 'downloadedAt'
+        }[sortField];
+        const sortMultiplier = sortDirection === 'desc' ? -1 : 1;
+        const sortedRows = [...rows].sort((a, b) => {
+            const aTimestamp = a.dataset[timestampField] || '';
+            const bTimestamp = b.dataset[timestampField] || '';
+            if (!aTimestamp || !bTimestamp) {
+                return aTimestamp ? -1 : bTimestamp ? 1 : 0;
+            }
+            if (aTimestamp === bTimestamp) {
+                return 0;
+            }
+            return (aTimestamp < bTimestamp ? -1 : 1) * sortMultiplier;
+        });
+        sortedRows.forEach((row) => list.appendChild(row));
+        const page = getSharedFilesPage(sortedRows, searchInput.value, pageSize, currentPage);
         const totalResults = page.filteredRows.length;
         currentPage = page.currentPage;
 
@@ -325,6 +345,7 @@ function initializeSharedFilesList() {
                 const statusBadge = row.querySelector('[data-file-status]');
                 downloadedAt.textContent = file.downloaded_at || 'No';
                 downloadedBy.textContent = file.downloaded_by_ip || '-';
+                row.dataset.downloadedAt = file.downloaded_at || '';
                 statusBadge.textContent = file.status_display || 'Active';
                 statusBadge.classList.remove('status-badge-green', 'status-badge-red', 'status-badge-amber');
                 statusBadge.classList.add(file.downloaded_at
@@ -358,6 +379,11 @@ function initializeSharedFilesList() {
         );
     });
 
+    sortInput.addEventListener('change', () => {
+        currentPage = 1;
+        render();
+    });
+
     prevButton.addEventListener('click', () => {
         if (currentPage > 1) {
             currentPage -= 1;
@@ -372,7 +398,7 @@ function initializeSharedFilesList() {
     });
 
     nextButton.addEventListener('click', () => {
-        const page = getSharedFilesPage(rows, searchInput.value, pageSize, currentPage);
+        const page = render();
         if (currentPage < page.totalPages) {
             currentPage += 1;
             const nextPage = render();
