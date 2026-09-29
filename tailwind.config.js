@@ -63,27 +63,13 @@ module.exports = {
           '0%': { opacity: '0', transform: 'scale(0.94)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
         },
-        bob: {
-          '0%, 100%': { transform: 'translateY(-5px)' },
-          '50%': { transform: 'translateY(5px)' },
-        },
         drift: {
           '0%': { transform: 'translate3d(0, 0, 0)' },
           '100%': { transform: 'translate3d(-48px, -83.14px, 0)' },
         },
-        'cell-pulse': {
-          '0%, 100%': { opacity: '0.4' },
-          '50%': { opacity: '0.95' },
-        },
         stripes: {
           '0%': { backgroundPosition: '0 0' },
           '100%': { backgroundPosition: '32px 0' },
-        },
-        'bee-fly': {
-          '0%': { offsetDistance: '0%', opacity: '0' },
-          '8%': { opacity: '1' },
-          '92%': { opacity: '1' },
-          '100%': { offsetDistance: '100%', opacity: '0' },
         },
         'draw-in': {
           '0%': { strokeDashoffset: '48' },
@@ -97,11 +83,8 @@ module.exports = {
       animation: {
         'fade-up': 'fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both',
         'zoom-in': 'zoom-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both',
-        bob: 'bob 7s ease-in-out infinite',
         drift: 'drift 70s linear infinite',
-        'cell-pulse': 'cell-pulse 4s ease-in-out infinite',
         stripes: 'stripes 0.9s linear infinite',
-        'bee-fly': 'bee-fly 14s cubic-bezier(0.45, 0, 0.55, 1) infinite',
         'draw-in': 'draw-in 0.8s ease-out 0.25s both',
         'halo-pulse': 'halo-pulse 5s ease-in-out infinite',
       },

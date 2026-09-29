@@ -12,10 +12,10 @@
         <h1 class="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
             Make it <span class="honey-text">buzz</span>, then vanish.
         </h1>
-        <p class="max-w-2xl text-sm leading-relaxed text-slate-400">
-            Encrypt a file or a secret note in your browser, send one link, and let the drop delete itself
+        <h2 class="max-w-2xl text-sm leading-relaxed text-slate-400">
+            <strong>Encrypt a file or a secret note in your browser</strong>, send one link, and let the drop delete itself
             the moment it is opened. The server only ever holds ciphertext.
-        </p>
+         </h2>
     </header>
 
     <div class="surface-card animate-fade-up delay-1 p-6 sm:p-8">
@@ -149,10 +149,11 @@
             <h1 class="text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl">
                 File sharing that stings&nbsp;— <span class="honey-text">just once.</span>
             </h1>
-            <p class="max-w-xl text-lg leading-relaxed text-slate-400">
-                Encrypt files and secret notes in your browser, send a single link, and watch the drop
-                disappear the moment it is opened. No plaintext ever reaches the server.
-            </p>
+            <h2 class="max-w-xl text-lg leading-relaxed text-slate-400">
+                <strong class="text-honey-400">Encrypt files and secret notes in your browser</strong>, send a single link, and watch the drop
+                disappear the moment it is opened.<br />
+                No plaintext ever reaches the server.
+            </h2>
             <div class="flex flex-wrap items-center gap-3">
                 <a href="{{ url_for('login') }}" class="btn-primary">
                     <span class="relative z-10">Enter the hive</span>
@@ -175,37 +176,115 @@
             </div>
         </div>
 
-        {# Decorative hive: logo orbited by comb cells, with a bee on patrol. #}
-        <div class="animate-zoom-in delay-2 flex justify-center">
-            <div class="relative h-[360px] w-[360px] max-w-full">
-                <svg viewBox="0 0 360 360" class="absolute inset-0 h-full w-full" aria-hidden="true">
-                    <circle cx="180" cy="180" r="150" fill="none" stroke="#FFB627" stroke-opacity=".22" stroke-width="1" stroke-dasharray="3 11"/>
-                    <circle cx="180" cy="180" r="112" fill="url(#hive-core)"/>
-                    <defs>
-                        <radialGradient id="hive-core">
-                            <stop offset="0%" stop-color="#FFB627" stop-opacity=".22"/>
-                            <stop offset="100%" stop-color="#FFB627" stop-opacity="0"/>
-                        </radialGradient>
-                        <linearGradient id="cell-fill" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0%" stop-color="#FFD166"/>
-                            <stop offset="100%" stop-color="#D97706"/>
-                        </linearGradient>
-                    </defs>
-                    <g fill="url(#cell-fill)" stroke="#FFD166" stroke-opacity=".55" stroke-width="1.2">
-                        <path class="animate-cell-pulse" d="M310 150 284 165v30l26 15 26-15v-30z"/>
-                        <path class="animate-cell-pulse delay-1" d="M245 37.4 219 52.4v30l26 15 26-15v-30z"/>
-                        <path class="animate-cell-pulse delay-2" d="M115 37.4 89 52.4v30l26 15 26-15v-30z"/>
-                        <path class="animate-cell-pulse delay-3" d="M50 150 24 165v30l26 15 26-15v-30z"/>
-                        <path class="animate-cell-pulse delay-4" d="M115 262.6 89 277.6v30l26 15 26-15v-30z"/>
-                        <path class="animate-cell-pulse delay-5" d="M245 262.6 219 277.6v30l26 15 26-15v-30z"/>
-                    </g>
-                </svg>
-                <span class="bee-dot" aria-hidden="true"></span>
-                {# The logo asset bakes in a dark wordmark that disappears on this background,
-                   so only the bee illustration (the top ~2/3 of the artwork) is shown. #}
-                <div class="logo-crop absolute left-1/2 top-1/2 h-[200px] w-[300px] max-w-full -translate-x-1/2 -translate-y-1/2 overflow-hidden">
-                    <img src="{{ url_for('static', filename='logo.png') }}" alt="Buzzdrop bee logo"
-                         class="h-[300px] w-[300px] animate-bob object-contain"/>
+        {# Hero walkthrough: the six stages a drop goes through, cycled by hero-flow.js.
+           Artwork is aria-hidden; the captions stay readable as an ordered list. #}
+        <div class="animate-zoom-in delay-2 flex justify-center lg:justify-end">
+            <div id="flow-stage" class="flow-stage" data-step="0">
+                <div class="flow-window">
+                    <div class="flow-topbar" aria-hidden="true">
+                        <span class="flow-title">How a drop works</span>
+                        <span class="flow-pips">
+                            <span class="flow-dot is-active"></span>
+                            <span class="flow-dot"></span>
+                            <span class="flow-dot"></span>
+                            <span class="flow-dot"></span>
+                            <span class="flow-dot"></span>
+                            <span class="flow-dot"></span>
+                        </span>
+                    </div>
+
+                    <ol class="flow-body">
+                        <li class="flow-step is-active">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-seg">
+                                    <span class="flow-seg-thumb"></span>
+                                    <span class="flow-seg-item flow-seg-item--a">File</span>
+                                    <span class="flow-seg-item flow-seg-item--b">Message</span>
+                                </div>
+                                <div class="flow-swap">
+                                    <span class="flow-tile flow-tile--a">
+                                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm6 0v3a1 1 0 0 0 1 1h3l-4-4Z" clip-rule="evenodd"/></svg>
+                                        contract.pdf
+                                    </span>
+                                    <span class="flow-tile flow-tile--b">
+                                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3.6l-3.1 2.7A1 1 0 0 1 6.6 16v-2H5a2 2 0 0 1-2-2V5Zm3 2h8v1.5H6V7Zm0 3h5v1.5H6V10Z" clip-rule="evenodd"/></svg>
+                                        Wire details inside
+                                    </span>
+                                </div>
+                            </div>
+                            <p class="flow-cap"><strong>Pick a file &mdash; or type a message.</strong> Either one gets the same treatment.</p>
+                        </li>
+
+                        <li class="flow-step">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-field">
+                                    <span class="flow-secret">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>
+                                    <svg class="flow-lock" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4 4 0 0 0-4 4v3H5.5A1.5 1.5 0 0 0 4 9.5v7A1.5 1.5 0 0 0 5.5 18h9a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 14.5 8H14V5a4 4 0 0 0-4-4Zm2 7V5a2 2 0 1 0-4 0v3h4Z" clip-rule="evenodd"/></svg>
+                                </div>
+                                <span class="flow-tag">AES-GCM &middot; PBKDF2 100k</span>
+                            </div>
+                            <p class="flow-cap"><strong>Set a password.</strong> Encryption happens in your browser, before anything is uploaded.</p>
+                        </li>
+
+                        <li class="flow-step">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-clock">
+                                    <svg viewBox="0 0 72 72">
+                                        <circle class="flow-ring-track" cx="36" cy="36" r="30"/>
+                                        <circle class="flow-ring-live" cx="36" cy="36" r="30"/>
+                                    </svg>
+                                    <span class="flow-clock-label">24h</span>
+                                </div>
+                                <span class="flow-tag">Expires 12 Oct, 18:00</span>
+                            </div>
+                            <p class="flow-cap"><strong>Add an expiry.</strong> Optional deadline &mdash; the drop can vanish before anyone opens it.</p>
+                        </li>
+
+                        <li class="flow-step">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-link">
+                                    <svg viewBox="0 0 20 20" fill="currentColor"><path d="M12.586 4.586a2 2 0 1 1 2.828 2.828l-3 3a2 2 0 0 1-2.828 0 1 1 0 0 0-1.414 1.414 4 4 0 0 0 5.656 0l3-3a4 4 0 0 0-5.656-5.656l-1.5 1.5a1 1 0 1 0 1.414 1.414l1.5-1.5Z"/><path d="M7.414 15.414a2 2 0 1 1-2.828-2.828l3-3a2 2 0 0 1 2.828 0 1 1 0 0 0 1.414-1.414 4 4 0 0 0-5.656 0l-3 3a4 4 0 1 0 5.656 5.656l1.5-1.5a1 1 0 1 0-1.414-1.414l-1.5 1.5Z"/></svg>
+                                    <span class="flow-url">&hellip;/view/7f3ac9d2</span>
+                                    <span class="flow-copy">
+                                        <span class="flow-copy-a">Copy</span>
+                                        <span class="flow-copy-b">Copied</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <p class="flow-cap"><strong>Get one link.</strong> It opens exactly once, then it is spent.</p>
+                        </li>
+
+                        <li class="flow-step">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-send">
+                                    <span class="flow-node">You</span>
+                                    <span class="flow-track">
+                                        <span class="flow-parcel">
+                                            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3.5 2.9 17.4 9a1 1 0 0 1 0 1.9L3.5 17.1a1 1 0 0 1-1.4-1.1L3.3 11 11 10 3.3 9 2.1 4a1 1 0 0 1 1.4-1.1Z"/></svg>
+                                        </span>
+                                    </span>
+                                    <span class="flow-node flow-node--to">Them</span>
+                                </div>
+                            </div>
+                            <p class="flow-cap"><strong>Send the link.</strong> Send the password through a different channel.</p>
+                        </li>
+
+                        <li class="flow-step">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-swap">
+                                    <span class="flow-tile flow-tile--open">
+                                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm6 0v3a1 1 0 0 0 1 1h3l-4-4Z" clip-rule="evenodd"/></svg>
+                                        contract.pdf
+                                    </span>
+                                    <span class="flow-gone">
+                                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM6.7 6.7a1 1 0 0 1 1.4 0L10 8.6l1.9-1.9a1 1 0 1 1 1.4 1.4L11.4 10l1.9 1.9a1 1 0 0 1-1.4 1.4L10 11.4l-1.9 1.9a1 1 0 0 1-1.4-1.4L8.6 10 6.7 8.1a1 1 0 0 1 0-1.4Z" clip-rule="evenodd"/></svg>
+                                        Deleted from the server
+                                    </span>
+                                </div>
+                            </div>
+                            <p class="flow-cap"><strong>They open it once.</strong> The file decrypts on their device, and the stored copy is destroyed.</p>
+                        </li>
+                    </ol>
                 </div>
             </div>
         </div>
@@ -312,6 +391,7 @@
         </div>
     </section>
 </div>
+<script type="module" src="{{ url_for('static', filename='js/hero-flow.js') }}" integrity="{{ sri_hash('js/hero-flow.js') }}" crossorigin="anonymous"></script>
 {% endif %}
 
 {% if session.get('username') and user_files %}
