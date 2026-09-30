@@ -284,6 +284,12 @@
     @apply opacity-[0.14];
   }
 
+  /* Empty when idle: no box, no margin, so the live region can stay in the DOM
+     without leaving a gap under the dropzone. */
+  .file-error:not(:empty) {
+    @apply mt-3 inline-flex items-center gap-2 rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-300;
+  }
+
   .file-chip {
     @apply inline-flex max-w-full items-center gap-2 rounded-full border border-honey-400/30 bg-honey-400/10 px-4 py-2 text-sm font-medium text-honey-200;
   }

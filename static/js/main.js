@@ -138,6 +138,20 @@ function showSelectedFile(file) {
     chip.classList.toggle('hidden', !file);
 }
 
+// The region is always present and only its text changes, so assistive tech
+// announces every rejection rather than a one-time reveal.
+function setFileError(message) {
+    const region = document.getElementById('file-error');
+    if (region) region.textContent = message;
+}
+
+// Reject a disallowed file, discarding any earlier selection along with it.
+function rejectFile(input) {
+    input.value = '';
+    showSelectedFile(null);
+    setFileError('That file type is not allowed.');
+}
+
 const dropzone = document.getElementById('dropzone');
 if (dropzone) {
     const fileField = document.getElementById('file');
@@ -164,7 +178,7 @@ if (dropzone) {
         const file = e.dataTransfer && e.dataTransfer.files[0];
         if (!file) return;
         if (!isAllowedFile(file.name)) {
-            alert('File type not allowed');
+            rejectFile(fileField);
             return;
         }
         // Hand the dropped file to the real input so the form submits it unchanged.
@@ -172,6 +186,7 @@ if (dropzone) {
         transfer.items.add(file);
         fileField.files = transfer.files;
         showSelectedFile(file);
+        setFileError('');
     });
 }
 
@@ -186,12 +201,11 @@ if (fileUploadForm) {
             return;
         }
         if (!isAllowedFile(file.name)) {
-            alert('File type not allowed');
-            e.target.value = '';
-            showSelectedFile(null);
+            rejectFile(e.target);
             return;
         }
         showSelectedFile(file);
+        setFileError('');
     });
 
     // Handle form submission: encrypt file client-side, then upload
