@@ -465,7 +465,7 @@
                                 <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
                                 <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
                             </svg>
-                            <span class="copy-flash hidden shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-emerald-300">Copied</span>
+                            <span class="copy-flash hidden shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-emerald-300" aria-hidden="true">Copied</span>
                         </a>
                         {% if file.private_note %}
                             <p class="mt-2 text-sm text-slate-500">{{ file.private_note }}</p>
@@ -502,6 +502,8 @@
             </article>
             {% endfor %}
         </div>
+
+        <p id="copy-status" class="sr-only" role="status"></p>
 
         <p id="shared-files-empty-state" class="mt-4 hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-6 text-center text-sm text-slate-500">No drops match this search.</p>
 

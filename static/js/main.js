@@ -317,6 +317,13 @@ if (shareActionButton) {
 }
 
 // --- Copy URL to Clipboard Logic ---
+// Every row shares one status region, so a long list does not become a page
+// full of live regions. The per-row pill is visual only.
+function setCopyStatus(message) {
+    const region = document.getElementById('copy-status');
+    if (region) region.textContent = message;
+}
+
 document.querySelectorAll('.copy-url').forEach(el => {
     const flash = el.querySelector('.copy-flash');
     let flashTimer;
@@ -325,14 +332,16 @@ document.querySelectorAll('.copy-url').forEach(el => {
         e.preventDefault();
         const url = el.getAttribute('data-url');
         navigator.clipboard.writeText(url).then(() => {
-            if (!flash) {
-                alert('url copied to clipboard');
-                return;
-            }
+            setCopyStatus('Share link copied to clipboard.');
             // Inline confirmation beats a modal dialog for something this small.
-            flash.classList.remove('hidden');
+            if (flash) flash.classList.remove('hidden');
             clearTimeout(flashTimer);
-            flashTimer = setTimeout(() => flash.classList.add('hidden'), 1800);
+            flashTimer = setTimeout(() => {
+                if (flash) flash.classList.add('hidden');
+                // Emptying it means the next copy writes fresh text, which is
+                // what makes assistive tech announce it again.
+                setCopyStatus('');
+            }, 1800);
         });
     });
 });
