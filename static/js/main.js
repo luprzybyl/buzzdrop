@@ -328,21 +328,34 @@ document.querySelectorAll('.copy-url').forEach(el => {
     const flash = el.querySelector('.copy-flash');
     let flashTimer;
 
+    // Inline confirmation beats a modal dialog for something this small. The
+    // pill carries the outcome for sighted users, the shared region announces
+    // it, and a failure lingers longer because it has to be read.
+    const showResult = (label, message, failed) => {
+        setCopyStatus(message);
+        if (flash) {
+            flash.textContent = label;
+            flash.classList.toggle('copy-flash-error', failed);
+            flash.classList.remove('hidden');
+        }
+        clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => {
+            if (flash) flash.classList.add('hidden');
+            // Emptying it means the next copy writes fresh text, which is
+            // what makes assistive tech announce it again.
+            setCopyStatus('');
+        }, failed ? 4000 : 1800);
+    };
+
     el.addEventListener('click', (e) => {
         e.preventDefault();
         const url = el.getAttribute('data-url');
-        navigator.clipboard.writeText(url).then(() => {
-            setCopyStatus('Share link copied to clipboard.');
-            // Inline confirmation beats a modal dialog for something this small.
-            if (flash) flash.classList.remove('hidden');
-            clearTimeout(flashTimer);
-            flashTimer = setTimeout(() => {
-                if (flash) flash.classList.add('hidden');
-                // Emptying it means the next copy writes fresh text, which is
-                // what makes assistive tech announce it again.
-                setCopyStatus('');
-            }, 1800);
-        });
+        navigator.clipboard.writeText(url).then(
+            () => showResult('Copied', 'Share link copied to clipboard.', false),
+            // A denied permission or a non-secure context rejects here. Say so
+            // rather than leaving the click with no feedback at all.
+            () => showResult('Copy failed', 'Your browser blocked clipboard access, so the link was not copied.', true),
+        );
     });
 });
 
