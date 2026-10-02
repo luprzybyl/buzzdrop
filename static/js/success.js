@@ -4,18 +4,25 @@
 // - Toggling password visibility
 // - Auto-filling the password from sessionStorage
 
+// Flash confirmation on the button. Only the visible label is rewritten: the
+// button also carries a screen-reader-only prefix naming which link it copies,
+// and setting textContent on the button itself would destroy it.
+function flashCopied(button) {
+    const label = button.querySelector('.copy-label');
+    if (!label) return;
+    const originalText = label.textContent;
+    label.textContent = 'Copied!';
+    setTimeout(() => {
+        label.textContent = originalText;
+    }, 2000);
+}
+
 // Copy the share link to clipboard and show a temporary message
 function copyLink() {
     const shareLink = document.getElementById('share-link');
     shareLink.select();
     document.execCommand('copy');
-
-    const button = shareLink.nextElementSibling;
-    const originalText = button.textContent;
-    button.textContent = 'Copied!';
-    setTimeout(() => {
-        button.textContent = originalText;
-    }, 2000);
+    flashCopied(shareLink.nextElementSibling);
 }
 
 // Copy the share link with password to clipboard
@@ -23,13 +30,7 @@ function copyLinkWithPassword() {
     const shareLinkWithPassword = document.getElementById('share-link-with-password');
     shareLinkWithPassword.select();
     document.execCommand('copy');
-
-    const button = shareLinkWithPassword.nextElementSibling;
-    const originalText = button.textContent;
-    button.textContent = 'Copied!';
-    setTimeout(() => {
-        button.textContent = originalText;
-    }, 2000);
+    flashCopied(shareLinkWithPassword.nextElementSibling);
 }
 
 // Toggle password field between 'password' and 'text' for user convenience
