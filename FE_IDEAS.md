@@ -18,8 +18,16 @@ No test executes any browser JavaScript. `node --check` only proves the files pa
    npm run build:css && git diff --exit-code static/css/app.css
    ```
    The committed stylesheet has already drifted from its sources once, and it will happen again without a check.
-2. **The four remaining `alert()` calls** in `static/js/main.js` (lines 93, 108, 117, 267). Move them to the non-blocking inline-region pattern that's already used in three places.
+2. **The four remaining `alert()` calls** in `static/js/main.js` (lines 141, 156, 165 on the upload path, 315 for a missing text or password). Move them to the non-blocking inline-region pattern that's already used in three places. Raised as a non-blocking nitpick in the PR #125 review.
 3. **`aria-pressed` on the "Show" password toggle** (`templates/success.html:48`). It's the last loose a11y end on that page.
+
+## Open from the PR #125 review: expiry only runs on access
+
+`check_and_handle_expiry` only runs when a drop or the uploader's file list is accessed. An expired drop that nobody opens keeps its ciphertext on disk indefinitely. The reviewer agreed it's a real gap and asked for it to be tracked as a separate issue, which hasn't been opened yet.
+
+- [ ] Open the issue on `luprzybyl/buzzdrop`.
+- [ ] Backend fix: a sweep at startup, plus an optional periodic task.
+- [ ] Copy: the "An expiry is a hard cut-off" card (`templates/index.html:378`) says the stored copy is removed "whether or not anyone ever opened it". That isn't true until the sweep exists. Either soften the wording now or ship it together with the fix.
 
 ## Plan: thorough frontend testing
 
