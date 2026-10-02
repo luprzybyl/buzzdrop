@@ -395,6 +395,12 @@
     @apply relative z-10 min-h-[17rem];
   }
 
+  /* Bottom-right of the mock window, quiet until hovered or focused. The
+     global focus-visible ring covers keyboard focus. */
+  .flow-toggle {
+    @apply absolute bottom-4 right-4 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-hive-950/70 text-slate-500 backdrop-blur transition duration-200 hover:border-honey-400/40 hover:text-honey-300;
+  }
+
   /* Only opacity is transitioned. The lift is a one-shot animation on entry,
      so an outgoing stage fades in place instead of sliding back down and
      fighting the incoming one. */
@@ -676,7 +682,8 @@
     animation: none !important;
   }
 
-  .flow-topbar {
+  .flow-topbar,
+  .flow-toggle {
     display: none;
   }
 

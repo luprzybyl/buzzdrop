@@ -16,6 +16,9 @@ if (stage) {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let current = 0;
     let timer = null;
+    // A deliberate pause has to outlast hovering and tab switches, so it is
+    // tracked apart from the transient reasons to hold still.
+    let paused = false;
 
     const render = (index) => {
         current = index;
@@ -36,7 +39,7 @@ if (stage) {
         stop();
         // Reduced motion shows every stage at once instead of auto-advancing;
         // see the prefers-reduced-motion block in the stylesheet.
-        if (reduceMotion.matches || document.hidden) return;
+        if (paused || reduceMotion.matches || document.hidden) return;
         timer = setTimeout(() => {
             render((current + 1) % steps.length);
             play();
@@ -45,6 +48,26 @@ if (stage) {
 
     render(0);
     play();
+
+    // Hover only pauses while the pointer is there, which leaves keyboard and
+    // touch users with no way to stop it; this control is the real mechanism.
+    const toggle = document.getElementById('flow-toggle');
+    if (toggle) {
+        const pauseIcon = toggle.querySelector('[data-flow-icon="pause"]');
+        const playIcon = toggle.querySelector('[data-flow-icon="play"]');
+
+        const setPaused = (value) => {
+            paused = value;
+            toggle.setAttribute('aria-label', paused ? 'Play walkthrough' : 'Pause walkthrough');
+            if (pauseIcon) pauseIcon.classList.toggle('hidden', paused);
+            if (playIcon) playIcon.classList.toggle('hidden', !paused);
+            // Pressing play while the pointer rests on the stage resumes it:
+            // an explicit press outranks the hover heuristic.
+            if (paused) stop(); else play();
+        };
+
+        toggle.addEventListener('click', () => setPaused(!paused));
+    }
 
     // Let people linger on a stage they are still reading.
     stage.addEventListener('mouseenter', stop);
