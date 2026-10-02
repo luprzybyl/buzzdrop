@@ -10,6 +10,14 @@ let uploadInProgress = false;
 const allowedExtensions = JSON.parse(document.getElementById('allowed-extensions-json').textContent);
 
 // --- Tab Switching Logic ---
+// The composer's two modes are an ARIA tab set: the rail is the tablist and
+// each section is the panel its tab controls.
+const shareModes = {
+    file: { tab: 'file-tab', panel: 'file-upload-section', action: 'Share file' },
+    text: { tab: 'text-tab', panel: 'text-note-section', action: 'Share note' },
+};
+const shareModeOrder = ['file', 'text'];
+
 // The action button holds an icon alongside its label, so only the label node is rewritten.
 function setShareAction(label) {
     const button = document.getElementById('share-action-btn');
@@ -22,27 +30,67 @@ function setShareAction(label) {
     }
 }
 
+// Toggling one class rather than reassigning className, so the ARIA state set
+// below survives a mode switch.
+function selectShareMode(mode, { focusTab = false } = {}) {
+    activeShareMode = mode;
+
+    shareModeOrder.forEach((name) => {
+        const { tab, panel } = shareModes[name];
+        const isActive = name === mode;
+        const tabNode = document.getElementById(tab);
+        const panelNode = document.getElementById(panel);
+
+        if (panelNode) panelNode.style.display = isActive ? 'block' : 'none';
+        if (!tabNode) return;
+
+        tabNode.classList.toggle('share-tab-active', isActive);
+        tabNode.setAttribute('aria-selected', String(isActive));
+        // Roving tabindex: Tab reaches the rail once, arrows move within it.
+        tabNode.tabIndex = isActive ? 0 : -1;
+        if (isActive && focusTab) tabNode.focus();
+    });
+
+    setShareAction(shareModes[mode].action);
+}
+
 function showFileUpload() {
-    activeShareMode = 'file';
-    document.getElementById('file-upload-section').style.display = 'block';
-    document.getElementById('text-note-section').style.display = 'none';
-    document.getElementById('file-tab').className = 'share-tab share-tab-active';
-    document.getElementById('text-tab').className = 'share-tab';
-    setShareAction('Share file');
+    selectShareMode('file');
 }
 
 function showTextNote() {
-    activeShareMode = 'text';
-    document.getElementById('file-upload-section').style.display = 'none';
-    document.getElementById('text-note-section').style.display = 'block';
-    document.getElementById('file-tab').className = 'share-tab';
-    document.getElementById('text-tab').className = 'share-tab share-tab-active';
-    setShareAction('Share note');
+    selectShareMode('text');
 }
 
 // Make functions globally accessible for inline onclick handlers
 window.showFileUpload = showFileUpload;
 window.showTextNote = showTextNote;
+
+// The tab role promises a keyboard contract, so honour it: arrows move between
+// tabs, Home and End jump to the ends.
+const shareTabRail = document.querySelector('.tab-rail');
+if (shareTabRail) {
+    shareTabRail.addEventListener('keydown', (e) => {
+        const current = shareModeOrder.indexOf(activeShareMode);
+        const last = shareModeOrder.length - 1;
+        let next;
+
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+            next = current === last ? 0 : current + 1;
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            next = current === 0 ? last : current - 1;
+        } else if (e.key === 'Home') {
+            next = 0;
+        } else if (e.key === 'End') {
+            next = last;
+        } else {
+            return;
+        }
+
+        e.preventDefault();
+        selectShareMode(shareModeOrder[next], { focusTab: true });
+    });
+}
 
 // --- Shared Upload Logic ---
 /**

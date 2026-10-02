@@ -202,7 +202,7 @@
 
   /* ----------------------------------------------------------------- Tabs */
 
-  /* main.js rewrites className wholesale, so these two must stand alone. */
+  /* .share-tab stays put; main.js toggles -active on top of it. */
   .share-tab {
     @apply relative z-10 flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-400 transition duration-200 hover:text-slate-100 sm:flex-none;
   }

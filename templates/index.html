@@ -19,17 +19,17 @@
     </header>
 
     <div class="surface-card animate-fade-up delay-1 p-6 sm:p-8">
-        <span class="field-label">What are you sending?</span>
-        <div class="tab-rail sm:inline-flex">
-            <button id="file-tab" onclick="showFileUpload()" class="share-tab share-tab-active">
+        <span id="share-mode-label" class="field-label">What are you sending?</span>
+        <div class="tab-rail sm:inline-flex" role="tablist" aria-labelledby="share-mode-label">
+            <button id="file-tab" type="button" role="tab" aria-selected="true" aria-controls="file-upload-section" onclick="showFileUpload()" class="share-tab share-tab-active">
                 File
             </button>
-            <button id="text-tab" onclick="showTextNote()" class="share-tab">
+            <button id="text-tab" type="button" role="tab" aria-selected="false" aria-controls="text-note-section" tabindex="-1" onclick="showTextNote()" class="share-tab">
                 Text note
             </button>
         </div>
 
-        <div id="file-upload-section" class="mt-6">
+        <div id="file-upload-section" class="mt-6" role="tabpanel" aria-labelledby="file-tab">
             <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
                 <label id="dropzone" for="file" class="dropzone block">
                     <div class="relative flex flex-col items-center gap-4">
@@ -62,7 +62,7 @@
             </form>
         </div>
 
-        <div id="text-note-section" style="display:none;" class="mt-6">
+        <div id="text-note-section" style="display:none;" class="mt-6" role="tabpanel" aria-labelledby="text-tab">
             <label for="note-text" class="field-label">Secret text</label>
             <textarea id="note-text" rows="9" class="field-input min-h-[14rem] font-mono text-[0.8rem] leading-6" placeholder="Paste the note you want to protect with a one-time buzz..." required></textarea>
             <p class="field-help">Encrypted in the browser before it reaches the server.</p>
