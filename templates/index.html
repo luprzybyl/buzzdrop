@@ -14,7 +14,7 @@
         </h1>
         <h2 class="max-w-2xl text-sm leading-relaxed text-slate-400">
             <strong>Encrypt a file or a secret note in your browser</strong>, send one link, and let the drop delete itself
-            the moment it is opened. The server only ever holds ciphertext.
+            the moment it is downloaded. The contents are ciphertext to the server; details like the filename and your private note are not.
          </h2>
     </header>
 
@@ -153,8 +153,8 @@
             </h1>
             <p class="max-w-xl text-lg leading-relaxed text-slate-400">
                 <strong class="text-honey-400">Encrypt files and secret notes in your browser</strong>, send a single link, and watch the drop
-                disappear the moment it is opened.<br />
-                No plaintext ever reaches the server.
+                disappear the moment it is downloaded.<br />
+                The contents never reach the server unencrypted.
             </p>
             <div class="flex flex-wrap items-center gap-3">
                 <a href="{{ url_for('login') }}" class="btn-primary">
