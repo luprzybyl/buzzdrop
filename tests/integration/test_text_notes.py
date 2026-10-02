@@ -195,7 +195,7 @@ def test_text_note_success_page(client, app):
 
     assert response.status_code == 200
     assert b'Note is in the hive' in response.data
-    assert b'is destroyed after the first successful open' in response.data
+    assert b'is destroyed as soon as the recipient continues' in response.data
 
 def test_text_note_deletion_after_view(client, app, files_table):
     """Test that text note is marked as downloaded after viewing."""

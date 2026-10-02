@@ -120,7 +120,7 @@
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div class="text-sm">
                         <p class="font-semibold text-white">One-time buzz</p>
-                        <p class="mt-1 text-slate-400">Stored as ciphertext only, destroyed after the first successful open.</p>
+                        <p class="mt-1 text-slate-400">Stored as ciphertext only, destroyed the moment the recipient downloads it.</p>
                     </div>
                     <button id="share-action-btn" type="button" aria-label="Share file" class="btn-primary w-full shrink-0 sm:w-auto">
                         <span id="share-action-label" class="relative z-10">Share file</span>
@@ -253,7 +253,7 @@
                                     </span>
                                 </div>
                             </div>
-                            <p class="flow-cap"><strong>Get one link.</strong> It opens exactly once, then it is spent.</p>
+                            <p class="flow-cap"><strong>Get one link.</strong> It hands over the drop exactly once, then it is spent.</p>
                         </li>
 
                         <li class="flow-step">
@@ -353,7 +353,7 @@
                     <path d="M15 24h12m0 0-4.5-4.5M27 24l-4.5 4.5M32 17v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 <div>
-                    <h3 class="text-base font-semibold leading-snug text-white">Opening the link spends it</h3>
+                    <h3 class="text-base font-semibold leading-snug text-white">Continuing spends the drop</h3>
                     <p class="mt-2 text-sm leading-relaxed text-slate-400">Once the recipient confirms, the stored copy is deleted before a password is even entered. A wrong guess gets no second attempt, and neither does anyone who finds the link later.</p>
                 </div>
             </div>
