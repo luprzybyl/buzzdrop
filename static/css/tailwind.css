@@ -264,6 +264,12 @@
     @apply relative cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed border-white/10 bg-hive-850/50 px-6 py-12 text-center transition duration-300 hover:border-honey-400/50 hover:bg-honey-400/[0.04];
   }
 
+  /* The real input is sr-only, so its own focus ring is invisible. Mirror the
+     global focus ring on the label when focus lands anywhere inside it. */
+  .dropzone:focus-within {
+    @apply border-honey-400 ring-2 ring-honey-400/80 ring-offset-2 ring-offset-hive-950;
+  }
+
   .dropzone-active {
     @apply border-honey-400 bg-honey-400/[0.08] shadow-honey;
   }
