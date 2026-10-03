@@ -473,7 +473,7 @@ def login():
         password = request.form.get('password')
 
         if login_user(username, password):
-            flash('Logged in successfully')
+            flash('Logged in successfully', 'success')
             return redirect(url_for('index'))
         else:
             flash('Invalid username or password')
@@ -483,7 +483,7 @@ def login():
 @app.route('/logout')
 def logout():
     logout_user()
-    flash('Logged out successfully')
+    flash('Logged out successfully', 'success')
     return redirect(url_for('index'))
 
 @app.route('/users', methods=['GET'])
@@ -601,7 +601,7 @@ def revoke_api_token_route(token_id):
     if wants_json:
         return {'status': 'revoked'}, 200
 
-    flash('API token revoked')
+    flash('API token revoked', 'success')
     return redirect(url_for('manage_users' if current_user.get('is_admin', False) else 'index'))
 
 
@@ -791,7 +791,7 @@ def delete_file(file_id):
             pass
 
     file_repo.delete(file_id)
-    flash('File deleted successfully')
+    flash('File deleted successfully', 'success')
     return redirect(url_for('index'))
 
 

@@ -1,18 +1,45 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="mx-auto mt-8 max-w-xl">
-    <div class="surface-card p-6 text-center sm:p-8">
-        <span class="eyebrow">⚡ One-time action</span>
-        <p class="mt-4 text-lg font-semibold text-slate-700">{% if file_type == 'text' %}Secret Note{% else %}File: {{ original_name }}{% endif %}</p>
-        <h2 class="mt-2 text-2xl font-bold text-slate-950">Ready to {% if file_type == 'text' %}View{% else %}Download{% endif %}?</h2>
-        <p class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 font-semibold text-rose-700">Warning: {% if file_type == 'text' %}Viewing{% else %}Downloading{% endif %} will immediately delete this {% if file_type == 'text' %}note{% else %}file{% endif %} from the server. If the sender shared the password separately, have it ready before you continue. One-click links already include it.</p>
+<div class="mx-auto max-w-xl">
+    <div class="surface-card animate-zoom-in p-8 text-center sm:p-10">
+        <span class="relative mx-auto mb-6 block h-16 w-16">
+            <span class="absolute inset-0 animate-halo-pulse rounded-full bg-honey-400/25 blur-xl" aria-hidden="true"></span>
+            <svg viewBox="0 0 64 64" class="relative h-16 w-16 text-honey-300" fill="none" aria-hidden="true">
+                <path d="M32 4 54 16.7v25.6L32 55 10 42.3V16.7z" stroke="currentColor" stroke-width="1.5" opacity=".4"/>
+                <path d="M32 11 48 20.2v18.6L32 48l-16-9.2V20.2z" fill="currentColor" opacity=".08"/>
+                <path d="M32 21v16m0 6.5v.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+        </span>
+
+        <span class="eyebrow">One-time action</span>
+
+        <h1 class="mt-5 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+            Ready to {% if file_type == 'text' %}view{% else %}download{% endif %}?
+        </h1>
+
+        <p class="mx-auto mt-3 max-w-sm truncate text-sm text-slate-400">{{ original_name }}</p>
+
+        <div class="alert-banner alert-banner-warning mt-7 text-left">
+            <svg class="mt-0.5 h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            <span>
+                <strong class="font-semibold">Continuing deletes this {% if file_type == 'text' %}note{% else %}file{% endif %} from the server immediately.</strong>
+                If the sender shared the password separately, have it ready before you continue. One-click links already include it.
+            </span>
+        </div>
+
         <form id="confirm-form" method="POST" action="/view/{{ file_id }}/confirm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn-primary mt-6 w-full sm:w-auto">
-                Proceed to {% if file_type == 'text' %}view{% else %}download{% endif %} and decryption
+            <button type="submit" class="btn-primary mt-7 w-full">
+                <span class="relative z-10">Proceed to {% if file_type == 'text' %}view{% else %}download{% endif %}</span>
+                <svg class="relative z-10 h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M3 10a1 1 0 0 1 1-1h9.586L9.293 4.707a1 1 0 0 1 1.414-1.414l6 6a1 1 0 0 1 0 1.414l-6 6a1 1 0 0 1-1.414-1.414L13.586 11H4a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
+                </svg>
             </button>
         </form>
+
         <script>
             // Preserve password from URL fragment if present
             if (window.location.hash) {
@@ -22,7 +49,11 @@
                 }
             }
         </script>
-        <p class="mt-4 text-sm leading-6 text-slate-500">This is a one-time {% if file_type == 'text' %}view{% else %}download{% endif %}. You will not be able to access this {% if file_type == 'text' %}note{% else %}file{% endif %} again.</p>
+
+        <p class="mt-5 text-xs leading-5 text-slate-500">
+            This is a one-time {% if file_type == 'text' %}view{% else %}download{% endif %}. You will not be able to access this
+            {% if file_type == 'text' %}note{% else %}file{% endif %} again.
+        </p>
     </div>
 </div>
 {% endblock %}

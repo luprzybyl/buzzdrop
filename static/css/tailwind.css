@@ -4,127 +4,810 @@
 
 @layer base {
   :root {
-    color-scheme: light;
+    color-scheme: dark;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
-    @apply bg-slate-100 text-slate-900 antialiased;
-    background-image:
-      radial-gradient(circle at top, rgba(251, 191, 36, 0.18), transparent 32rem),
-      linear-gradient(180deg, rgba(15, 23, 42, 0.03), rgba(15, 23, 42, 0));
+    @apply bg-hive-950 font-sans text-slate-300 antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
 
   ::selection {
-    @apply bg-amber-200 text-slate-900;
+    @apply bg-honey-400/30 text-honey-50;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-honey-400/80 ring-offset-2 ring-offset-hive-950;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-hive-600;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-hive-500;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* datetime-local pickers render a black-on-black icon in dark UIs. */
+  input[type='datetime-local']::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.5;
+    cursor: pointer;
+  }
+
+  input[type='datetime-local']::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
   }
 }
 
 @layer components {
+  /* ---------------------------------------------------------------- Shell */
+
   .container-shell {
-    @apply mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8;
+    @apply mx-auto w-full max-w-shell px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Hairline of honey across the very top of the page. */
+  .topline {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-honey-400/70 to-transparent;
+  }
+
+  /* Fixed honeycomb lattice, slowly drifting behind everything. */
+  .hex-veil {
+    @apply pointer-events-none fixed z-0 animate-drift opacity-[0.07];
+    inset: -140px;
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2034.64%2060'%3E%3Cg%20fill='none'%20stroke='%23ffb627'%20stroke-width='0.7'%3E%3Cpath%20d='M17.32%20-20L34.64%20-10L34.64%2010L17.32%2020L0%2010L0%20-10Z'/%3E%3Cpath%20d='M17.32%2040L34.64%2050L34.64%2070L17.32%2080L0%2070L0%2050Z'/%3E%3Cpath%20d='M0%2010L17.32%2020L17.32%2040L0%2050L-17.32%2040L-17.32%2020Z'/%3E%3Cpath%20d='M34.64%2010L51.96%2020L51.96%2040L34.64%2050L17.32%2040L17.32%2020Z'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 48px 83.14px;
+    -webkit-mask-image: radial-gradient(75rem 55rem at 50% 0%, #000 10%, transparent 78%);
+    mask-image: radial-gradient(75rem 55rem at 50% 0%, #000 10%, transparent 78%);
+  }
+
+  /* Warm ambient light pooling at the top of the shell. */
+  .glow-field {
+    @apply pointer-events-none fixed inset-0 z-0;
+    background:
+      radial-gradient(58rem 34rem at 10% -8%, rgba(255, 182, 39, 0.16), transparent 68%),
+      radial-gradient(46rem 32rem at 92% 2%, rgba(217, 119, 6, 0.13), transparent 70%),
+      radial-gradient(60rem 42rem at 50% 108%, rgba(255, 209, 102, 0.06), transparent 72%);
   }
 
   .nav-shell {
-    @apply border-b border-slate-200/80 bg-white/90 backdrop-blur;
+    @apply sticky top-0 z-40 border-b border-white/5 bg-hive-950/80 backdrop-blur-xl;
   }
 
+  .footer-shell {
+    @apply relative z-10 mt-16 border-t border-white/5 bg-hive-950/60 backdrop-blur;
+  }
+
+  /* --------------------------------------------------------------- Shapes */
+
+  .hex {
+    clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
+  }
+
+  /* ---------------------------------------------------------------- Cards */
+
   .surface-card {
-    @apply rounded-2xl border border-slate-200/80 bg-white shadow-buzz;
+    @apply relative overflow-hidden rounded-3xl border border-white/[0.07] bg-hive-900/70 shadow-buzz backdrop-blur-xl;
+  }
+
+  /* Lit top edge — reads as light catching the rim of the card. */
+  .surface-card::before {
+    content: '';
+    @apply pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-honey-400/60 to-transparent;
   }
 
   .surface-card-soft {
-    @apply rounded-2xl border border-slate-200/80 bg-slate-50/90 shadow-sm;
+    @apply rounded-2xl border border-white/[0.06] bg-white/[0.02] shadow-hairline;
   }
 
+  .dashboard-item {
+    @apply rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 shadow-hairline transition duration-300 hover:border-honey-400/30 hover:bg-white/[0.04];
+  }
+
+  .metric-card {
+    @apply rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4;
+  }
+
+  .feature-card {
+    @apply relative overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 transition duration-300 hover:-translate-y-1 hover:border-honey-400/30 hover:shadow-honey;
+  }
+
+  /* ----------------------------------------------------------- Typography */
+
   .section-title {
-    @apply text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl;
+    @apply text-2xl font-semibold tracking-tight text-white sm:text-3xl;
+  }
+
+  .section-lead {
+    @apply text-sm leading-relaxed text-slate-400;
   }
 
   .eyebrow {
-    @apply inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700;
+    @apply inline-flex items-center gap-2 rounded-full border border-honey-400/25 bg-honey-400/10 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-honey-300;
   }
 
+  .honey-text {
+    @apply bg-gradient-to-br from-honey-200 via-honey-300 to-honey-500 bg-clip-text text-transparent;
+  }
+
+  /* ---------------------------------------------------------------- Forms */
+
   .field-label {
-    @apply mb-2 block text-sm font-medium text-slate-700;
+    @apply mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400;
   }
 
   .field-input {
-    @apply block w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-200;
+    @apply block w-full rounded-xl border border-white/10 bg-hive-850/80 px-4 py-3 text-sm text-slate-100 shadow-hairline outline-none transition duration-200 placeholder:text-slate-600 hover:border-white/20 focus:border-honey-400/70 focus:bg-hive-850 focus:ring-4 focus:ring-honey-400/15;
+  }
+
+  .field-input:read-only {
+    @apply text-slate-400;
   }
 
   .field-help {
     @apply mt-2 text-xs leading-5 text-slate-500;
   }
 
+  .field-check {
+    @apply mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-honey-400;
+  }
+
+  /* -------------------------------------------------------------- Buttons */
+
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-br from-honey-300 via-honey-400 to-honey-500 px-5 py-3 text-sm font-semibold text-hive-950 shadow-honey transition duration-200 hover:-translate-y-0.5 hover:shadow-honey-lg active:translate-y-0 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  /* Light sweeps across the button on hover. */
+  .btn-primary::after {
+    content: '';
+    @apply pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/45 to-transparent transition-transform duration-700;
+  }
+
+  .btn-primary:hover::after {
+    @apply translate-x-full;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:border-honey-400/40 hover:bg-white/[0.07] hover:text-white;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-slate-400 transition duration-200 hover:bg-white/5 hover:text-white;
   }
 
   .btn-danger {
-    @apply inline-flex items-center justify-center rounded-2xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-300 focus:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-300 transition duration-200 hover:border-rose-500/50 hover:bg-rose-500/20 hover:text-rose-200;
   }
 
+  /* ----------------------------------------------------------------- Tabs */
+
+  /* .share-tab stays put; main.js toggles -active on top of it. */
   .share-tab {
-    @apply rounded-full px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-white hover:text-slate-900;
+    @apply relative z-10 flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-400 transition duration-200 hover:text-slate-100 sm:flex-none;
   }
 
+  /* Applied together with .share-tab, so it has to win the hover colour too. */
   .share-tab-active {
-    @apply bg-white text-slate-950 shadow-sm ring-1 ring-slate-200;
+    @apply relative z-10 flex-1 rounded-lg bg-gradient-to-br from-honey-300 to-honey-500 px-4 py-2.5 text-sm font-semibold text-hive-950 shadow-honey transition duration-200 hover:text-hive-950 sm:flex-none;
   }
+
+  .tab-rail {
+    @apply flex gap-1 rounded-xl border border-white/[0.07] bg-hive-850/70 p-1;
+  }
+
+  /* --------------------------------------------------------------- Status */
 
   .status-badge {
-    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold;
+    @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold;
   }
 
   .status-badge-amber {
-    @apply bg-amber-50 text-amber-700 ring-1 ring-amber-200;
+    @apply border-honey-400/25 bg-honey-400/10 text-honey-300;
   }
 
   .status-badge-slate {
-    @apply bg-slate-100 text-slate-700 ring-1 ring-slate-200;
+    @apply border-white/10 bg-white/5 text-slate-300;
   }
 
   .status-badge-green {
-    @apply bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200;
+    @apply border-emerald-400/25 bg-emerald-400/10 text-emerald-300;
   }
 
   .status-badge-red {
-    @apply bg-rose-50 text-rose-700 ring-1 ring-rose-200;
+    @apply border-rose-400/25 bg-rose-400/10 text-rose-300;
   }
 
   .alert-banner {
-    @apply flex gap-3 rounded-2xl border px-4 py-4 text-sm shadow-sm;
+    @apply flex gap-3 rounded-2xl border px-4 py-4 text-sm;
   }
 
   .alert-banner-error {
-    @apply border-rose-200 bg-rose-50 text-rose-800;
+    @apply border-rose-400/25 bg-rose-500/10 text-rose-200;
+  }
+
+  .alert-banner-success {
+    @apply border-emerald-400/25 bg-emerald-500/10 text-emerald-200;
   }
 
   .alert-banner-warning {
-    @apply border-amber-200 bg-amber-50 text-amber-900;
+    @apply border-honey-400/25 bg-honey-400/10 text-honey-100;
   }
 
   .alert-banner-info {
-    @apply border-sky-200 bg-sky-50 text-sky-900;
+    @apply border-sky-400/20 bg-sky-400/10 text-sky-100;
   }
+
+  /* ------------------------------------------------------------- Dropzone */
 
   .dropzone {
-    @apply rounded-2xl border border-dashed border-amber-300 bg-gradient-to-br from-amber-50 via-white to-slate-50 p-8 text-center;
+    @apply relative cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed border-white/10 bg-hive-850/50 px-6 py-12 text-center transition duration-300 hover:border-honey-400/50 hover:bg-honey-400/[0.04];
   }
 
-  .metric-card {
-    @apply rounded-2xl border border-slate-200 bg-slate-50 p-4;
+  /* The real input is sr-only, so its own focus ring is invisible. Mirror the
+     global focus ring on the label when focus lands anywhere inside it. */
+  .dropzone:focus-within {
+    @apply border-honey-400 ring-2 ring-honey-400/80 ring-offset-2 ring-offset-hive-950;
   }
+
+  .dropzone-active {
+    @apply border-honey-400 bg-honey-400/[0.08] shadow-honey;
+  }
+
+  .dropzone-active .dropzone-hint {
+    @apply text-honey-200;
+  }
+
+  /* Oversized honeycomb watermark inside the dropzone. */
+  .dropzone::after {
+    content: '';
+    @apply pointer-events-none absolute inset-0 opacity-[0.045] transition-opacity duration-300;
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2034.64%2060'%3E%3Cg%20fill='none'%20stroke='%23ffb627'%20stroke-width='1'%3E%3Cpath%20d='M17.32%20-20L34.64%20-10L34.64%2010L17.32%2020L0%2010L0%20-10Z'/%3E%3Cpath%20d='M17.32%2040L34.64%2050L34.64%2070L17.32%2080L0%2070L0%2050Z'/%3E%3Cpath%20d='M0%2010L17.32%2020L17.32%2040L0%2050L-17.32%2040L-17.32%2020Z'/%3E%3Cpath%20d='M34.64%2010L51.96%2020L51.96%2040L34.64%2050L17.32%2040L17.32%2020Z'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 72px 124.7px;
+  }
+
+  .dropzone-active::after {
+    @apply opacity-[0.14];
+  }
+
+  /* Empty when idle: no box, no margin, so the live region can stay in the DOM
+     without leaving a gap under the dropzone. */
+  .file-error:not(:empty) {
+    @apply mt-3 inline-flex items-center gap-2 rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-300;
+  }
+
+  .copy-flash {
+    @apply shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-emerald-300;
+  }
+
+  .copy-flash-error {
+    @apply border-rose-400/25 bg-rose-500/10 text-rose-300;
+  }
+
+  .file-chip {
+    @apply inline-flex max-w-full items-center gap-2 rounded-full border border-honey-400/30 bg-honey-400/10 px-4 py-2 text-sm font-medium text-honey-200;
+  }
+
+  /* -------------------------------------------------------------- Copying */
 
   .copy-field {
-    @apply flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center;
+    @apply flex flex-col gap-2 rounded-xl border border-white/[0.07] bg-hive-850/60 p-2 sm:flex-row sm:items-center;
   }
 
-  .dashboard-item {
-    @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-sm;
+  /* ------------------------------------------------------------- Progress */
+
+  .honey-track {
+    @apply h-2.5 w-full overflow-hidden rounded-full border border-white/5 bg-hive-800;
+  }
+
+  /* Honey pouring into the track: moving comb stripes over a warm gradient. */
+  .honey-bar {
+    @apply h-full animate-stripes rounded-full transition-[width] duration-300 ease-out;
+    background-image: linear-gradient(
+        115deg,
+        rgba(255, 255, 255, 0.3) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.3) 50%,
+        rgba(255, 255, 255, 0.3) 75%,
+        transparent 75%
+      ),
+      linear-gradient(90deg, #f59e0b, #ffd166, #ffb627);
+    background-size: 32px 100%, 100% 100%;
+  }
+
+  /* ----------------------------------------------------- Landing visuals */
+
+  /* Numbered hexagon used by the "how it works" rail. */
+  .hex-step {
+    @apply hex grid h-11 w-11 shrink-0 place-items-center bg-gradient-to-br from-honey-300 to-honey-600 text-sm font-bold text-hive-950;
+  }
+
+  /* ------------------------------------------------- Hero flow walkthrough */
+
+  .flow-stage {
+    @apply w-full max-w-[26rem];
+  }
+
+  .flow-window {
+    @apply relative overflow-hidden rounded-3xl border border-white/[0.08] bg-hive-900/80 shadow-buzz backdrop-blur-xl;
+  }
+
+  .flow-window::before {
+    content: '';
+    @apply pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-honey-400/70 to-transparent;
+  }
+
+  /* Faint comb behind the mock UI, tying the panel to the rest of the page. */
+  .flow-window::after {
+    content: '';
+    @apply pointer-events-none absolute inset-0 opacity-[0.035];
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2034.64%2060'%3E%3Cg%20fill='none'%20stroke='%23ffb627'%20stroke-width='1'%3E%3Cpath%20d='M17.32%20-20L34.64%20-10L34.64%2010L17.32%2020L0%2010L0%20-10Z'/%3E%3Cpath%20d='M17.32%2040L34.64%2050L34.64%2070L17.32%2080L0%2070L0%2050Z'/%3E%3Cpath%20d='M0%2010L17.32%2020L17.32%2040L0%2050L-17.32%2040L-17.32%2020Z'/%3E%3Cpath%20d='M34.64%2010L51.96%2020L51.96%2040L34.64%2050L17.32%2040L17.32%2020Z'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 64px 110.8px;
+  }
+
+  .flow-topbar {
+    @apply relative z-10 flex items-center justify-between gap-4 border-b border-white/[0.06] px-6 py-4;
+  }
+
+  .flow-title {
+    @apply text-[0.6rem] font-semibold uppercase tracking-[0.22em] text-slate-500;
+  }
+
+  .flow-pips {
+    @apply flex shrink-0 items-center gap-2;
+  }
+
+  /* Progress pips: the active stage stretches into a bar. */
+  .flow-dot {
+    @apply h-1.5 w-1.5 rounded-full bg-white/15 transition-all duration-[600ms];
+  }
+
+  .flow-dot.is-done {
+    @apply bg-honey-400/40;
+  }
+
+  .flow-dot.is-active {
+    @apply w-7 bg-honey-400;
+  }
+
+  .flow-body {
+    @apply relative z-10 min-h-[17rem];
+  }
+
+  /* Bottom-right of the mock window, quiet until hovered or focused. The
+     global focus-visible ring covers keyboard focus. */
+  .flow-toggle {
+    @apply absolute bottom-4 right-4 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-hive-950/70 text-slate-500 backdrop-blur transition duration-200 hover:border-honey-400/40 hover:text-honey-300;
+  }
+
+  /* Only opacity is transitioned. The lift is a one-shot animation on entry,
+     so an outgoing stage fades in place instead of sliding back down and
+     fighting the incoming one. */
+  .flow-step {
+    @apply pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-5 px-6 py-6 opacity-0 transition-opacity duration-[600ms] ease-out;
+  }
+
+  .flow-step.is-active {
+    @apply opacity-100;
+    animation: flow-rise 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .flow-art {
+    @apply flex min-h-[6.5rem] w-full flex-col items-center justify-center gap-3;
+  }
+
+  .flow-cap {
+    @apply max-w-[20rem] text-center text-sm leading-relaxed text-slate-400;
+  }
+
+  .flow-cap strong {
+    @apply font-semibold text-white;
+  }
+
+  .flow-tag {
+    @apply rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[0.68rem] font-medium tracking-wide text-slate-400;
+  }
+
+  /* Stage 1 — file or message */
+
+  .flow-seg {
+    @apply relative inline-flex rounded-full border border-white/10 bg-hive-850/80 p-1;
+  }
+
+  .flow-seg-thumb {
+    @apply absolute bottom-1 left-1 top-1 rounded-full bg-gradient-to-br from-honey-300 to-honey-500;
+    width: calc(50% - 0.25rem);
+  }
+
+  .flow-seg-item {
+    @apply relative z-10 w-[5.5rem] px-3 py-1.5 text-center text-xs font-semibold text-slate-400 transition-colors duration-300;
+  }
+
+  .flow-swap {
+    @apply grid;
+  }
+
+  .flow-swap > * {
+    grid-area: 1 / 1;
+  }
+
+  .flow-tile {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-hive-850/80 px-4 py-3 text-sm font-medium text-slate-200;
+  }
+
+  .flow-tile svg {
+    @apply h-4 w-4 shrink-0 text-honey-300;
+  }
+
+  .flow-tile--b,
+  .flow-gone {
+    @apply opacity-0;
+  }
+
+  .is-active .flow-seg-thumb {
+    animation: flow-seg-slide 4.08s ease-in-out both;
+  }
+
+  .is-active .flow-seg-item--a {
+    animation: flow-seg-on 4.08s ease-in-out both;
+  }
+
+  .is-active .flow-seg-item--b {
+    animation: flow-seg-off 4.08s ease-in-out both;
+  }
+
+  .is-active .flow-tile--a {
+    animation: flow-fade-out 4.08s ease-in-out both;
+  }
+
+  .is-active .flow-tile--b {
+    animation: flow-fade-in 4.08s ease-in-out both;
+  }
+
+  /* Stage 2 — password */
+
+  .flow-field {
+    @apply flex w-full max-w-[16rem] items-center justify-between gap-3 rounded-xl border border-white/10 bg-hive-850/80 px-4 py-3;
+  }
+
+  .flow-secret {
+    @apply select-none overflow-hidden text-base leading-none tracking-[0.3em] text-honey-200;
+  }
+
+  .flow-lock {
+    @apply h-5 w-5 shrink-0 text-slate-600;
+  }
+
+  .is-active .flow-secret {
+    animation: flow-type 1.8s steps(12, end) both;
+  }
+
+  .is-active .flow-lock {
+    animation: flow-lock-snap 0.84s cubic-bezier(0.34, 1.56, 0.64, 1) 1.68s both;
+  }
+
+  /* Stage 3 — expiry */
+
+  .flow-clock {
+    @apply relative grid h-[5.5rem] w-[5.5rem] place-items-center;
+  }
+
+  .flow-clock svg {
+    @apply absolute inset-0 h-full w-full -rotate-90;
+  }
+
+  .flow-ring-track {
+    @apply fill-none stroke-white/10;
+    stroke-width: 5;
+  }
+
+  .flow-ring-live {
+    @apply fill-none stroke-honey-400;
+    stroke-width: 5;
+    stroke-linecap: round;
+    stroke-dasharray: 188.5;
+    stroke-dashoffset: 188.5;
+  }
+
+  .flow-clock-label {
+    @apply relative text-lg font-semibold tabular-nums text-white;
+  }
+
+  .is-active .flow-ring-live {
+    animation: flow-sweep 2.76s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  /* Stage 4 — the link */
+
+  .flow-link {
+    @apply flex w-full max-w-[19rem] items-center gap-2 rounded-xl border border-white/10 bg-hive-850/80 px-3 py-2.5;
+  }
+
+  .flow-link > svg {
+    @apply h-4 w-4 shrink-0 text-honey-300;
+  }
+
+  .flow-url {
+    @apply flex-1 overflow-hidden whitespace-nowrap font-mono text-xs text-slate-300;
+  }
+
+  .flow-copy {
+    @apply relative grid shrink-0 rounded-lg bg-gradient-to-br from-honey-300 to-honey-500 px-2.5 py-1 text-[0.68rem] font-semibold text-hive-950;
+  }
+
+  .flow-copy > * {
+    grid-area: 1 / 1;
+  }
+
+  .flow-copy-b {
+    @apply opacity-0;
+  }
+
+  .is-active .flow-url {
+    animation: flow-type 1.44s steps(22, end) both;
+  }
+
+  .is-active .flow-copy-a {
+    animation: flow-fade-out 3.72s ease-in-out both;
+  }
+
+  .is-active .flow-copy-b {
+    animation: flow-fade-in 3.72s ease-in-out both;
+  }
+
+  /* Stage 5 — hand-off */
+
+  .flow-send {
+    @apply flex w-full max-w-[19rem] items-center gap-3;
+  }
+
+  .flow-node {
+    @apply grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/10 bg-hive-850 text-[0.65rem] font-semibold uppercase tracking-wider text-slate-400;
+  }
+
+  .flow-track {
+    @apply relative h-px flex-1;
+    background-image: linear-gradient(to right, rgba(255, 182, 39, 0.45) 45%, transparent 0);
+    background-size: 10px 1px;
+    background-repeat: repeat-x;
+  }
+
+  .flow-parcel {
+    @apply absolute top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full bg-gradient-to-br from-honey-300 to-honey-500 text-hive-950 shadow-honey;
+  }
+
+  .flow-parcel svg {
+    @apply h-3.5 w-3.5;
+  }
+
+  .is-active .flow-parcel {
+    animation: flow-travel 3s cubic-bezier(0.5, 0, 0.3, 1) both;
+  }
+
+  .is-active .flow-node--to {
+    animation: flow-arrive 3s ease-out both;
+  }
+
+  /* Stage 6 — opened, then destroyed */
+
+  .flow-tile--open {
+    @apply border-emerald-400/25 bg-emerald-400/[0.07];
+  }
+
+  .flow-tile--open svg {
+    @apply text-emerald-300;
+  }
+
+  .flow-gone {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-300;
+  }
+
+  .flow-gone svg {
+    @apply h-4 w-4 shrink-0;
+  }
+
+  .is-active .flow-tile--open {
+    animation: flow-consume 4.8s ease-in-out both;
+  }
+
+  .is-active .flow-gone {
+    animation: flow-fade-in-late 4.8s ease-in-out both;
+  }
+
+  .stat-chip {
+    @apply inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-300;
+  }
+}
+
+@layer utilities {
+  /* Staggered entrances — pair with .animate-fade-up / .animate-zoom-in. */
+  .delay-1 {
+    animation-delay: 80ms;
+  }
+
+  .delay-2 {
+    animation-delay: 160ms;
+  }
+
+  .delay-3 {
+    animation-delay: 240ms;
+  }
+
+  .delay-4 {
+    animation-delay: 320ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .btn-primary:hover,
+  .feature-card:hover {
+    transform: none;
+  }
+
+  /* The hero walkthrough does not auto-advance here, so every stage is laid
+     out at once, each frozen in its finished state. */
+  .flow-window *,
+  .flow-window *::before,
+  .flow-window *::after {
+    animation: none !important;
+  }
+
+  .flow-topbar,
+  .flow-toggle {
+    display: none;
+  }
+
+  .flow-body {
+    min-height: 0;
+  }
+
+  .flow-step {
+    position: relative;
+    inset: auto;
+    opacity: 1;
+    transform: none;
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .flow-step + .flow-step {
+    border-top: 1px solid rgb(255 255 255 / 0.06);
+  }
+
+  .flow-tile--b,
+  .flow-copy-b,
+  .flow-gone {
+    display: none;
+  }
+
+  .flow-seg-item--a {
+    color: #07080B;
+  }
+
+  .flow-secret,
+  .flow-url {
+    clip-path: none;
+  }
+
+  .flow-lock {
+    color: #FFB627;
+  }
+
+  .flow-ring-live {
+    stroke-dashoffset: 47;
+  }
+
+  .flow-parcel {
+    left: 50%;
+  }
+}
+
+/* ---------------------------------------------- Hero walkthrough keyframes */
+
+/* Settles upward into place once; its end state matches the resting
+   transform, so dropping .is-active causes no jump back. */
+@keyframes flow-rise {
+  from { transform: translateY(8px); }
+  to { transform: translateY(0); }
+}
+
+@keyframes flow-seg-slide {
+  0%, 40% { transform: translateX(0); }
+  55%, 100% { transform: translateX(100%); }
+}
+
+@keyframes flow-seg-on {
+  0%, 40% { color: #07080B; }
+  55%, 100% { color: #94a3b8; }
+}
+
+@keyframes flow-seg-off {
+  0%, 40% { color: #94a3b8; }
+  55%, 100% { color: #07080B; }
+}
+
+@keyframes flow-fade-in {
+  0%, 42% { opacity: 0; transform: translateY(4px); }
+  60%, 100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes flow-fade-out {
+  0%, 42% { opacity: 1; transform: translateY(0); }
+  60%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+
+/* Reveals text left-to-right, as if it were being typed in. */
+@keyframes flow-type {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes flow-lock-snap {
+  0% { transform: scale(0.6); color: #475569; }
+  60% { transform: scale(1.18); color: #FFD166; }
+  100% { transform: scale(1); color: #FFB627; }
+}
+
+@keyframes flow-sweep {
+  from { stroke-dashoffset: 188.5; }
+  to { stroke-dashoffset: 47; }
+}
+
+@keyframes flow-travel {
+  0% { left: 0; transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  18% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  82% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { left: 100%; transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+}
+
+/* Opened on the recipient's device, then the stored copy burns away. */
+@keyframes flow-consume {
+  0% { opacity: 0; transform: scale(0.94); }
+  10%, 48% { opacity: 1; transform: scale(1); filter: blur(0); }
+  70%, 100% { opacity: 0; transform: scale(0.9); filter: blur(6px); }
+}
+
+@keyframes flow-fade-in-late {
+  0%, 55% { opacity: 0; transform: translateY(6px); }
+  72%, 100% { opacity: 1; transform: translateY(0); }
+}
+
+/* The parcel is absorbed on arrival, so the node itself marks delivery. */
+@keyframes flow-arrive {
+  0%, 78% { border-color: rgb(255 255 255 / 0.1); color: #94a3b8; box-shadow: none; }
+  92%, 100% {
+    border-color: rgb(255 182 39 / 0.55);
+    color: #FFD166;
+    box-shadow: 0 10px 30px -12px rgba(255, 182, 39, 0.45);
   }
 }

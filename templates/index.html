@@ -2,91 +2,97 @@
 
 {% block content %}
 {% if session.get('username') %}
-<div class="mx-auto max-w-5xl">
-    <div class="surface-card p-6 sm:p-8">
-        <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-            <div class="space-y-3">
-                <span class="eyebrow">🐝 Secure handoff</span>
-                <h1 class="section-title">Share Securely</h1>
-                <p class="max-w-2xl text-sm leading-6 text-slate-600">
-                    Create a one-time buzz for files or secret notes. Encryption happens in your browser first, and the drop disappears after the first successful open.
-                </p>
-            </div>
-            <div class="surface-card-soft p-4 text-sm text-slate-600 sm:max-w-xs">
-                <p class="font-semibold text-slate-900">Drop secured</p>
-                <p class="mt-2">For the strongest setup, send the share link and password in different channels.</p>
-            </div>
+{# ------------------------------------------------------------- Composer #}
+<div class="mx-auto max-w-5xl space-y-8">
+    <header class="animate-fade-up space-y-4">
+        <span class="eyebrow">
+            <span class="h-1.5 w-1.5 rounded-full bg-honey-400" aria-hidden="true"></span>
+            Secure handoff
+        </span>
+        <h1 class="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            Make it <span class="honey-text">buzz</span>, then vanish.
+        </h1>
+        <h2 class="max-w-2xl text-sm leading-relaxed text-slate-400">
+            <strong>Encrypt a file or a secret note in your browser</strong>, send one link, and let the drop delete itself
+            the moment it is downloaded. The contents are ciphertext to the server; details like the filename and your private note are not.
+         </h2>
+    </header>
+
+    <div class="surface-card animate-fade-up delay-1 p-6 sm:p-8">
+        <span id="share-mode-label" class="field-label">What are you sending?</span>
+        <div class="tab-rail sm:inline-flex" role="tablist" aria-labelledby="share-mode-label">
+            <button id="file-tab" type="button" role="tab" aria-selected="true" aria-controls="file-upload-section" onclick="showFileUpload()" class="share-tab share-tab-active">
+                File
+            </button>
+            <button id="text-tab" type="button" role="tab" aria-selected="false" aria-controls="text-note-section" tabindex="-1" onclick="showTextNote()" class="share-tab">
+                Text note
+            </button>
         </div>
 
-        <div class="mt-8 rounded-full bg-slate-100 p-1">
-            <div class="flex flex-wrap gap-2">
-                <button id="file-tab" onclick="showFileUpload()" class="share-tab share-tab-active">
-                    Upload File
-                </button>
-                <button id="text-tab" onclick="showTextNote()" class="share-tab">
-                    Share Text Note
-                </button>
-            </div>
-        </div>
-
-        <div id="file-upload-section" class="mt-6">
-            <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="space-y-6">
-                <div class="dropzone">
-                    <div class="space-y-3">
-                        <svg class="mx-auto h-12 w-12 text-amber-500" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        <div id="file-upload-section" class="mt-6" role="tabpanel" aria-labelledby="file-tab">
+            <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+                <label id="dropzone" for="file" class="dropzone block">
+                    <div class="relative flex flex-col items-center gap-4">
+                        <svg viewBox="0 0 48 48" class="h-14 w-14 text-honey-300" fill="none" aria-hidden="true">
+                            <path d="M24 3 42 13.5v21L24 45 6 34.5v-21z" stroke="currentColor" stroke-width="1.4" opacity=".45"/>
+                            <path d="M24 32V17m0 0-6.5 6.5M24 17l6.5 6.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        <div class="text-slate-600">
-                            <label for="file" class="relative cursor-pointer rounded-md font-semibold text-slate-950 hover:text-amber-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-amber-300 focus-within:ring-offset-2">
-                                <span>Select a file to encrypt</span>
-                                <input id="file" name="file" type="file" class="sr-only" required>
-                            </label>
-                            <p class="mt-2">or drag and drop it here before you make it buzz away.</p>
+                        <div class="space-y-1">
+                            <p class="text-base font-semibold text-white">
+                                Drop a file here, or <span class="text-honey-300 underline decoration-honey-400/40 underline-offset-4">browse</span>
+                            </p>
+                            <p class="dropzone-hint text-sm text-slate-400">It is encrypted on this device before a single byte leaves it.</p>
                         </div>
-                        <p class="text-xs text-slate-500">
-                            Supported formats: {{ allowed_extensions|join(', ')|upper }}
+                        <p id="file-selected" class="hidden">
+                            <span class="file-chip">
+                                <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm6 0v3a1 1 0 0 0 1 1h3l-4-4Z" clip-rule="evenodd"/>
+                                </svg>
+                                <span id="file-selected-name" class="truncate"></span>
+                            </span>
                         </p>
-                        <p class="text-xs text-slate-500">
-                            Maximum file size: {{ (max_content_length / 1024 / 1024)|int }}MB
-                        </p>
+                        <div class="space-y-2 pt-1">
+                            <p><span class="stat-chip">Up to {{ (max_content_length / 1024 / 1024)|int }}MB</span></p>
+                            <p class="mx-auto max-w-sm text-xs leading-5 text-slate-600">{{ allowed_extensions|join(' · ')|upper }}</p>
+                        </div>
                     </div>
-                </div>
+                    <input id="file" name="file" type="file" class="sr-only" required>
+                </label>
+                <p id="file-error" class="file-error" role="alert"></p>
             </form>
         </div>
 
-        <div id="text-note-section" style="display:none;" class="mt-6 space-y-6">
-            <div>
-                <label for="note-text" class="field-label">Secret Text</label>
-                <textarea id="note-text" rows="8" class="field-input min-h-[13rem]" placeholder="Paste the note you want to protect with a one-time buzz..." required></textarea>
-                <p class="field-help">Your text is encrypted in the browser before it reaches the server.</p>
-            </div>
+        <div id="text-note-section" style="display:none;" class="mt-6" role="tabpanel" aria-labelledby="text-tab">
+            <label for="note-text" class="field-label">Secret text</label>
+            <textarea id="note-text" rows="9" class="field-input min-h-[14rem] font-mono text-[0.8rem] leading-6" placeholder="Paste the note you want to protect with a one-time buzz..." required></textarea>
+            <p class="field-help">Encrypted in the browser before it reaches the server.</p>
         </div>
 
-        <div class="mt-8 grid gap-6 border-t border-slate-200 pt-6">
-            <div class="grid gap-6 md:grid-cols-2">
+        <div class="mt-8 space-y-6 border-t border-white/[0.06] pt-8">
+            <div class="grid gap-5 md:grid-cols-2">
                 <div>
                     <label for="shared-password" class="field-label">Password</label>
                     <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" required>
-                    <p class="field-help">Share it separately for the strongest handoff.</p>
+                    <p class="field-help">Share it through a different channel than the link.</p>
                 </div>
                 <div>
-                    <label for="shared-expiry" class="field-label">Expiry Date (optional)</label>
+                    <label for="shared-expiry" class="field-label">Expiry date <span class="text-slate-600">(optional)</span></label>
                     <input id="shared-expiry" name="expiry" type="datetime-local" class="field-input">
-                    <p class="field-help">Optional for time-sensitive drops.</p>
+                    <p class="field-help">For drops that should not outlive the week.</p>
                 </div>
             </div>
 
             <div>
-                <label for="shared-private-note" class="field-label">Private note (optional)</label>
-                <textarea id="shared-private-note" name="private_note" rows="2" class="field-input" placeholder="Visible only to you in your shared items list"></textarea>
+                <label for="shared-private-note" class="field-label">Private note <span class="text-slate-600">(optional)</span></label>
+                <textarea id="shared-private-note" name="private_note" rows="2" class="field-input" placeholder="Visible only to you, in your drop list"></textarea>
             </div>
 
-            <div class="surface-card-soft space-y-4 p-4">
-                <label class="flex items-start gap-3 text-sm text-slate-700">
-                    <input id="notify-on-open" name="notify_on_open" type="checkbox" class="mt-1 h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400">
+            <div class="surface-card-soft space-y-4 p-5">
+                <label class="flex cursor-pointer items-start gap-3 text-sm">
+                    <input id="notify-on-open" name="notify_on_open" type="checkbox" class="field-check">
                     <span>
-                        <span class="font-semibold text-slate-900">Notify me when this is opened</span>
-                        <span class="mt-1 block text-slate-500">Buzzdrop sends one email after the recipient attempts decryption. Delivery failures are logged only.</span>
+                        <span class="block font-semibold text-white">Notify me when this is opened</span>
+                        <span class="mt-1 block text-slate-500">One email after the recipient attempts decryption. Delivery failures are logged only.</span>
                     </span>
                 </label>
                 <div>
@@ -110,163 +116,387 @@
                 </div>
             </div>
 
-            <div class="surface-card-soft grid gap-4 p-4 sm:grid-cols-[1fr,auto] sm:items-center">
-                <div class="text-sm text-slate-600">
-                    <p class="font-semibold text-slate-900">One-time buzz</p>
-                    <p class="mt-1">The file is stored only as ciphertext and self-destructs after the first successful open.</p>
-                </div>
-                <button id="share-action-btn" type="button" aria-label="Upload file" class="btn-primary w-full sm:w-auto">
-                    Upload File
-                </button>
-                <div id="share-progress-container" class="col-span-full w-full" style="display:none; align-items:center;">
-                    <div class="w-full rounded-full bg-slate-200">
-                        <div id="share-progress-bar" class="h-4 rounded-full bg-amber-400 transition-all" style="width: 0%"></div>
+            <div class="relative overflow-hidden rounded-2xl border border-honey-400/20 bg-gradient-to-br from-honey-400/[0.09] to-transparent p-5">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="text-sm">
+                        <p class="font-semibold text-white">One-time buzz</p>
+                        <p class="mt-1 text-slate-400">Stored as ciphertext only, destroyed the moment the recipient downloads it.</p>
                     </div>
-                    <span id="share-progress-text" class="ml-2 text-sm font-semibold text-slate-700">0%</span>
+                    <button id="share-action-btn" type="button" aria-label="Share file" class="btn-primary w-full shrink-0 sm:w-auto">
+                        <span id="share-action-label" class="relative z-10">Share file</span>
+                        <svg class="relative z-10 h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M3 10a1 1 0 0 1 1-1h9.586L9.293 4.707a1 1 0 0 1 1.414-1.414l6 6a1 1 0 0 1 0 1.414l-6 6a1 1 0 0 1-1.414-1.414L13.586 11H4a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="share-progress-container" class="mt-4 w-full items-center gap-3" style="display:none;">
+                    <div class="honey-track">
+                        <div id="share-progress-bar" class="honey-bar" style="width: 0%"></div>
+                    </div>
+                    <span id="share-progress-text" class="shrink-0 text-sm font-semibold tabular-nums text-honey-300">0%</span>
                 </div>
             </div>
         </div>
     </div>
 </div>
 {% else %}
-<div class="max-w-6xl mx-auto space-y-8">
-    <section class="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-2xl">
-        <div class="grid gap-10 px-8 py-10 lg:grid-cols-[1.4fr,1fr] lg:px-12 lg:py-14">
-            <div class="space-y-6">
-                <span class="inline-flex items-center rounded-full bg-white/10 px-4 py-1 text-sm font-medium ring-1 ring-white/20">
-                    Zero-knowledge sharing for files and secret notes
-                </span>
-                <div class="space-y-4">
-                    <img src="{{ url_for('static', filename='logo.png') }}" alt="Buzzdrop bee logo" class="h-20"/>
-                    <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">Buzzdrop: file sharing that stings—just once.</h1>
-                    <p class="max-w-2xl text-lg text-indigo-100">
-                        BuzzDrop: secure, one-time file sharing. Upload encrypted files or secret notes, send a link, and let them vanish after a single successful view.
-                    </p>
-                </div>
-                <div class="grid gap-3 text-sm text-indigo-100 sm:grid-cols-3">
-                    <div class="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/10">
-                        <p class="font-semibold text-white"><span aria-hidden="true" class="mr-1">🔒</span>Encrypted in the browser</p>
-                        <p class="mt-1 text-indigo-100">AES-GCM + PBKDF2 protection happens before upload starts.</p>
-                    </div>
-                    <div class="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/10">
-                        <p class="font-semibold text-white"><span aria-hidden="true" class="mr-1">💥</span>Self-destructing links</p>
-                        <p class="mt-1 text-indigo-100">Shared files disappear after the first successful download or view.</p>
-                    </div>
-                    <div class="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/10">
-                        <p class="font-semibold text-white"><span aria-hidden="true" class="mr-1">📝</span>Secret notes included</p>
-                        <p class="mt-1 text-indigo-100">Send encrypted text notes when a file would be overkill.</p>
-                    </div>
-                </div>
+{# -------------------------------------------------------------- Landing #}
+<div class="space-y-20">
+    <section class="grid items-center gap-12 lg:grid-cols-[1.15fr,1fr]">
+        <div class="animate-fade-up space-y-7">
+            <span class="eyebrow">
+                <span class="h-1.5 w-1.5 rounded-full bg-honey-400" aria-hidden="true"></span>
+                Zero-knowledge sharing
+            </span>
+            <h1 class="text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl">
+                File sharing that stings&nbsp;— <span class="honey-text">just once.</span>
+            </h1>
+            <p class="max-w-xl text-lg leading-relaxed text-slate-400">
+                <strong class="text-honey-400">Encrypt files and secret notes in your browser</strong>, send a single link, and watch the drop
+                disappear the moment it is downloaded.<br />
+                The contents never reach the server unencrypted.
+            </p>
+            <div class="flex flex-wrap items-center gap-3">
+                <a href="{{ url_for('login') }}" class="btn-primary">
+                    <span class="relative z-10">Enter the hive</span>
+                    <svg class="relative z-10 h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M3 10a1 1 0 0 1 1-1h9.586L9.293 4.707a1 1 0 0 1 1.414-1.414l6 6a1 1 0 0 1 0 1.414l-6 6a1 1 0 0 1-1.414-1.414L13.586 11H4a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
+                    </svg>
+                </a>
+                <a href="https://github.com/luprzybyl/buzzdrop" target="_blank" rel="noopener noreferrer" class="btn-secondary">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4 fill-current">
+                        <path d="M12 1.5a10.5 10.5 0 0 0-3.32 20.46c.53.1.72-.23.72-.51v-1.78c-2.94.64-3.56-1.25-3.56-1.25-.48-1.2-1.16-1.52-1.16-1.52-.95-.65.07-.64.07-.64 1.05.08 1.6 1.08 1.6 1.08.94 1.6 2.46 1.14 3.06.87.09-.68.37-1.14.66-1.4-2.35-.27-4.82-1.17-4.82-5.23 0-1.16.42-2.1 1.09-2.84-.11-.27-.47-1.37.1-2.84 0 0 .89-.28 2.92 1.08a10.2 10.2 0 0 1 5.32 0c2.03-1.36 2.92-1.08 2.92-1.08.57 1.47.21 2.57.1 2.84.68.74 1.09 1.68 1.09 2.84 0 4.07-2.48 4.96-4.84 5.22.38.33.72.97.72 1.96v2.91c0 .28.19.62.73.51A10.5 10.5 0 0 0 12 1.5Z"/>
+                    </svg>
+                    View source
+                </a>
             </div>
+            <div class="flex flex-wrap gap-2 pt-2">
+                <span class="stat-chip">AES-GCM</span>
+                <span class="stat-chip">PBKDF2 · 100k</span>
+                <span class="stat-chip">Local or S3</span>
+                <span class="stat-chip">CLI included</span>
+            </div>
+        </div>
 
-            <div class="rounded-2xl bg-white/10 p-6 shadow-lg ring-1 ring-white/15 backdrop-blur">
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-100">Why Buzzdrop</p>
-                <div class="mt-4 space-y-4">
-                    <div class="rounded-2xl bg-slate-950/20 p-4">
-                        <p class="text-lg font-semibold">One link. One view. Gone.</p>
-                        <p class="mt-1 text-sm text-indigo-100">Perfect for contracts, credentials, handoffs, and anything else that should not linger in an inbox forever.</p>
+        {# Hero walkthrough: the six stages a drop goes through, cycled by hero-flow.js.
+           Artwork is aria-hidden; the captions stay readable as an ordered list. #}
+        <div class="animate-zoom-in delay-2 flex justify-center lg:justify-end">
+            <div id="flow-stage" class="flow-stage" data-step="0">
+                <div class="flow-window">
+                    <div class="flow-topbar" aria-hidden="true">
+                        <span class="flow-title">How a drop works</span>
+                        <span class="flow-pips">
+                            <span class="flow-dot is-active"></span>
+                            <span class="flow-dot"></span>
+                            <span class="flow-dot"></span>
+                            <span class="flow-dot"></span>
+                            <span class="flow-dot"></span>
+                            <span class="flow-dot"></span>
+                        </span>
                     </div>
-                    <div class="rounded-2xl bg-slate-950/20 p-4">
-                        <p class="text-lg font-semibold">Your server never sees plaintext.</p>
-                        <p class="mt-1 text-sm text-indigo-100">Encryption happens before upload, so Buzzdrop stores only ciphertext and metadata.</p>
-                    </div>
-                    <div class="rounded-2xl bg-slate-950/20 p-4">
-                        <p class="text-lg font-semibold">Built for flexible deployment.</p>
-                        <p class="mt-1 text-sm text-indigo-100">Run it with local storage or S3, and tune file type and size rules for your team.</p>
-                    </div>
+
+                    <ol class="flow-body">
+                        <li class="flow-step is-active">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-seg">
+                                    <span class="flow-seg-thumb"></span>
+                                    <span class="flow-seg-item flow-seg-item--a">File</span>
+                                    <span class="flow-seg-item flow-seg-item--b">Message</span>
+                                </div>
+                                <div class="flow-swap">
+                                    <span class="flow-tile flow-tile--a">
+                                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm6 0v3a1 1 0 0 0 1 1h3l-4-4Z" clip-rule="evenodd"/></svg>
+                                        contract.pdf
+                                    </span>
+                                    <span class="flow-tile flow-tile--b">
+                                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3.6l-3.1 2.7A1 1 0 0 1 6.6 16v-2H5a2 2 0 0 1-2-2V5Zm3 2h8v1.5H6V7Zm0 3h5v1.5H6V10Z" clip-rule="evenodd"/></svg>
+                                        Wire details inside
+                                    </span>
+                                </div>
+                            </div>
+                            <p class="flow-cap"><strong>Pick a file &mdash; or type a message.</strong> Either one gets the same treatment.</p>
+                        </li>
+
+                        <li class="flow-step">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-field">
+                                    <span class="flow-secret">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>
+                                    <svg class="flow-lock" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4 4 0 0 0-4 4v3H5.5A1.5 1.5 0 0 0 4 9.5v7A1.5 1.5 0 0 0 5.5 18h9a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 14.5 8H14V5a4 4 0 0 0-4-4Zm2 7V5a2 2 0 1 0-4 0v3h4Z" clip-rule="evenodd"/></svg>
+                                </div>
+                                <span class="flow-tag">AES-GCM &middot; PBKDF2 100k</span>
+                            </div>
+                            <p class="flow-cap"><strong>Set a password.</strong> Encryption happens in your browser, before anything is uploaded.</p>
+                        </li>
+
+                        <li class="flow-step">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-clock">
+                                    <svg viewBox="0 0 72 72">
+                                        <circle class="flow-ring-track" cx="36" cy="36" r="30"/>
+                                        <circle class="flow-ring-live" cx="36" cy="36" r="30"/>
+                                    </svg>
+                                    <span class="flow-clock-label">24h</span>
+                                </div>
+                                <span class="flow-tag">Expires 12 Oct, 18:00</span>
+                            </div>
+                            <p class="flow-cap"><strong>Add an expiry.</strong> Optional deadline &mdash; the drop can vanish before anyone opens it.</p>
+                        </li>
+
+                        <li class="flow-step">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-link">
+                                    <svg viewBox="0 0 20 20" fill="currentColor"><path d="M12.586 4.586a2 2 0 1 1 2.828 2.828l-3 3a2 2 0 0 1-2.828 0 1 1 0 0 0-1.414 1.414 4 4 0 0 0 5.656 0l3-3a4 4 0 0 0-5.656-5.656l-1.5 1.5a1 1 0 1 0 1.414 1.414l1.5-1.5Z"/><path d="M7.414 15.414a2 2 0 1 1-2.828-2.828l3-3a2 2 0 0 1 2.828 0 1 1 0 0 0 1.414-1.414 4 4 0 0 0-5.656 0l-3 3a4 4 0 1 0 5.656 5.656l1.5-1.5a1 1 0 1 0-1.414-1.414l-1.5 1.5Z"/></svg>
+                                    <span class="flow-url">&hellip;/view/7f3ac9d2</span>
+                                    <span class="flow-copy">
+                                        <span class="flow-copy-a">Copy</span>
+                                        <span class="flow-copy-b">Copied</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <p class="flow-cap"><strong>Get one link.</strong> It hands over the drop exactly once, then it is spent.</p>
+                        </li>
+
+                        <li class="flow-step">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-send">
+                                    <span class="flow-node">You</span>
+                                    <span class="flow-track">
+                                        <span class="flow-parcel">
+                                            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3.5 2.9 17.4 9a1 1 0 0 1 0 1.9L3.5 17.1a1 1 0 0 1-1.4-1.1L3.3 11 11 10 3.3 9 2.1 4a1 1 0 0 1 1.4-1.1Z"/></svg>
+                                        </span>
+                                    </span>
+                                    <span class="flow-node flow-node--to">Them</span>
+                                </div>
+                            </div>
+                            <p class="flow-cap"><strong>Send the link.</strong> Send the password through a different channel.</p>
+                        </li>
+
+                        <li class="flow-step">
+                            <div class="flow-art" aria-hidden="true">
+                                <div class="flow-swap">
+                                    <span class="flow-tile flow-tile--open">
+                                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm6 0v3a1 1 0 0 0 1 1h3l-4-4Z" clip-rule="evenodd"/></svg>
+                                        contract.pdf
+                                    </span>
+                                    <span class="flow-gone">
+                                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM6.7 6.7a1 1 0 0 1 1.4 0L10 8.6l1.9-1.9a1 1 0 1 1 1.4 1.4L11.4 10l1.9 1.9a1 1 0 0 1-1.4 1.4L10 11.4l-1.9 1.9a1 1 0 0 1-1.4-1.4L8.6 10 6.7 8.1a1 1 0 0 1 0-1.4Z" clip-rule="evenodd"/></svg>
+                                        Deleted from the server
+                                    </span>
+                                </div>
+                            </div>
+                            <p class="flow-cap"><strong>They open it once.</strong> The file decrypts on their device, and the stored copy is destroyed.</p>
+                        </li>
+                    </ol>
+
+                    <button id="flow-toggle" type="button" class="flow-toggle" aria-label="Pause walkthrough">
+                        <svg data-flow-icon="pause" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path d="M6 4h3v12H6zM11 4h3v12h-3z"/>
+                        </svg>
+                        <svg data-flow-icon="play" class="hidden h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path d="M7 4.5v11l9-5.5z"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="grid gap-6 lg:grid-cols-[1.3fr,1fr]">
-        <div class="rounded-2xl bg-white p-8 shadow-md">
-            <h2 class="text-2xl font-bold text-gray-900">How it works</h2>
-            <div class="mt-6 grid gap-4 md:grid-cols-3">
-                <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                    <p class="text-sm font-semibold text-indigo-600">1. Encrypt before upload</p>
-                    <p class="mt-2 text-sm text-gray-600">Choose a file or write a note, set a password, and let the browser encrypt everything locally.</p>
+    <section class="space-y-8">
+        <div class="max-w-2xl space-y-3">
+            <h2 class="section-title">How it works</h2>
+            <p class="section-lead">Three steps, and nothing left behind.</p>
+        </div>
+        <div class="grid gap-5 md:grid-cols-3">
+            <article class="feature-card animate-fade-up">
+                <div class="flex items-center gap-4">
+                    <span class="hex-step">1</span>
+                    <h3 class="text-base font-semibold text-white">Encrypt before upload</h3>
                 </div>
-                <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                    <p class="text-sm font-semibold text-indigo-600">2. Share the generated link</p>
-                    <p class="mt-2 text-sm text-gray-600">Send the one-time link and share the password separately when you want the strongest protection.</p>
+                <p class="mt-4 text-sm leading-relaxed text-slate-400">
+                    Pick a file or write a note, set a password, and the browser seals it with AES-GCM locally.
+                </p>
+            </article>
+            <article class="feature-card animate-fade-up delay-2">
+                <div class="flex items-center gap-4">
+                    <span class="hex-step">2</span>
+                    <h3 class="text-base font-semibold text-white">Share the one-time link</h3>
                 </div>
-                <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5">
-                    <p class="text-sm font-semibold text-indigo-600">3. Watch it self-destruct</p>
-                    <p class="mt-2 text-sm text-gray-600">After the first successful download or view, the encrypted payload is deleted automatically.</p>
+                <p class="mt-4 text-sm leading-relaxed text-slate-400">
+                    Send the link, and send the password somewhere else. Two channels, one drop.
+                </p>
+            </article>
+            <article class="feature-card animate-fade-up delay-4">
+                <div class="flex items-center gap-4">
+                    <span class="hex-step">3</span>
+                    <h3 class="text-base font-semibold text-white">Watch it self-destruct</h3>
+                </div>
+                <p class="mt-4 text-sm leading-relaxed text-slate-400">
+                    The stored copy is deleted the moment the recipient continues &mdash; before the password is even checked.
+                </p>
+            </article>
+        </div>
+    </section>
+
+    <section class="space-y-8">
+        <div class="max-w-2xl space-y-3">
+            <h2 class="section-title">What&rsquo;s guaranteed</h2>
+            <p class="section-lead">Four things you can rely on &mdash; each of them checkable in the source.</p>
+        </div>
+        <div class="grid gap-5 md:grid-cols-2">
+        <article class="feature-card">
+            <div class="flex items-start gap-4">
+                <svg viewBox="0 0 48 48" class="h-11 w-11 shrink-0 text-honey-300" fill="none" aria-hidden="true">
+                    <path d="M24 3 42 13.5v21L24 45 6 34.5v-21z" stroke="currentColor" stroke-width="1.3" opacity=".4"/>
+                    <path d="M24 14a5 5 0 0 0-5 5c0 2 1.2 3.7 3 4.5V32l2 2 2-2 -1.4-1.5 1.4-1.5-1.4-1.5 1.4-1.5v-2.5c1.8-.8 3-2.5 3-4.5a5 5 0 0 0-5-5Zm0 3.2a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2Z" fill="currentColor"/>
+                </svg>
+                <div>
+                    <h3 class="text-base font-semibold leading-snug text-white">The server never sees your key</h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">Your password becomes an AES-GCM key in the browser via PBKDF2, 100,000 iterations, and never leaves the device. Buzzdrop stores ciphertext and metadata; it cannot read the drop.</p>
                 </div>
             </div>
+        </article>
+        <article class="feature-card">
+            <div class="flex items-start gap-4">
+                <svg viewBox="0 0 48 48" class="h-11 w-11 shrink-0 text-honey-300" fill="none" aria-hidden="true">
+                    <path d="M24 3 42 13.5v21L24 45 6 34.5v-21z" stroke="currentColor" stroke-width="1.3" opacity=".4"/>
+                    <path d="M15 24h12m0 0-4.5-4.5M27 24l-4.5 4.5M32 17v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <div>
+                    <h3 class="text-base font-semibold leading-snug text-white">Continuing spends the drop</h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">Once the recipient confirms, the stored copy is deleted before a password is even entered. A wrong guess gets no second attempt, and neither does anyone who finds the link later.</p>
+                </div>
+            </div>
+        </article>
+        <article class="feature-card">
+            <div class="flex items-start gap-4">
+                <svg viewBox="0 0 48 48" class="h-11 w-11 shrink-0 text-honey-300" fill="none" aria-hidden="true">
+                    <path d="M24 3 42 13.5v21L24 45 6 34.5v-21z" stroke="currentColor" stroke-width="1.3" opacity=".4"/>
+                    <path d="M24 16v8l5 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="1.6"/>
+                </svg>
+                <div>
+                    <h3 class="text-base font-semibold leading-snug text-white">An expiry is a hard cut-off</h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">Give a drop a deadline and the link stops working once it passes. The attempt is refused and the stored copy removed, whether or not anyone ever opened it.</p>
+                </div>
+            </div>
+        </article>
+        <article class="feature-card">
+            <div class="flex items-start gap-4">
+                <svg viewBox="0 0 48 48" class="h-11 w-11 shrink-0 text-honey-300" fill="none" aria-hidden="true">
+                    <path d="M24 3 42 13.5v21L24 45 6 34.5v-21z" stroke="currentColor" stroke-width="1.3" opacity=".4"/>
+                    <path d="M24 15a6 6 0 0 0-6 6c0 5-2 6-2 6h16s-2-1-2-6a6 6 0 0 0-6-6Zm-2.5 15a2.5 2.5 0 0 0 5 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <div>
+                    <h3 class="text-base font-semibold leading-snug text-white">You find out it happened</h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">Buzzdrop records when the drop was fetched and from which IP, and can email you once, the moment the recipient attempts decryption.</p>
+                </div>
+            </div>
+        </article>
         </div>
+    </section>
 
-        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-8 shadow-md">
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-amber-700">Open source</p>
-            <h2 class="mt-3 text-2xl font-bold text-gray-900">Star Buzzdrop on GitHub</h2>
-            <p class="mt-3 text-sm leading-6 text-gray-700">
-                Like the idea? Explore the code, follow releases, or drop a star to support the project and help more people find secure one-time sharing.
-            </p>
-            <ul class="mt-5 space-y-3 text-sm text-gray-700">
-                <li><span aria-hidden="true" class="mr-1">🐝</span> Read the full feature list and security notes in the README.</li>
-                <li><span aria-hidden="true" class="mr-1">🚀</span> Grab the <code class="rounded bg-white px-2 py-1 text-xs">buzz</code> CLI for encrypted uploads from your terminal.</li>
-                <li><span aria-hidden="true" class="mr-1">✅</span> Track the latest build status and ongoing improvements in the repository.</li>
-            </ul>
-            <div class="mt-6 flex flex-col gap-3">
-                <a href="https://github.com/luprzybyl/buzzdrop" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg bg-gray-900 px-5 py-3 font-semibold text-white hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2">
-                    <span>Open Buzzdrop on GitHub</span>
-                    <span class="ml-2 text-xs font-medium text-gray-300">(new tab)</span>
+    <section class="surface-card p-8 sm:p-12">
+        <div class="grid gap-10 lg:grid-cols-[1.2fr,1fr] lg:items-center">
+            <div class="space-y-5">
+                <span class="eyebrow">Open source</span>
+                <h2 class="section-title">Read the code. Then trust it.</h2>
+                <p class="section-lead max-w-xl">
+                    Buzzdrop is small enough to audit in an afternoon. Explore it, run it on your own box,
+                    or drop a star so more people find secure one-time sharing.
+                </p>
+                <ul class="space-y-3 text-sm text-slate-400">
+                    <li class="flex gap-3">
+                        <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-honey-400" aria-hidden="true"></span>
+                        <span>Full feature list and security notes live in the README.</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-honey-400" aria-hidden="true"></span>
+                        <span>Grab the <code class="rounded-md border border-white/10 bg-hive-850 px-1.5 py-0.5 text-xs text-honey-200">buzz</code> CLI for encrypted uploads from your terminal.</span>
+                    </li>
+                    <li class="flex gap-3">
+                        <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-honey-400" aria-hidden="true"></span>
+                        <span>Track build status and ongoing work in the repository.</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="flex flex-col gap-3">
+                <a href="https://github.com/luprzybyl/buzzdrop" target="_blank" rel="noopener noreferrer" class="btn-primary">
+                    <span class="relative z-10">Open Buzzdrop on GitHub</span>
                 </a>
-                <a href="https://github.com/luprzybyl/buzzdrop/blob/main/README.md" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center rounded-lg border border-gray-300 px-5 py-3 font-semibold text-gray-700 hover:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2">
-                    <span>Read the Buzzdrop README on GitHub</span>
-                    <span class="ml-2 text-xs font-medium text-gray-500">(new tab)</span>
+                <a href="https://github.com/luprzybyl/buzzdrop/blob/main/README.md" target="_blank" rel="noopener noreferrer" aria-label="Read the Buzzdrop README on GitHub (opens in new tab)" class="btn-secondary">
+                    Read the README
                 </a>
+                <p class="text-center text-xs text-slate-600">Both links open in a new tab.</p>
             </div>
         </div>
     </section>
 </div>
+<script type="module" src="{{ url_for('static', filename='js/hero-flow.js') }}" integrity="{{ sri_hash('js/hero-flow.js') }}" crossorigin="anonymous"></script>
 {% endif %}
+
 {% if session.get('username') and user_files %}
-<div class="mt-8">
-    <div class="surface-card p-6 sm:p-8">
+{# ------------------------------------------------------------ Drop list #}
+<div class="mx-auto mt-10 max-w-5xl">
+    <div class="surface-card animate-fade-up delay-2 p-6 sm:p-8">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h2 class="text-xl font-semibold text-slate-950">Your Shared Files</h2>
-                <p class="mt-1 text-sm text-slate-600">Track the status of each drop and copy links without exposing your private notes.</p>
+                <h2 class="text-xl font-semibold tracking-tight text-white">Your drops</h2>
+                <p class="mt-1 text-sm text-slate-400">Track every buzz and copy links without exposing your private notes.</p>
             </div>
-            <span class="status-badge status-badge-slate">{{ user_files|length }} active or historical drops</span>
+            <span class="status-badge status-badge-slate">{{ user_files|length }} total</span>
         </div>
-        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+
+        <div class="mt-6 flex flex-col gap-4 border-t border-white/[0.06] pt-6 lg:flex-row lg:items-end lg:justify-between">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <label class="block sm:w-72">
-                    <span class="field-label mb-1">Quick search</span>
-                    <input id="shared-files-search" type="search" class="field-input py-2.5" placeholder="Search by name, note, or status">
+                    <span class="field-label">Quick search</span>
+                    <input id="shared-files-search" type="search" class="field-input py-2.5" placeholder="Name, note, or status">
                 </label>
                 <label class="block sm:w-56">
-                    <span class="field-label mb-1">Sort by</span>
+                    <span class="field-label">Sort by</span>
                     <select id="shared-files-sort" class="field-input py-2.5">
-                        <option value="downloaded:desc" selected>Downloaded (newest first)</option>
-                        <option value="uploaded:desc">Uploaded (newest first)</option>
-                        <option value="expiry:asc">Expiry (soonest first)</option>
+                        <option value="downloaded:desc" selected>Downloaded (newest)</option>
+                        <option value="uploaded:desc">Uploaded (newest)</option>
+                        <option value="expiry:asc">Expiry (soonest)</option>
                     </select>
                 </label>
             </div>
             <div id="shared-files-summary" class="text-sm text-slate-500"></div>
         </div>
-        <div id="shared-files-list" class="mt-4 space-y-3" data-page-size="5" data-status-url="{{ url_for('user_file_statuses') }}">
+
+        <div id="shared-files-list" class="mt-5 space-y-3" data-page-size="5" data-status-url="{{ url_for('user_file_statuses') }}">
             {% for file in user_files %}
             <article class="dashboard-item shared-file-row" data-file-id="{{ file.id }}" data-search-base="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or ''))|lower }}" data-uploaded-at="{{ file.created_at or '' }}" data-expiry-at="{{ file.expiry_at or '' }}" data-downloaded-at="{{ file.downloaded_at or '' }}" data-search-text="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.status ~ ' ' ~ file.status_display ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or '') ~ ' ' ~ (file.downloaded_by_ip or ''))|lower }}">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
-                        <div>
-                            <a href="#" class="copy-url text-base font-semibold text-slate-950 hover:text-amber-600" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}">{{ file.original_name }}</a>
-                            {% if file.private_note %}
-                                <p class="mt-2 text-sm text-slate-500">{{ file.private_note }}</p>
-                            {% endif %}
-                        </div>
-                        <div class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
-                            <span><span class="font-semibold text-slate-700">Uploaded:</span> {{ file.created_at }}</span>
-                            <span><span class="font-semibold text-slate-700">Expiry:</span> {{ file.expiry_at or 'No expiry' }}</span>
-                            <span><span class="font-semibold text-slate-700">Downloaded:</span> <span data-file-downloaded-at>{{ file.downloaded_at or 'No' }}</span></span>
-                            <span class="break-all"><span class="font-semibold text-slate-700">Downloaded By:</span> <span data-file-downloaded-by>{{ file.downloaded_by_ip or '-' }}</span></span>
-                        </div>
+                        <a href="#" class="copy-url group inline-flex max-w-full items-center gap-2 text-base font-semibold text-white transition hover:text-honey-300" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}" title="Copy share link">
+                            <span class="truncate">{{ file.original_name }}</span>
+                            <svg class="h-4 w-4 shrink-0 text-slate-600 transition group-hover:text-honey-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
+                                <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
+                            </svg>
+                            <span class="copy-flash hidden" aria-hidden="true">Copied</span>
+                        </a>
+                        {% if file.private_note %}
+                            <p class="mt-2 text-sm text-slate-500">{{ file.private_note }}</p>
+                        {% endif %}
+                        <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">Uploaded</dt>
+                                <dd class="tabular-nums">{{ file.created_at }}</dd>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">Expiry</dt>
+                                <dd class="tabular-nums">{{ file.expiry_at or 'None' }}</dd>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">Opened</dt>
+                                <dd class="tabular-nums" data-file-downloaded-at>{{ file.downloaded_at or 'No' }}</dd>
+                            </div>
+                            <div class="flex gap-1.5 break-all">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">From</dt>
+                                <dd class="tabular-nums" data-file-downloaded-by>{{ file.downloaded_by_ip or '-' }}</dd>
+                            </div>
+                        </dl>
                     </div>
                     <div class="flex flex-wrap items-center gap-3 lg:justify-end">
                         <span data-file-status class="status-badge {% if file.downloaded_at %}status-badge-green{% elif file.status == 'expired' %}status-badge-red{% else %}status-badge-amber{% endif %}">
@@ -274,19 +504,23 @@
                         </span>
                         <form method="post" action="{{ url_for('delete_file', file_id=file.id) }}" class="inline-block">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn-secondary px-4 py-2 text-rose-700 hover:bg-rose-50" onclick="return confirm('Delete this file?');">Delete</button>
+                            <button type="submit" class="btn-danger" onclick="return confirm('Delete this file?');">Delete</button>
                         </form>
                     </div>
                 </div>
             </article>
             {% endfor %}
         </div>
-        <p id="shared-files-empty-state" class="mt-4 hidden rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">No drops match this search.</p>
-        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+        <p id="copy-status" class="sr-only" role="status"></p>
+
+        <p id="shared-files-empty-state" class="mt-4 hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-6 text-center text-sm text-slate-500">No drops match this search.</p>
+
+        <div class="mt-6 flex flex-col gap-3 border-t border-white/[0.06] pt-5 sm:flex-row sm:items-center sm:justify-between">
             <span id="shared-files-page" class="text-sm font-medium text-slate-500"></span>
             <div class="flex gap-2">
-                <button id="shared-files-prev" type="button" class="btn-secondary px-4 py-2">Previous</button>
-                <button id="shared-files-next" type="button" class="btn-secondary px-4 py-2">Next</button>
+                <button id="shared-files-prev" type="button" class="btn-secondary px-4 py-2 disabled:pointer-events-none disabled:opacity-40">Previous</button>
+                <button id="shared-files-next" type="button" class="btn-secondary px-4 py-2 disabled:pointer-events-none disabled:opacity-40">Next</button>
             </div>
         </div>
     </div>
@@ -298,6 +532,4 @@
 window.uploadUrl = "{{ url_for('upload_file') }}";
 </script>
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}" integrity="{{ sri_hash('js/main.js') }}" crossorigin="anonymous"></script>
-
-
 {% endblock %}

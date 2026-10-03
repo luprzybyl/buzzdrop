@@ -40,7 +40,7 @@ def test_upload_file_success(client, app, files_table):
 
     assert response.status_code == 200
     # Ensure content from success.html is present, not index.html
-    assert b'File Shared Successfully!' in response.data
+    assert b'File is in the hive' in response.data
     assert b'id="share-link"' in response.data # Check that the input field for the link is there
 
     File = Query()

@@ -10,27 +10,87 @@ let uploadInProgress = false;
 const allowedExtensions = JSON.parse(document.getElementById('allowed-extensions-json').textContent);
 
 // --- Tab Switching Logic ---
+// The composer's two modes are an ARIA tab set: the rail is the tablist and
+// each section is the panel its tab controls.
+const shareModes = {
+    file: { tab: 'file-tab', panel: 'file-upload-section', action: 'Share file' },
+    text: { tab: 'text-tab', panel: 'text-note-section', action: 'Share note' },
+};
+const shareModeOrder = ['file', 'text'];
+
+// The action button holds an icon alongside its label, so only the label node is rewritten.
+function setShareAction(label) {
+    const button = document.getElementById('share-action-btn');
+    const labelNode = document.getElementById('share-action-label');
+    if (labelNode) {
+        labelNode.textContent = label;
+    }
+    if (button) {
+        button.setAttribute('aria-label', label);
+    }
+}
+
+// Toggling one class rather than reassigning className, so the ARIA state set
+// below survives a mode switch.
+function selectShareMode(mode, { focusTab = false } = {}) {
+    activeShareMode = mode;
+
+    shareModeOrder.forEach((name) => {
+        const { tab, panel } = shareModes[name];
+        const isActive = name === mode;
+        const tabNode = document.getElementById(tab);
+        const panelNode = document.getElementById(panel);
+
+        if (panelNode) panelNode.style.display = isActive ? 'block' : 'none';
+        if (!tabNode) return;
+
+        tabNode.classList.toggle('share-tab-active', isActive);
+        tabNode.setAttribute('aria-selected', String(isActive));
+        // Roving tabindex: Tab reaches the rail once, arrows move within it.
+        tabNode.tabIndex = isActive ? 0 : -1;
+        if (isActive && focusTab) tabNode.focus();
+    });
+
+    setShareAction(shareModes[mode].action);
+}
+
 function showFileUpload() {
-    activeShareMode = 'file';
-    document.getElementById('file-upload-section').style.display = 'block';
-    document.getElementById('text-note-section').style.display = 'none';
-    document.getElementById('file-tab').className = 'share-tab share-tab-active';
-    document.getElementById('text-tab').className = 'share-tab';
-    document.getElementById('share-action-btn').textContent = 'Upload File';
+    selectShareMode('file');
 }
 
 function showTextNote() {
-    activeShareMode = 'text';
-    document.getElementById('file-upload-section').style.display = 'none';
-    document.getElementById('text-note-section').style.display = 'block';
-    document.getElementById('file-tab').className = 'share-tab';
-    document.getElementById('text-tab').className = 'share-tab share-tab-active';
-    document.getElementById('share-action-btn').textContent = 'Share Text Note';
+    selectShareMode('text');
 }
 
 // Make functions globally accessible for inline onclick handlers
 window.showFileUpload = showFileUpload;
 window.showTextNote = showTextNote;
+
+// The tab role promises a keyboard contract, so honour it: arrows move between
+// tabs, Home and End jump to the ends.
+const shareTabRail = document.querySelector('.tab-rail');
+if (shareTabRail) {
+    shareTabRail.addEventListener('keydown', (e) => {
+        const current = shareModeOrder.indexOf(activeShareMode);
+        const last = shareModeOrder.length - 1;
+        let next;
+
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+            next = current === last ? 0 : current + 1;
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            next = current === 0 ? last : current - 1;
+        } else if (e.key === 'Home') {
+            next = 0;
+        } else if (e.key === 'End') {
+            next = last;
+        } else {
+            return;
+        }
+
+        e.preventDefault();
+        selectShareMode(shareModeOrder[next], { focusTab: true });
+    });
+}
 
 // --- Shared Upload Logic ---
 /**
@@ -112,18 +172,88 @@ function uploadWithProgress(formData, password, uiElements) {
     xhr.send(formData);
 }
 
+// --- Dropzone Logic ---
+function isAllowedFile(name) {
+    return allowedExtensions.includes(name.split('.').pop().toLowerCase());
+}
+
+// Show (or clear) the chip naming the file that is queued for encryption.
+function showSelectedFile(file) {
+    const chip = document.getElementById('file-selected');
+    const chipName = document.getElementById('file-selected-name');
+    if (!chip || !chipName) return;
+    chipName.textContent = file ? file.name : '';
+    chip.classList.toggle('hidden', !file);
+}
+
+// The region is always present and only its text changes, so assistive tech
+// announces every rejection rather than a one-time reveal.
+function setFileError(message) {
+    const region = document.getElementById('file-error');
+    if (region) region.textContent = message;
+}
+
+// Reject a disallowed file, discarding any earlier selection along with it.
+function rejectFile(input) {
+    input.value = '';
+    showSelectedFile(null);
+    setFileError('That file type is not allowed.');
+}
+
+const dropzone = document.getElementById('dropzone');
+if (dropzone) {
+    const fileField = document.getElementById('file');
+
+    const setDragging = (isDragging) => dropzone.classList.toggle('dropzone-active', isDragging);
+
+    ['dragenter', 'dragover'].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            setDragging(true);
+        });
+    });
+
+    // dragleave also fires when crossing into a child, so ignore those.
+    dropzone.addEventListener('dragleave', (e) => {
+        if (!dropzone.contains(e.relatedTarget)) {
+            setDragging(false);
+        }
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        setDragging(false);
+        const file = e.dataTransfer && e.dataTransfer.files[0];
+        if (!file) return;
+        if (!isAllowedFile(file.name)) {
+            rejectFile(fileField);
+            return;
+        }
+        // Hand the dropped file to the real input so the form submits it unchanged.
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        fileField.files = transfer.files;
+        showSelectedFile(file);
+        setFileError('');
+    });
+}
+
 // --- File Upload Logic ---
 const fileUploadForm = document.querySelector('#file-upload-section form');
 if (fileUploadForm) {
     // Validate file extension when a file is selected
     document.getElementById('file').addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (!file) return;
-        const ext = file.name.split('.').pop().toLowerCase();
-        if (!allowedExtensions.includes(ext)) {
-            alert('File type not allowed');
-            e.target.value = '';
+        if (!file) {
+            showSelectedFile(null);
+            return;
         }
+        if (!isAllowedFile(file.name)) {
+            rejectFile(e.target);
+            return;
+        }
+        showSelectedFile(file);
+        setFileError('');
     });
 
     // Handle form submission: encrypt file client-side, then upload
@@ -235,13 +365,45 @@ if (shareActionButton) {
 }
 
 // --- Copy URL to Clipboard Logic ---
+// Every row shares one status region, so a long list does not become a page
+// full of live regions. The per-row pill is visual only.
+function setCopyStatus(message) {
+    const region = document.getElementById('copy-status');
+    if (region) region.textContent = message;
+}
+
 document.querySelectorAll('.copy-url').forEach(el => {
+    const flash = el.querySelector('.copy-flash');
+    let flashTimer;
+
+    // Inline confirmation beats a modal dialog for something this small. The
+    // pill carries the outcome for sighted users, the shared region announces
+    // it, and a failure lingers longer because it has to be read.
+    const showResult = (label, message, failed) => {
+        setCopyStatus(message);
+        if (flash) {
+            flash.textContent = label;
+            flash.classList.toggle('copy-flash-error', failed);
+            flash.classList.remove('hidden');
+        }
+        clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => {
+            if (flash) flash.classList.add('hidden');
+            // Emptying it means the next copy writes fresh text, which is
+            // what makes assistive tech announce it again.
+            setCopyStatus('');
+        }, failed ? 4000 : 1800);
+    };
+
     el.addEventListener('click', (e) => {
         e.preventDefault();
         const url = el.getAttribute('data-url');
-        navigator.clipboard.writeText(url).then(() => {
-            alert('url copied to clipboard');
-        });
+        navigator.clipboard.writeText(url).then(
+            () => showResult('Copied', 'Share link copied to clipboard.', false),
+            // A denied permission or a non-secure context rejects here. Say so
+            // rather than leaving the click with no feedback at all.
+            () => showResult('Copy failed', 'Your browser blocked clipboard access, so the link was not copied.', true),
+        );
     });
 });
 
