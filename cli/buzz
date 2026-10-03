@@ -17,7 +17,7 @@ Usage:
 import argparse
 import json
 import os
-import random
+import secrets
 import sys
 import zipfile
 from io import BytesIO
@@ -165,7 +165,7 @@ def _zip_path(path: str) -> bytes:
 
 def generate_passphrase(n: int = 4) -> str:
     """Return n random words joined by hyphens."""
-    return '-'.join(random.choices(_WORDS, k=n))
+    return '-'.join(secrets.choice(_WORDS) for _ in range(n))
 
 
 def _requests():
