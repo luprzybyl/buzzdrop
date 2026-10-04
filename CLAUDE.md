@@ -71,7 +71,7 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 - `created_at`, `downloaded_at`, `expiry_at` timestamps
 - `uploaded_by` (username), `status` (active/expired)
 - `downloaded_by_ip` (IP address of client who downloaded the file)
-- `decryption_success` (bool, written once via `record_decryption_result` — NULL-guarded so the first receipt-backed report wins)
+- `decryption_success` (bool, NULL-guarded write-once: a receipt-backed `record_decryption_result` report — or `False` stamped by key-release lockout, a terminal never-decrypted outcome — whichever lands first wins)
 - `receipt_hash` (SHA-256 of the in-plaintext decryption receipt — `/report_decryption` must present a matching receipt)
 - `type` (`'file'` or `'text'` for text notes)
 

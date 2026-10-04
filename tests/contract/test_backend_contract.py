@@ -298,10 +298,21 @@ def test_attempt_key_release_lockout(backend):
     assert result['status'] == 'locked'
     # lockout without burn keeps H — availability lost, not the share row
     assert backend.files.get_key_share('f1')['attempts'] == 1
+    # lockout is terminal "never decrypted" — recorded on the files row
+    assert backend.files.get_by_id('f1')['decryption_success'] is False
     # even the correct verifier is refused after lockout
     result = backend.files.attempt_key_release('f1', _V, 1, False)
     assert result['status'] == 'locked'
     assert backend.files.get_key_share('f1') is not None
+
+
+def test_attempt_key_release_lockout_preserves_report(backend):
+    """A prior receipt-backed report must not be clobbered by lockout."""
+    _bound_share(backend)
+    backend.files.record_decryption_result('f1', True)
+    result = backend.files.attempt_key_release('f1', 'dd' * 32, 1, False)
+    assert result['status'] == 'locked'
+    assert backend.files.get_by_id('f1')['decryption_success'] is True
 
 
 def test_attempt_key_release_burn_on_lockout(backend):
