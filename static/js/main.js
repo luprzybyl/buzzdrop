@@ -19,6 +19,10 @@ if (window.location.hash.length > 1) {
 // Parse allowed file extensions from a hidden JSON element injected by the server
 const allowedExtensions = JSON.parse(document.getElementById('allowed-extensions-json').textContent);
 
+// Upload endpoints injected the same way — a type="application/json" data
+// island, which CSP does not treat as script.
+const uploadEndpoints = JSON.parse(document.getElementById('upload-endpoints-json').textContent);
+
 // --- Tab Switching Logic ---
 // The composer's two modes are an ARIA tab set: the rail is the tablist and
 // each section is the panel its tab controls.
@@ -72,9 +76,9 @@ function showTextNote() {
     selectShareMode('text');
 }
 
-// Make functions globally accessible for inline onclick handlers
-window.showFileUpload = showFileUpload;
-window.showTextNote = showTextNote;
+// Tabs wire up here, not via inline onclick — CSP forbids inline handlers.
+document.getElementById('file-tab')?.addEventListener('click', showFileUpload);
+document.getElementById('text-tab')?.addEventListener('click', showTextNote);
 
 // The tab role promises a keyboard contract, so honour it: arrows move between
 // tabs, Home and End jump to the ends.
@@ -197,7 +201,7 @@ const csrfToken =
  * @throws {Error} When the server refuses the handshake
  */
 async function encryptForUpload(data, password) {
-    const res = await fetch(window.uploadBeginUrl, {
+    const res = await fetch(uploadEndpoints.uploadBeginUrl, {
         method: 'POST',
         headers: {
             'X-Requested-With': 'XMLHttpRequest',
@@ -249,7 +253,7 @@ function uploadWithProgress(formData, password, uiElements) {
     progressText.textContent = '0%';
 
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', window.uploadUrl, true);
+    xhr.open('POST', uploadEndpoints.uploadUrl, true);
     xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
     xhr.setRequestHeader('X-CSRF-Token', csrfToken);
 
@@ -556,6 +560,16 @@ document.querySelectorAll('.copy-url').forEach(el => {
             // rather than leaving the click with no feedback at all.
             () => showResult('Copy failed', 'Your browser blocked clipboard access, so the link was not copied.', true),
         );
+    });
+});
+
+// Destructive forms carry their confirmation text in data-confirm-message —
+// a submit listener replaces the old inline onclick, which CSP forbids.
+document.querySelectorAll('form[data-confirm-message]').forEach((form) => {
+    form.addEventListener('submit', (e) => {
+        if (!window.confirm(form.dataset.confirmMessage)) {
+            e.preventDefault();
+        }
     });
 });
 

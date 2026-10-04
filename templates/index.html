@@ -21,10 +21,10 @@
     <div class="surface-card animate-fade-up delay-1 p-6 sm:p-8">
         <span id="share-mode-label" class="field-label">What are you sending?</span>
         <div class="tab-rail sm:inline-flex" role="tablist" aria-labelledby="share-mode-label">
-            <button id="file-tab" type="button" role="tab" aria-selected="true" aria-controls="file-upload-section" onclick="showFileUpload()" class="share-tab share-tab-active">
+            <button id="file-tab" type="button" role="tab" aria-selected="true" aria-controls="file-upload-section" class="share-tab share-tab-active">
                 File
             </button>
-            <button id="text-tab" type="button" role="tab" aria-selected="false" aria-controls="text-note-section" tabindex="-1" onclick="showTextNote()" class="share-tab">
+            <button id="text-tab" type="button" role="tab" aria-selected="false" aria-controls="text-note-section" tabindex="-1" class="share-tab">
                 Text note
             </button>
         </div>
@@ -517,9 +517,9 @@
                         <span data-file-status class="status-badge {% if file.downloaded_at %}status-badge-green{% elif file.status == 'expired' %}status-badge-red{% else %}status-badge-amber{% endif %}">
                             {{ file.status_display or 'Active' }}
                         </span>
-                        <form method="post" action="{{ url_for('delete_file', file_id=file.id) }}" class="inline-block">
+                        <form method="post" action="{{ url_for('delete_file', file_id=file.id) }}" class="inline-block" data-confirm-message="Delete this file?">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn-danger" onclick="return confirm('Delete this file?');">Delete</button>
+                            <button type="submit" class="btn-danger">Delete</button>
                         </form>
                     </div>
                 </div>
@@ -543,9 +543,9 @@
 {% endif %}
 
 <script id="allowed-extensions-json" type="application/json">{{ allowed_extensions | tojson }}</script>
-<script>
-window.uploadUrl = "{{ url_for('upload_file') }}";
-window.uploadBeginUrl = "{{ url_for('upload_begin') }}";
-</script>
+<script id="upload-endpoints-json" type="application/json">{{ {
+    'uploadUrl': url_for('upload_file'),
+    'uploadBeginUrl': url_for('upload_begin'),
+} | tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}" integrity="{{ sri_hash('js/main.js') }}" crossorigin="anonymous"></script>
 {% endblock %}
