@@ -31,7 +31,6 @@ def app():
     flask_app.config.update({
         'TESTING': True,
         'DATABASE_URL': f'sqlite:///{db_path}',
-        'DATABASE_PATH': db_path,
         'UPLOAD_FOLDER': temp_upload_folder,
         'WTF_CSRF_ENABLED': False, # Disable CSRF for easier testing of forms
     })

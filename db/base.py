@@ -55,8 +55,9 @@ class FileStore(ABC):
 
         MUST be a single conditional statement (e.g.
         ``UPDATE ... SET downloaded_at=..., downloaded_by_ip=...
-        WHERE id=? AND downloaded_at IS NULL``) so exactly one of any number
-        of concurrent callers wins the claim.
+        WHERE id=? AND downloaded_at IS NULL AND <not expired>``) so
+        exactly one of any number of concurrent callers wins the claim.
+        Expired records must not be claimable.
 
         Returns:
             True when this call won the download claim, False otherwise.
@@ -157,15 +158,17 @@ class Backend(ABC):
     A concrete storage backend: one FileStore + one TokenStore.
 
     Attributes:
-        url: The DATABASE_URL this backend was created from.
+        url: The canonicalized DATABASE_URL this backend was created from.
         files: FileStore implementation.
         tokens: TokenStore implementation.
+        closed: True after close() — implementations should refuse work then.
     """
 
     url: str
     files: FileStore
     tokens: TokenStore
+    closed: bool = False
 
     @abstractmethod
     def close(self) -> None:
-        """Release any held connections/resources."""
+        """Release any held connections/resources and mark the backend closed."""

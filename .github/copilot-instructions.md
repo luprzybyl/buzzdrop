@@ -24,12 +24,13 @@ pytest tests/integration/test_app.py::test_function_name -v
 Buzzdrop is a one-time self-destructing file-sharing app where files are encrypted client-side (AES-GCM + PBKDF2) before upload. The server never handles plaintext data.
 
 **Module layout** — the app was refactored from a single-file monolith; responsibilities are now split:
-- `app.py` — Flask routes, `get_db()`/`get_files_table()` helpers, SRI context processor, startup logic
-- `models.py` — `FileRepository`: all TinyDB CRUD via a repository pattern
+- `app.py` — Flask routes, `get_backend()`/`get_files_store()` helpers, SRI context processor, startup logic
+- `db/` — swappable storage backends: `base.py` defines `FileStore`/`TokenStore`/`Backend`, `sqlite_backend.py` implements them over raw `sqlite3`, `create_backend(DATABASE_URL)` selects by URL scheme
+- `models.py` — `FileRepository`: domain facade delegating to the injected `FileStore`
 - `storage.py` — `StorageBackend` ABC with `LocalStorage` and `S3Storage` implementations
 - `auth.py` — user loading from env vars, `@login_required`/`@admin_required` decorators
 - `config.py` — `Config`/`DevelopmentConfig`/`TestingConfig`/`ProductionConfig`; selected via `FLASK_ENV`
-- `tokens.py` — `generate_api_token`, `validate_api_token`, `revoke_api_token`; token hashes stored in TinyDB `api_tokens` table
+- `tokens.py` — `generate_api_token`, `validate_api_token`, `revoke_api_token`; token hashes stored via `TokenStore` (`api_tokens` table)
 - `utils.py` — shared helpers: `enhance_file_display()` (formats timestamps + adds `status_display`), `allowed_file()`, `get_client_ip()` (proxy-aware), `cleanup_orphaned_files()`. `DEFAULT_TIMEZONE = 'Europe/Warsaw'`.
 - `cli/buzz` — standalone CLI script (install to `$PATH`; deps in `requirements-cli.txt`)
 - `static/js/main.js` — client-side encryption on upload
@@ -44,7 +45,7 @@ Buzzdrop is a one-time self-destructing file-sharing app where files are encrypt
 
 **Storage abstraction:** `get_storage_backend(config)` returns either `LocalStorage` or `S3Storage`. Both expose `save(file_id, file_data) -> path`, `retrieve(path) -> Iterator[bytes]`, `delete(path)`. The `path` stored in DB is a local filesystem path for local storage and an S3 key (`uploads/{uuid}`) for S3.
 
-**API token auth:** `POST /api/token` (admin-only, JSON `{"username": "..."}`) issues a raw token shown once. The `@api_auth_required` decorator on `/upload` accepts either `Authorization: Bearer <token>` or a session cookie. When a Bearer header is present and invalid → 401 JSON (no session fallback). On success it sets `flask.g.username`; routes read `g.username` not `session['username']`. Tokens are stored as SHA-256 hashes in TinyDB `api_tokens` table — never the raw token.
+**API token auth:** `POST /api/token` (admin-only, JSON `{"username": "..."}`) issues a raw token shown once. The `@api_auth_required` decorator on `/upload` accepts either `Authorization: Bearer <token>` or a session cookie. When a Bearer header is present and invalid → 401 JSON (no session fallback). On success it sets `flask.g.username`; routes read `g.username` not `session['username']`. Tokens are stored as SHA-256 hashes in the `api_tokens` table via `TokenStore` — never the raw token.
 
 **`buzz` CLI** (`cli/buzz`): encrypts a file with the same AES-GCM format as the browser, then uploads via Bearer token. Reads `~/.buzz_token` as JSON `{"token": "...", "server": "https://..."}`. Requires `cryptography` and `requests` (see `requirements-cli.txt`). Generates a 4-word passphrase if `-p` is omitted.
 
@@ -54,9 +55,9 @@ Buzzdrop is a one-time self-destructing file-sharing app where files are encrypt
 
 **Users are environment variables, not a database.** Format: `FLASK_USER_N=username:password:is_admin`. `get_users()` in `auth.py` is decorated with `@lru_cache` — it hashes passwords on first call. In tests, **clearing and re-adding `FLASK_USER_*` env vars requires calling `get_users.cache_clear()`** or the cached result will be stale.
 
-**`FileRepository` resolves its table lazily.** When initialized without a `files_table` argument (the default), `table` property calls `from app import get_files_table` at access time, which respects the current Flask app context. Tests that supply a table directly bypass this.
+**`FileRepository` resolves its store lazily.** When initialized without a `files_store` argument (the default), the `store` property calls `from app import get_files_store` at access time, which respects the current Flask app context. Tests that supply a store directly bypass this.
 
-**`get_db()` handles closed handles.** TinyDB file handles can go stale across test teardowns. `get_db()` checks `database._storage._handle.closed` and reopens if needed — do not bypass this with direct `TinyDB()` calls in new code.
+**`get_backend()` recreates backends on config change.** It compares the canonicalized `DATABASE_URL` against `backend.url`, closes the displaced backend, and skips closed ones — do not construct `SQLiteBackend` directly in new code; go through `create_backend()`.
 
 **Test isolation:** `conftest.py` sets `FLASK_USER_1`/`FLASK_USER_2` at module level before any imports. The `db_instance` fixture is `scope='function'` and truncates all tables per test. The `app` fixture is `scope='session'` with a shared temp DB file.
 

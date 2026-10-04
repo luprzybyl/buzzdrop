@@ -105,6 +105,25 @@ class Config:
             return cls.DATABASE_URL
         return f'sqlite:///{cls.DATABASE_PATH or "buzzdrop.db"}'
 
+    @staticmethod
+    def _sanitize_database_url(url: str) -> str:
+        """Strip credentials from a DATABASE_URL before logging it."""
+        try:
+            from urllib.parse import urlsplit, urlunsplit
+            parts = urlsplit(url)
+        except ValueError:
+            return url
+        if not parts.password:
+            return url
+        netloc = parts.username or ''
+        netloc += ':***'
+        if parts.hostname:
+            netloc += f'@{parts.hostname}'
+        if parts.port:
+            netloc += f':{parts.port}'
+        return urlunsplit((parts.scheme, netloc, parts.path,
+                           parts.query, parts.fragment))
+
     @classmethod
     def get_display_info(cls) -> dict:
         """
@@ -117,7 +136,7 @@ class Config:
         return {
             'storage_backend': cls.STORAGE_BACKEND,
             'upload_folder': cls.UPLOAD_FOLDER if cls.STORAGE_BACKEND == 'local' else 'N/A',
-            'database_url': cls.get_database_url(),
+            'database_url': cls._sanitize_database_url(cls.get_database_url()),
             'max_file_size_mb': cls.MAX_CONTENT_LENGTH / (1024 * 1024),
             'allowed_extensions': ', '.join(sorted(cls.ALLOWED_EXTENSIONS)),
             'rate_limit_enabled': cls.RATE_LIMIT_ENABLED,
@@ -145,7 +164,7 @@ class TestingConfig(Config):
     """Testing environment configuration."""
     TESTING = True
     DEBUG = True
-    # Tests will override DATABASE_PATH in conftest.py
+    # Tests will override DATABASE_URL in conftest.py
     LOGIN_RATE_LIMIT = os.getenv('LOGIN_RATE_LIMIT', '1000 per minute')
     API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '1000 per hour')
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '1000 per hour')

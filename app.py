@@ -289,24 +289,38 @@ print_backend_info(storage)
 file_repo = FileRepository()
 
 def _resolve_database_url() -> str:
-    """Resolve the effective DATABASE_URL for the current app context."""
+    """
+    Resolve the effective, canonicalized DATABASE_URL for the current app
+    context.
+
+    Bare paths are wrapped in sqlite:/// and SQLite paths are absolutized so
+    the result compares equal to Backend.url — otherwise every call would
+    mint a fresh backend and leak the old one's connections.
+    """
     configured = (
         current_app.config if has_app_context() else app.config
     )
     url = configured.get('DATABASE_URL')
-    if url:
-        return url
-    # Deprecated fallback: plain file path → sqlite:///
-    return f"sqlite:///{configured.get('DATABASE_PATH') or 'buzzdrop.db'}"
+    if not url:
+        # Deprecated fallback: plain file path → sqlite:///
+        url = f"sqlite:///{configured.get('DATABASE_PATH') or 'buzzdrop.db'}"
+
+    if url.startswith('sqlite:///'):
+        path = url[len('sqlite:///'):]
+        url = f'sqlite:///{os.path.abspath(path)}'
+    elif '://' not in url:
+        url = f'sqlite:///{os.path.abspath(url)}'
+    return url
 
 
 def get_backend():
     """
     Return the storage Backend for the current app context.
 
-    A new backend is created when the app's cached instance is missing or
-    was opened against a different DATABASE_URL (e.g. test scenarios that
-    point the app at a temporary database file).
+    A new backend is created when the app's cached instance is missing,
+    closed, or was opened against a different DATABASE_URL (e.g. test
+    scenarios that point the app at a temporary database file). A displaced
+    backend is closed so its connections are not leaked.
 
     Returns:
         Backend: Active backend exposing .files/.tokens stores
@@ -314,12 +328,16 @@ def get_backend():
     url = _resolve_database_url()
     if has_app_context():
         backend = getattr(current_app, 'backend', None)
-        if backend is None or backend.url != url:
+        if backend is None or backend.url != url or getattr(backend, 'closed', False):
+            if backend is not None:
+                backend.close()
             backend = create_backend(url)
             current_app.backend = backend
     else:
         backend = getattr(app, 'backend', None)
-        if backend is None or backend.url != url:
+        if backend is None or backend.url != url or getattr(backend, 'closed', False):
+            if backend is not None:
+                backend.close()
             backend = create_backend(url)
             app.backend = backend
     return backend
@@ -748,18 +766,29 @@ def download_file(file_id):
 
     # Atomically claim the file — exactly one concurrent requester wins.
     if not file_repo.mark_downloaded(file_id, client_ip):
-        flash('This file has already been downloaded')
+        # Losers get the reason that fits: expired vs. already consumed.
+        latest = file_repo.get_by_id(file_id) or {}
+        if latest.get('status') == 'expired':
+            flash('File has expired')
+        else:
+            flash('This file has already been downloaded')
         return redirect(url_for('index'))
 
     # Stream file from storage
     def generate():
-        for chunk in storage.retrieve(file_info['path']):
-            yield chunk
-        # Delete file after streaming completes
         try:
-            storage.delete(file_info['path'])
+            for chunk in storage.retrieve(file_info['path']):
+                yield chunk
         except Exception:
-            pass
+            # The claim is already consumed — surface the loss loudly.
+            current_app.logger.error(
+                'Storage retrieve failed for claimed file %s', file_id)
+            raise
+        finally:
+            try:
+                storage.delete(file_info['path'])
+            except Exception:
+                pass
     
     response = current_app.response_class(
         generate(),

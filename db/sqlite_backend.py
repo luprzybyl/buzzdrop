@@ -7,18 +7,38 @@ are preserved in an ``extra`` JSON column so the schema can grow.
 
 Each thread gets its own connection (thread-local storage) with WAL mode
 and a busy timeout, so concurrent writers serialize through SQLite locking
-instead of racing a shared file.
+instead of racing a shared file. Per-thread connections live as long as
+their worker threads; they are all closed by Backend.close().
 """
 import json
+import logging
+import os
 import re
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from db.base import Backend, FileStore, TokenStore
 
+_SQLITE_MAGIC = b'SQLite format 3\x00'
+
+# SQLite variable limit is 999 (newer builds allow more); chunk well under it.
+_MAX_VARS_PER_STATEMENT = 500
+
 _SAFE_IDENTIFIER = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+
+
+def _is_iso_timestamp(value: Any) -> int:
+    """SQLite UDF: 1 when the value parses as an ISO-8601 timestamp."""
+    if not isinstance(value, str):
+        return 0
+    try:
+        datetime.fromisoformat(value)
+        return 1
+    except ValueError:
+        return 0
 
 # Columns stored as INTEGER 0/1/NULL and decoded back to bool/None.
 FILE_BOOL_COLUMNS = frozenset({'decryption_success', 'notify_on_open'})
@@ -101,6 +121,10 @@ def _split_doc(doc: Mapping[str, Any], known_columns: frozenset
     extra: Dict[str, Any] = {}
     for key, value in doc.items():
         if key == 'doc_id' or key == 'extra':
+            logging.warning(
+                'Document key %r conflicts with a reserved column name and '
+                'was dropped on write', key,
+            )
             continue
         if key in known_columns:
             known[key] = value
@@ -135,7 +159,10 @@ class _SQLiteStoreBase:
             else:
                 doc[column] = value
         if row['extra']:
-            doc.update(json.loads(row['extra']))
+            # setdefault: typed columns win over stale extra copies, so a
+            # field promoted to a real column later is never shadowed.
+            for key, value in json.loads(row['extra']).items():
+                doc.setdefault(key, value)
         return doc
 
     def _doc_to_insert(self, doc: Mapping[str, Any],
@@ -272,11 +299,17 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
         return self._update_by_clause(fields, 'id = ?', (file_id,))
 
     def claim_download(self, file_id: str, ip_address: str) -> bool:
+        # Expired shares are excluded too: a claim raced against
+        # check_and_handle_expiry() must not resurrect an expired drop.
+        # NULL status is tolerated for partial/legacy rows.
+        now = datetime.now().isoformat()
         cursor = self._conn().execute(
             f'UPDATE "{self.table}" '
             'SET downloaded_at = ?, downloaded_by_ip = ? '
-            'WHERE id = ? AND downloaded_at IS NULL',
-            (datetime.now().isoformat(), ip_address, file_id),
+            'WHERE id = ? AND downloaded_at IS NULL '
+            'AND (status IS NULL OR status != \'expired\') '
+            'AND (expiry_at IS NULL OR expiry_at > ?)',
+            (now, ip_address, file_id, now),
         )
         return cursor.rowcount > 0
 
@@ -336,12 +369,17 @@ class SQLiteTokenStore(_SQLiteStoreBase, TokenStore):
         ids = list(doc_ids)
         if not ids:
             return 0
-        placeholders = ', '.join('?' for _ in ids)
-        cursor = self._conn().execute(
-            f'DELETE FROM "{self.table}" WHERE doc_id IN ({placeholders})',
-            tuple(ids),
-        )
-        return cursor.rowcount
+        removed = 0
+        # Chunk to stay under SQLite's bound-variable limit.
+        for offset in range(0, len(ids), _MAX_VARS_PER_STATEMENT):
+            chunk = ids[offset:offset + _MAX_VARS_PER_STATEMENT]
+            placeholders = ', '.join('?' for _ in chunk)
+            cursor = self._conn().execute(
+                f'DELETE FROM "{self.table}" WHERE doc_id IN ({placeholders})',
+                tuple(chunk),
+            )
+            removed += cursor.rowcount
+        return removed
 
     def remove_by_hash(self, token_hash: str) -> bool:
         cursor = self._conn().execute(
@@ -350,9 +388,15 @@ class SQLiteTokenStore(_SQLiteStoreBase, TokenStore):
         return cursor.rowcount > 0
 
     def purge_expired(self, now_iso: str) -> int:
+        # expires_at and now_iso are both naive ISO-8601 strings produced by
+        # datetime.now().isoformat(), so a plain text comparison is correct.
+        # Malformed expires_at values are deleted too — treating a garbage
+        # expiry as expired is the desired fail-closed semantics for a
+        # credential store (a token must never survive on corrupt data).
         cursor = self._conn().execute(
             f'DELETE FROM "{self.table}" '
-            'WHERE expires_at IS NOT NULL AND expires_at < ?',
+            'WHERE expires_at IS NOT NULL '
+            'AND (expires_at < ? OR NOT is_iso_timestamp(expires_at))',
             (now_iso,),
         )
         return cursor.rowcount
@@ -362,23 +406,55 @@ class SQLiteBackend(Backend):
     """SQLite Backend: one file, per-thread connections, WAL mode."""
 
     def __init__(self, path: str):
-        self.path = path
-        self.url = f'sqlite:///{path}'
+        if not path:
+            raise ValueError(
+                'SQLite path must not be empty — "sqlite:///" alone would '
+                'silently open a private throwaway database. Set a real '
+                'DATABASE_URL like sqlite:///buzzdrop.db'
+            )
+        if path == ':memory:':
+            raise ValueError(
+                'In-memory SQLite (":memory:") is not supported: each '
+                'thread-local connection would open a separate private '
+                'database. Point DATABASE_URL at a file instead.'
+            )
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            with open(path, 'rb') as handle:
+                magic = handle.read(len(_SQLITE_MAGIC))
+            if magic != _SQLITE_MAGIC:
+                raise sqlite3.DatabaseError(
+                    f'{path} exists but is not a SQLite database. If this is '
+                    'a legacy TinyDB file, migrate it first: '
+                    f'python migrate_db.py --source {path} '
+                    '--target buzzdrop.db — then set '
+                    'DATABASE_URL=sqlite:///buzzdrop.db'
+                )
+        self.path = os.path.abspath(path)
+        self.url = f'sqlite:///{self.path}'
         self._local = threading.local()
         self._connections: List[sqlite3.Connection] = []
         # RLock: _connection may be re-entered while held
         self._lock = threading.RLock()
+        self.closed = False
         self.files: FileStore = SQLiteFileStore(self)
         self.tokens: TokenStore = SQLiteTokenStore(self)
         self._ensure_schema()
 
     def _connection(self) -> sqlite3.Connection:
+        if self.closed:
+            raise RuntimeError(
+                'SQLiteBackend is closed — obtain a fresh backend via '
+                'create_backend()/get_backend() instead'
+            )
         conn = getattr(self._local, 'conn', None)
         if conn is None:
-            conn = sqlite3.connect(self.path, timeout=10, isolation_level=None)
+            # autocommit; the busy timeout is set once via PRAGMA below —
+            # keeping a single knob avoids divergent wait behaviour.
+            conn = sqlite3.connect(self.path, isolation_level=None)
             conn.row_factory = sqlite3.Row
             conn.execute('PRAGMA journal_mode=WAL')
             conn.execute('PRAGMA busy_timeout=10000')
+            conn.create_function('is_iso_timestamp', 1, _is_iso_timestamp)
             self._local.conn = conn
             with self._lock:
                 self._connections.append(conn)
@@ -390,9 +466,27 @@ class SQLiteBackend(Backend):
         conn.execute(_TOKENS_DDL)
         conn.execute(_TOKENS_HASH_INDEX)
 
+    @contextmanager
+    def transaction(self):
+        """
+        Run a block of store operations inside one transaction on the
+        current thread's connection. Commits on success, rolls back on
+        error. Used by migrate_db.py so an import is all-or-nothing.
+        """
+        conn = self._connection()
+        conn.execute('BEGIN IMMEDIATE')
+        try:
+            yield
+        except Exception:
+            conn.execute('ROLLBACK')
+            raise
+        else:
+            conn.execute('COMMIT')
+
     def close(self) -> None:
         with self._lock:
             connections, self._connections = self._connections, []
+            self.closed = True
         for conn in connections:
             try:
                 conn.close()

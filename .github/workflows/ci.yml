@@ -33,7 +33,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build Docker image
         run: docker build -t buzzdrop-test .
-      - name: Ensure db.json exists
-        run: touch db.json
       - name: Run pytest in Docker container
-        run: docker run --rm -v ${{ github.workspace }}/uploads:/app/uploads -v ${{ github.workspace }}/db.json:/app/db.json buzzdrop-test pytest
+        run: docker run --rm -v ${{ github.workspace }}/uploads:/app/uploads buzzdrop-test pytest
+      - name: Smoke-test db.json migration
+        run: docker run --rm buzzdrop-test sh -c "echo '{\"files\":{\"1\":{\"id\":\"smoke-1\",\"original_name\":\"a.txt\",\"path\":\"uploads/smoke-1\"}},\"api_tokens\":{}}' > /tmp/db.json && python migrate_db.py --source /tmp/db.json --target /tmp/migrated.db"

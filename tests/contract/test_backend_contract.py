@@ -99,6 +99,16 @@ def test_get_by_id_missing(backend):
     assert backend.files.get_by_id('nope') is None
 
 
+def test_insert_with_explicit_doc_id(backend):
+    """Explicit doc_id round-trips and auto ids keep increasing past it."""
+    doc_id = backend.files.insert(_file_doc(), doc_id=100)
+    assert doc_id == 100
+    assert backend.files.get_by_id('file-1')['doc_id'] == 100
+
+    next_id = backend.files.insert(_file_doc('file-2'))
+    assert next_id > 100
+
+
 def test_get_by_and_list_by(backend):
     backend.files.insert(_file_doc('a', uploaded_by='u1', status='active'))
     backend.files.insert(_file_doc('b', uploaded_by='u1', status='expired'))
@@ -271,8 +281,10 @@ def test_token_purge_expired(backend):
     backend.tokens.insert(_token_doc(expires_at=past))
     backend.tokens.insert(_token_doc(expires_at=future))
     backend.tokens.insert(_token_doc(expires_at=None))  # legacy: no stored expiry
+    # malformed expiry is fail-closed: treated as expired, not kept valid
+    backend.tokens.insert(_token_doc(expires_at='not-a-timestamp'))
 
-    assert backend.tokens.purge_expired(datetime.now().isoformat()) == 1
+    assert backend.tokens.purge_expired(datetime.now().isoformat()) == 2
     remaining = backend.tokens.all()
     assert len(remaining) == 2
     assert all(t['expires_at'] in (future, None) for t in remaining)
