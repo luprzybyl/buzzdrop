@@ -124,10 +124,11 @@ def test_view_text_note_shows_correct_template(client, app, files_store):
     response = upload_note(client, files_store)
     note_id = response.get_json()['file_id']
 
-    # View the note (confirm page)
+    # View the note (confirm page) — names are opt-in, so the generic
+    # label is what the unauthenticated recipient sees.
     response = client.get(url_for('view_file', file_id=note_id))
     assert response.status_code == 200
-    assert b'Secret Note' in response.data
+    assert b'a note' in response.data
     assert b'Ready to view?' in response.data
     assert b'Continuing deletes this note from the server immediately.' in response.data
     assert b'If the sender shared the password separately' in response.data
@@ -315,7 +316,7 @@ def test_report_decryption_for_text_note_sends_failed_notification(client, app, 
 
     assert len(sent_messages) == 1
     assert sent_messages[0][0] == 'testuser@example.com'
-    assert 'Secret Note' in sent_messages[0][1]
+    assert sent_messages[0][1] == 'Buzzdrop secret note opened'
     assert 'Decryption status: failed' in sent_messages[0][2]
 
 

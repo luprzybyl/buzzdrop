@@ -18,6 +18,7 @@ def restore_rate_limits(app):
         'API_TOKEN_RATE_LIMIT',
         'UPLOAD_RATE_LIMIT',
         'PUBLIC_FILE_RATE_LIMIT',
+        'REPORT_DECRYPTION_RATE_LIMIT',
     )
     original = {key: app.config[key] for key in keys}
     yield
@@ -132,3 +133,23 @@ def test_public_file_rate_limit_is_shared_across_view_and_download(client, app, 
     second = client.get(url_for('download_file', file_id=file_info['id']))
     assert second.status_code == 429
     assert b'Too many requests. Please try again later.' in second.data
+
+
+def test_report_decryption_rate_limit_is_per_file_id(client, app, restore_rate_limits):
+    """The endpoint is unauthenticated (the receipt is the credential),
+    so it gets the same per-file_id rate limiting as /release."""
+    app.config['REPORT_DECRYPTION_RATE_LIMIT'] = '1 per minute'
+
+    url = url_for('report_decryption', file_id='missing-id')
+    first = client.post(url, json={'success': False})
+    assert first.status_code == 404
+
+    second = client.post(url, json={'success': False})
+    assert second.status_code == 429
+    assert b'Too many requests. Please try again later.' in second.data
+
+    # A different file_id gets its own bucket.
+    other = client.post(
+        url_for('report_decryption', file_id='other-id'),
+        json={'success': False})
+    assert other.status_code == 404

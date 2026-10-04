@@ -424,6 +424,7 @@ if (fileUploadForm) {
         const privateNoteInput = document.getElementById('shared-private-note');
         const notifyOnOpenInput = document.getElementById('notify-on-open');
         const notificationEmailInput = document.getElementById('notification-email');
+        const showFilenameInput = document.getElementById('show-filename');
         if (expiryInput && expiryInput.value) {
             formData.append('expiry', expiryInput.value);
         }
@@ -432,6 +433,9 @@ if (fileUploadForm) {
         }
         if (notifyOnOpenInput && notifyOnOpenInput.checked) {
             formData.append('notify_on_open', 'true');
+        }
+        if (showFilenameInput && showFilenameInput.checked) {
+            formData.append('show_filename', 'true');
         }
         if (notificationEmailInput && notificationEmailInput.value.trim()) {
             formData.append('notification_email', notificationEmailInput.value.trim());

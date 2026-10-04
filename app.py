@@ -223,7 +223,9 @@ def send_open_notification_email(file_info: dict) -> bool:
 
     share_type = 'Secret Note' if file_info.get('type') == 'text' else 'File'
     original_name = file_info.get('original_name') or ('Secret Note' if share_type == 'Secret Note' else 'Shared file')
-    subject = f'Buzzdrop {share_type.lower()} opened: {original_name}'
+    # Email subjects are not private (notification previews, provider
+    # logs) — the filename stays out of the subject line, period.
+    subject = f'Buzzdrop {share_type.lower()} opened'
     body = '\n'.join([
         'Your Buzzdrop share was opened.',
         '',
@@ -844,6 +846,9 @@ def upload_file():
     note_text = request.form.get('note_text')
     upload_type = request.form.get('type', 'file')
     private_note = (request.form.get('private_note') or '').strip() or None
+    # Opt-in: without this flag recipients only ever see a generic label.
+    show_filename = (request.form.get('show_filename') or '').strip().lower() in {
+        '1', 'true', 'yes', 'on'}
     wants_json = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     if not _session_csrf_required():
@@ -992,6 +997,7 @@ def upload_file():
                 'notify_on_open': notify_on_open,
                 'notification_email': notification_email,
                 'receipt_hash': receipt_hash,
+                'show_filename': show_filename,
             }, file_id=unique_id)
         except Exception:
             if file_path is not None:
@@ -1069,7 +1075,7 @@ def download_file(file_id):
     response = current_app.response_class(
         generate(),
         headers={
-            'Content-Disposition': f"attachment; filename={file_info['original_name']}"
+            'Content-Disposition': f'attachment; filename="{_recipient_display_name(file_info)}"'
         },
         mimetype='application/octet-stream'
     )
@@ -1111,6 +1117,20 @@ def upload_success(file_id):
     return render_template('success.html', share_link=share_link)
 
 
+def _recipient_display_name(file_info: dict) -> str:
+    """
+    Name shown to an unauthenticated recipient: the real
+    ``original_name`` only when the uploader opted in
+    (``show_filename``), otherwise a generic label. The confirm page
+    is public — anyone holding the link must not learn the filename
+    by default.
+    """
+    if file_info.get('show_filename'):
+        return file_info.get('original_name') or (
+            'a note' if file_info.get('type') == 'text' else 'a file')
+    return 'a note' if file_info.get('type') == 'text' else 'a file'
+
+
 @app.route('/view/<file_id>', methods=['GET'])
 @limiter.shared_limit(
     lambda: current_app.config['PUBLIC_FILE_RATE_LIMIT'],
@@ -1127,7 +1147,7 @@ def view_file(file_id):
         flash('File has expired')
         return redirect(url_for('index'))
     file_type = file_info.get('type', 'file')
-    return render_template('confirm_download.html', file_id=file_id, original_name=file_info['original_name'], file_type=file_type)
+    return render_template('confirm_download.html', file_id=file_id, original_name=_recipient_display_name(file_info), file_type=file_type)
 
 @app.route('/view/<file_id>/confirm', methods=['POST'])
 @limiter.shared_limit(
@@ -1148,7 +1168,7 @@ def confirm_view_file(file_id):
         flash('Invalid request')
         return redirect(url_for('view_file', file_id=file_id))
     file_type = file_info.get('type', 'file')
-    return render_template('view.html', file_id=file_id, original_name=file_info['original_name'], file_type=file_type)
+    return render_template('view.html', file_id=file_id, original_name=_recipient_display_name(file_info), file_type=file_type)
 
 
 def _release_rate_limit_key() -> str:
@@ -1222,7 +1242,18 @@ def release_key(file_id):
     return {'error': 'Not found'}, 404
 
 
+def _report_rate_limit_key() -> str:
+    """Rate-limit /report_decryption per file_id, same as /release."""
+    return f"report:{request.view_args.get('file_id') or get_client_ip()}"
+
+
 @app.route('/report_decryption/<file_id>', methods=['POST'])
+@limiter.limit(
+    lambda: current_app.config['REPORT_DECRYPTION_RATE_LIMIT'],
+    key_func=_report_rate_limit_key,
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
 def report_decryption(file_id):
     """
     Record whether the downloaded file was decrypted successfully.
@@ -1230,6 +1261,8 @@ def report_decryption(file_id):
     Proof-of-decryption: the client must return the 32-byte receipt that
     was encrypted INSIDE the ciphertext — the server stores only its
     SHA-256 hash, so the report is unforgeable from the link/UUID alone.
+    The endpoint is unauthenticated (the receipt is the credential), so
+    it is rate-limited per file_id like /release.
     """
     file_info = file_repo.get_by_id(file_id)
     if not file_info:
