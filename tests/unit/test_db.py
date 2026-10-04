@@ -207,3 +207,104 @@ def test_cleanup_orphaned_files_uploads_dir_does_not_exist(app, files_store):
 
         mock_listdir.assert_not_called() # Should not attempt to listdir if path doesn't exist
         mock_remove.assert_not_called() # No removal attempts
+
+
+# --- schema evolution: opening a backend on a stale database --------
+
+def _legacy_doc_blob_db(path):
+    """Create a database in the original doc-blob shape (doc TEXT NOT NULL)."""
+    import sqlite3
+    import json
+    conn = sqlite3.connect(path)
+    conn.execute(
+        'CREATE TABLE files (doc_id INTEGER PRIMARY KEY AUTOINCREMENT, '
+        'doc TEXT NOT NULL)')
+    conn.execute(
+        'CREATE TABLE api_tokens (doc_id INTEGER PRIMARY KEY AUTOINCREMENT, '
+        'doc TEXT NOT NULL)')
+    conn.execute('INSERT INTO files (doc) VALUES (?)', (json.dumps({
+        'id': 'legacy-1', 'original_name': 'old.txt', 'status': 'active',
+        'notify_on_open': True, 'unknown_field': 'kept-in-extra',
+    }),))
+    conn.execute('INSERT INTO api_tokens (doc) VALUES (?)', (json.dumps({
+        'token_hash': 'th-1', 'username': 'legacyuser',
+    }),))
+    conn.commit()
+    conn.close()
+
+
+def test_legacy_doc_blob_tables_are_rebuilt(tmp_path):
+    """A doc-blob schema DB must be rebuilt with data and doc_ids preserved."""
+    import sqlite3
+    from db.sqlite_backend import SQLiteBackend
+
+    path = tmp_path / 'legacy.db'
+    _legacy_doc_blob_db(str(path))
+
+    backend = SQLiteBackend(str(path))
+    try:
+        doc = backend.files.get_by_id('legacy-1')
+        assert doc is not None
+        assert doc['doc_id'] == 1                     # doc_id preserved
+        assert doc['original_name'] == 'old.txt'
+        assert doc['notify_on_open'] is True          # bool round-trip
+        assert doc['unknown_field'] == 'kept-in-extra'  # extra overflow
+
+        token = backend.tokens.get_by_token_hash('th-1')
+        assert token is not None and token['doc_id'] == 1
+
+        # the failure mode the rebuild exists for: inserts must work
+        assert backend.files.insert({'id': 'new-1'}) == 2
+
+        cols = {r[1] for r in sqlite3.connect(str(path)).execute(
+            'PRAGMA table_info(files)')}
+        assert 'doc' not in cols
+        assert 'notification_claimed_at' in cols
+    finally:
+        backend.close()
+
+
+def test_missing_columns_added_to_existing_table(tmp_path):
+    """A table missing recently-added columns gets them via ALTER TABLE."""
+    import sqlite3
+    from db.sqlite_backend import SQLiteBackend
+
+    path = tmp_path / 'older.db'
+    conn = sqlite3.connect(str(path))
+    conn.execute(
+        'CREATE TABLE files (doc_id INTEGER PRIMARY KEY AUTOINCREMENT, '
+        'id TEXT UNIQUE, original_name TEXT, extra TEXT)')
+    conn.execute(
+        'CREATE TABLE api_tokens '
+        '(doc_id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT)')
+    conn.commit()
+    conn.close()
+
+    backend = SQLiteBackend(str(path))
+    try:
+        cols = {r[1] for r in sqlite3.connect(str(path)).execute(
+            'PRAGMA table_info(files)')}
+        assert 'notification_claimed_at' in cols
+        # insert using the previously-missing column must not fail
+        assert backend.files.insert(
+            {'id': 'x', 'notification_claimed_at': None}) == 1
+    finally:
+        backend.close()
+
+
+def test_incompatible_not_null_column_fails_fast(tmp_path):
+    """An unexpected NOT NULL column must raise a clear error, not a
+    cryptic IntegrityError on first insert."""
+    import sqlite3
+    from db.sqlite_backend import SQLiteBackend
+
+    path = tmp_path / 'weird.db'
+    conn = sqlite3.connect(str(path))
+    conn.execute(
+        'CREATE TABLE files (doc_id INTEGER PRIMARY KEY AUTOINCREMENT, '
+        'id TEXT UNIQUE, mystery TEXT NOT NULL)')
+    conn.commit()
+    conn.close()
+
+    with pytest.raises(sqlite3.DatabaseError, match='mystery'):
+        SQLiteBackend(str(path))

@@ -121,6 +121,90 @@ def _add_missing_columns(conn: sqlite3.Connection, table: str,
             conn.execute(f'ALTER TABLE "{table}" ADD COLUMN "{name}" {col_type}')
 
 
+def _table_columns(conn: sqlite3.Connection, table: str) -> List[sqlite3.Row]:
+    return conn.execute(f'PRAGMA table_info("{table}")').fetchall()
+
+
+def _rebuild_legacy_doc_table(conn: sqlite3.Connection, table: str,
+                              ddl: str, known_columns: frozenset,
+                              bool_columns: frozenset,
+                              json_columns: frozenset) -> None:
+    """Rebuild a legacy doc-blob table (doc_id, doc TEXT NOT NULL) into the
+    typed-column schema, preserving doc_ids and migrating row data.
+
+    Development versions of this backend stored each record as a JSON
+    blob in a ``doc`` column. An old DB carried over crashes every insert
+    with ``NOT NULL constraint failed: <table>.doc`` — detect the shape,
+    rebuild, and re-import the JSON payloads.
+    """
+    # Whole rebuild in one transaction — the connection is autocommit,
+    # so a mid-migration crash must not leave a renamed-away table.
+    conn.execute('BEGIN IMMEDIATE')
+    migrated = 0
+    try:
+        rows = conn.execute(f'SELECT doc_id, doc FROM "{table}"').fetchall()
+        conn.execute(f'ALTER TABLE "{table}" RENAME TO "{table}_legacy"')
+        conn.execute(ddl)
+        for doc_id, doc_json in rows:
+            try:
+                doc = json.loads(doc_json)
+            except (TypeError, json.JSONDecodeError):
+                doc = None
+            if not isinstance(doc, dict):
+                logging.warning(
+                    'Skipping unparseable legacy row doc_id=%s in %s',
+                    doc_id, table,
+                )
+                continue
+            known, extra = _split_doc(doc, known_columns)
+            names = [c for c in known_columns if c in known]
+            values = [
+                _serialize_value(c, known[c], bool_columns, json_columns)
+                for c in names
+            ]
+            if extra:
+                names.append('extra')
+                values.append(json.dumps(extra))
+            names.insert(0, 'doc_id')
+            values.insert(0, doc_id)
+            placeholders = ', '.join('?' for _ in values)
+            conn.execute(
+                f'INSERT INTO "{table}" ({", ".join(names)}) '
+                f'VALUES ({placeholders})',
+                tuple(values),
+            )
+            migrated += 1
+        conn.execute(f'DROP TABLE "{table}_legacy"')
+    except Exception:
+        conn.execute('ROLLBACK')
+        raise
+    else:
+        conn.execute('COMMIT')
+    logging.info('Migrated %d row(s) from legacy doc-blob table %r',
+                 migrated, table)
+
+
+def _guard_incompatible_columns(conn: sqlite3.Connection, table: str,
+                                known_columns: frozenset) -> None:
+    """Fail fast on NOT NULL columns the current schema doesn't write.
+
+    A leftover NOT NULL column we never populate makes every insert fail
+    with a cryptic IntegrityError — surface it as an actionable error.
+    """
+    allowed = set(known_columns) | {'doc_id', 'extra'}
+    offenders = [
+        row[1] for row in _table_columns(conn, table)
+        if row[1] not in allowed and row[3] and row[4] is None
+    ]
+    if offenders:
+        raise sqlite3.DatabaseError(
+            f'Table {table!r} has NOT NULL column(s) the current schema '
+            f'does not write: {", ".join(offenders)}. The database was '
+            'created by an incompatible version — back it up and remove '
+            'it, or migrate the data manually.'
+        )
+
+
 def _serialize_value(column: str, value: Any,
                      bool_columns: frozenset,
                      json_columns: frozenset) -> Any:
@@ -481,6 +565,18 @@ class SQLiteBackend(Backend):
 
     def _ensure_schema(self) -> None:
         conn = self._connection()
+        # Rebuild legacy doc-blob tables first — they can't be ALTERed
+        # into shape because `doc NOT NULL` rejects every new insert.
+        for table, ddl, cols, bools, jsons in (
+            ('files', _FILES_DDL, FILE_COLUMNS,
+             FILE_BOOL_COLUMNS, FILE_JSON_COLUMNS),
+            ('api_tokens', _TOKENS_DDL, TOKEN_COLUMNS,
+             TOKEN_BOOL_COLUMNS, TOKEN_JSON_COLUMNS),
+        ):
+            col_names = {row[1] for row in _table_columns(conn, table)}
+            if 'doc' in col_names:
+                _rebuild_legacy_doc_table(conn, table, ddl, cols,
+                                          bools, jsons)
         conn.execute(_FILES_DDL)
         conn.execute(_TOKENS_DDL)
         conn.execute(_TOKENS_HASH_INDEX)
@@ -489,6 +585,8 @@ class SQLiteBackend(Backend):
         # DB was created (nullable only — no constraints via ALTER).
         _add_missing_columns(conn, 'files', _FILE_MIGRATABLE_COLUMNS)
         _add_missing_columns(conn, 'api_tokens', _TOKEN_MIGRATABLE_COLUMNS)
+        _guard_incompatible_columns(conn, 'files', FILE_COLUMNS)
+        _guard_incompatible_columns(conn, 'api_tokens', TOKEN_COLUMNS)
 
     @contextmanager
     def transaction(self):
