@@ -2,7 +2,6 @@ import math
 import os
 import secrets
 import smtplib
-import uuid
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import parseaddr
@@ -102,6 +101,20 @@ def _is_valid_csrf_token() -> bool:
 
     session_token = session.get('csrf_token')
     return bool(submitted_token and session_token and secrets.compare_digest(submitted_token, session_token))
+
+
+def _session_csrf_required() -> bool:
+    """
+    CSRF gate for routes that accept session OR Bearer auth.
+
+    An ``Authorization`` header exempts the request outright: a
+    cross-site form/fetch cannot set it, so Bearer API clients are
+    CSRF-immune by construction. Session-authed requests must present
+    the session token (header, form field, or JSON field).
+    """
+    if request.headers.get('Authorization'):
+        return True
+    return _is_valid_csrf_token()
 
 
 def _parse_positive_integer(value):
@@ -355,6 +368,10 @@ if app.config['STORAGE_BACKEND'] == 'local':
     )
     cleanup_orphaned_files(app.config['UPLOAD_FOLDER'], tracked_files)
 
+# Sweep pending key shares abandoned mid-handshake (begin but no finish).
+file_repo.purge_stale_key_shares(
+    app.config['KEY_SHARE_PENDING_TTL_SECONDS'])
+
 @app.route('/favicon.ico')
 def favicon():
     """Serve the site favicon."""
@@ -385,7 +402,11 @@ def check_and_handle_expiry(file_info):
             storage.delete(file_info['path'])
         except Exception:
             pass
-        
+
+        # An expired share is dead: destroy the key share (H) along with
+        # the blob — nothing may be released for an expired file.
+        file_repo.burn_key_share(file_info['id'])
+
         # Mark as expired in database
         file_repo.mark_expired(file_info['id'])
         file_info['status'] = 'expired'
@@ -539,6 +560,8 @@ def create_api_token():
     ← shown once, store securely
     """
     from tokens import DEFAULT_TOKEN_EXPIRY_DAYS, generate_api_token
+    if not _session_csrf_required():
+        return {'error': 'CSRF validation failed'}, 403
     data = request.get_json(silent=True) or {}
     current_user = get_current_user()
     current_username = current_user['username']
@@ -625,6 +648,53 @@ def revoke_api_token_route(token_id):
     return redirect(url_for('manage_users' if current_user.get('is_admin', False) else 'index'))
 
 
+@app.after_request
+def no_store_key_release_responses(response):
+    """H-carrying endpoints must never be cached by browsers/proxies."""
+    if request.endpoint in {'upload_begin', 'release_key'}:
+        response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+def _is_valid_key_material(value) -> bool:
+    """Key material (H, V, receipt hash) travels as 64 lowercase hex chars (32 bytes)."""
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(c in '0123456789abcdef' for c in value)
+    )
+
+
+@app.route('/upload/begin', methods=['POST'])
+@limiter.limit(
+    lambda: current_app.config['UPLOAD_RATE_LIMIT'],
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
+@api_auth_required
+def upload_begin():
+    """
+    Phase 1 of a key-release upload (docs/true-one-time.md §6.3): mint a
+    file_id and the random server share H so the client can derive
+    file_key = HKDF(Kp ‖ H) before encrypting. The pending share is
+    bound to the uploader's username and completed by /upload carrying
+    ``file_id`` + ``key_verifier`` + ``receipt_hash``.
+    """
+    if not current_app.config.get('KEY_RELEASE_ENABLED', False):
+        return {'error': 'Server-gated key release is disabled'}, 404
+
+    if not _session_csrf_required():
+        return {'error': 'CSRF validation failed'}, 403
+
+    # Pending shares that never finished are dead weight — sweep them on
+    # the same path that creates them.
+    file_repo.purge_stale_key_shares(
+        current_app.config['KEY_SHARE_PENDING_TTL_SECONDS'])
+
+    file_id, h_hex = file_repo.create_key_share(created_by=g.username)
+    return {'file_id': file_id, 'h': h_hex}
+
+
 @app.route('/upload', methods=['POST'])
 @limiter.limit(
     lambda: current_app.config['UPLOAD_RATE_LIMIT'],
@@ -639,13 +709,49 @@ def upload_file():
     private_note = (request.form.get('private_note') or '').strip() or None
     wants_json = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
+    if not _session_csrf_required():
+        if wants_json:
+            return {'error': 'CSRF validation failed'}, 403
+        flash('Invalid request')
+        return redirect(url_for('index'))
+
+    # Every upload is two-phase: the client must have run /upload/begin
+    # and sends back the minted file_id, the password verifier V, and the
+    # receipt hash (SHA-256 of the in-ciphertext decryption receipt).
+    file_id = (request.form.get('file_id') or '').strip() or None
+    key_verifier = (request.form.get('key_verifier') or '').strip().lower() or None
+    receipt_hash = (request.form.get('receipt_hash') or '').strip().lower() or None
+
+    def _fail(message, status=400):
+        if wants_json:
+            return {'error': message}, status
+        flash(message)
+        return redirect(url_for('index'))
+
     try:
         notify_on_open, notification_email = _get_notification_preferences(g.username)
     except NotificationPreferenceError as exc:
-        if wants_json:
-            return {'error': exc.message}, 400
-        flash(exc.message)
-        return redirect(url_for('index'))
+        return _fail(exc.message)
+
+    if (
+        not file_id
+        or not _is_valid_key_material(key_verifier)
+        or not _is_valid_key_material(receipt_hash)
+    ):
+        return _fail('Invalid key-release upload')
+    share = file_repo.get_key_share(file_id)
+    if (
+        not current_app.config.get('KEY_RELEASE_ENABLED', False)
+        or share is None
+        or share.get('v') is not None
+        or share.get('released_at') is not None
+        or file_repo.get_by_id(file_id) is not None
+    ):
+        return _fail('Unknown or already finalized key-release upload', 409)
+    # Owner binding: only the account that ran /upload/begin may finish
+    # it — a leaked pending file_id must not let someone else claim it.
+    if share.get('created_by') != g.username:
+        return _fail('Key-release share belongs to another user', 403)
 
     if upload_type == 'text' and note_text:
         # Handle text note upload
@@ -661,24 +767,40 @@ def upload_file():
             except ValueError:
                 expiry_iso = None
 
-        # Generate unique ID
-        unique_id = str(uuid.uuid4())
-        
-        # Save to storage
-        file_path = storage.save(unique_id, text_bytes)
+        # The file_id was minted by /upload/begin
+        unique_id = file_id
 
-        # Create database entry
-        file_repo.create({
-            'original_name': 'Secret Note',
-            'path': file_path,
-            'uploaded_by': g.username,
-            'expiry_at': expiry_iso,
-            'type': 'text',
-            'private_note': private_note,
-            'notify_on_open': notify_on_open,
-            'notification_email': notification_email,
-        }, file_id=unique_id)
-        
+        # Binding V atomically claims the pending share — a racing second
+        # finish loses here, before any blob or record is written.
+        if not file_repo.bind_key_verifier(unique_id, key_verifier):
+            return _fail('Key-release upload was finalized elsewhere', 409)
+
+        # Compensation: a bound share with no file record is dangling —
+        # if save/create fails after the bind, destroy the share so the
+        # failed finish can't be replayed or sit orphaned holding H.
+        file_path = None
+        try:
+            file_path = storage.save(unique_id, text_bytes)
+            file_repo.create({
+                'original_name': 'Secret Note',
+                'path': file_path,
+                'uploaded_by': g.username,
+                'expiry_at': expiry_iso,
+                'type': 'text',
+                'private_note': private_note,
+                'notify_on_open': notify_on_open,
+                'notification_email': notification_email,
+                'receipt_hash': receipt_hash,
+            }, file_id=unique_id)
+        except Exception:
+            if file_path is not None:
+                try:
+                    storage.delete(file_path)
+                except Exception:
+                    pass
+            file_repo.burn_key_share(unique_id)
+            return _fail('Upload failed', 500)
+
         share_link = url_for('view_file', file_id=unique_id, _external=True)
         if wants_json:
             return {
@@ -700,11 +822,15 @@ def upload_file():
     
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        
-        # Generate unique ID and save to storage
-        unique_id = str(uuid.uuid4())
-        file_path = storage.save(unique_id, file)
-        
+
+        # The file_id was minted by /upload/begin
+        unique_id = file_id
+
+        # Binding V atomically claims the pending share — a racing second
+        # finish loses here, before any blob or record is written.
+        if not file_repo.bind_key_verifier(unique_id, key_verifier):
+            return _fail('Key-release upload was finalized elsewhere', 409)
+
         # Parse expiry date
         expiry_raw = request.form.get('expiry')
         expiry_iso = None
@@ -714,18 +840,32 @@ def upload_file():
             except ValueError:
                 expiry_iso = None
 
-        # Create database entry
-        file_repo.create({
-            'original_name': filename,
-            'path': file_path,
-            'uploaded_by': g.username,
-            'expiry_at': expiry_iso,
-            'type': 'file',
-            'private_note': private_note,
-            'notify_on_open': notify_on_open,
-            'notification_email': notification_email,
-        }, file_id=unique_id)
-        
+        # Compensation: a bound share with no file record is dangling —
+        # if save/create fails after the bind, destroy the share so the
+        # failed finish can't be replayed or sit orphaned holding H.
+        file_path = None
+        try:
+            file_path = storage.save(unique_id, file)
+            file_repo.create({
+                'original_name': filename,
+                'path': file_path,
+                'uploaded_by': g.username,
+                'expiry_at': expiry_iso,
+                'type': 'file',
+                'private_note': private_note,
+                'notify_on_open': notify_on_open,
+                'notification_email': notification_email,
+                'receipt_hash': receipt_hash,
+            }, file_id=unique_id)
+        except Exception:
+            if file_path is not None:
+                try:
+                    storage.delete(file_path)
+                except Exception:
+                    pass
+            file_repo.burn_key_share(unique_id)
+            return _fail('Upload failed', 500)
+
         share_link = url_for('view_file', file_id=unique_id, _external=True)
         if wants_json:
             return {
@@ -875,19 +1015,110 @@ def confirm_view_file(file_id):
     return render_template('view.html', file_id=file_id, original_name=file_info['original_name'], file_type=file_type)
 
 
+def _release_rate_limit_key() -> str:
+    """Rate-limit /release per file_id — rotating IPs must not reset it."""
+    return f"release:{request.view_args.get('file_id') or get_client_ip()}"
+
+
+@app.route('/release/<file_id>', methods=['POST'])
+@limiter.limit(
+    lambda: current_app.config['KEY_RELEASE_RATE_LIMIT'],
+    key_func=_release_rate_limit_key,
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
+def release_key(file_id):
+    """
+    Server-gated key release (docs/true-one-time.md §6.4): the client proves
+    password knowledge by presenting verifier V'. The whole attempt —
+    read state, constant-time compare, claim-or-count — runs inside ONE
+    transaction in FileStore.attempt_key_release, so racing requests
+    serialize: exactly one can release H, and a racing correct-V can
+    never be pre-empted (or burned) by a wrong-V request that lost.
+    """
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return {'error': 'Invalid request'}, 400
+    v_hex = data.get('v')
+    if isinstance(v_hex, str):
+        v_hex = v_hex.strip().lower()
+    if not _is_valid_key_material(v_hex):
+        return {'error': 'Invalid request'}, 400
+
+    client_ip = get_client_ip()
+    result = file_repo.attempt_key_release(
+        file_id,
+        v_hex,
+        current_app.config.get('KEY_RELEASE_MAX_ATTEMPTS', 1),
+        current_app.config.get('KEY_RELEASE_BURN_ON_LOCKOUT', False),
+    )
+    status = result['status']
+
+    if status == 'ok':
+        current_app.logger.info(
+            'Key-release share %s released (ip=%s)', file_id, client_ip)
+        return {'h': result['h']}
+    if status == 'denied':
+        current_app.logger.warning(
+            'Failed key-release attempt on %s (attempts=%s, ip=%s)',
+            file_id, result.get('attempts'), client_ip)
+        return {
+            'error': 'Incorrect password',
+            'attempts_remaining': result['attempts_remaining'],
+        }, 403
+    if status == 'locked':
+        current_app.logger.warning(
+            'Key-release share %s locked (attempts exhausted, ip=%s)',
+            file_id, client_ip)
+        return {'error': 'Too many attempts'}, 429
+    if status == 'released':
+        return {'error': 'Key already released'}, 410
+    if status == 'expired':
+        # Share row is already gone; finish the cleanup by dropping the
+        # stored blob too.
+        if result.get('path'):
+            try:
+                storage.delete(result['path'])
+            except Exception:
+                pass
+        return {'error': 'File has expired'}, 410
+    # missing_file / missing_share / pending — nothing to release.
+    return {'error': 'Not found'}, 404
+
+
 @app.route('/report_decryption/<file_id>', methods=['POST'])
 def report_decryption(file_id):
-    """Record whether the downloaded file was decrypted successfully."""
+    """
+    Record whether the downloaded file was decrypted successfully.
+
+    Proof-of-decryption: the client must return the 32-byte receipt that
+    was encrypted INSIDE the ciphertext — the server stores only its
+    SHA-256 hash, so the report is unforgeable from the link/UUID alone.
+    """
     file_info = file_repo.get_by_id(file_id)
     if not file_info:
         return {'error': 'File not found'}, 404
 
-    data = request.get_json(silent=True) or {}
-    if 'success' not in data or not isinstance(data['success'], bool):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return {'error': 'Invalid request'}, 400
+    receipt_hex = data.get('receipt')
+    if isinstance(receipt_hex, str):
+        receipt_hex = receipt_hex.strip().lower()
+    if (
+        'success' not in data
+        or not isinstance(data['success'], bool)
+        or not _is_valid_key_material(receipt_hex)
+    ):
         return {'error': 'Invalid request'}, 400
 
-    if file_info.get('decryption_success') is None:
-        file_repo.update_decryption_status(file_id, data['success'])
+    stored_hash = file_info.get('receipt_hash')
+    candidate_hash = hashlib.sha256(bytes.fromhex(receipt_hex)).hexdigest()
+    if not stored_hash or not secrets.compare_digest(
+            stored_hash, candidate_hash):
+        return {'error': 'Invalid receipt'}, 403
+
+    if file_repo.record_decryption_result(file_id, data['success']):
         file_info['decryption_success'] = data['success']
 
     latest_file_info = file_repo.get_by_id(file_id) or file_info

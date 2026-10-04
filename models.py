@@ -4,9 +4,10 @@ Provides abstraction over database operations — the public facade stays
 stable while the actual storage lives behind the FileStore interface
 (see db/base.py).
 """
+import secrets
 import uuid
 from datetime import datetime
-from typing import Optional, List, Iterable
+from typing import Optional, List, Iterable, Tuple
 
 from db import FileStore
 
@@ -31,6 +32,15 @@ class FileRepository:
             from app import get_files_store
             return get_files_store()
         return self._store
+
+    def record_decryption_result(self, file_id: str, success: bool) -> bool:
+        """
+        Record the decryption outcome — first receipt-valid report wins.
+
+        Returns:
+            True when this call wrote the outcome.
+        """
+        return self.store.record_decryption_result(file_id, success)
 
     def create(self, file_data: dict, file_id: Optional[str] = None) -> str:
         """
@@ -65,6 +75,7 @@ class FileRepository:
             'notification_email': file_data.get('notification_email'),
             'notification_sent_at': file_data.get('notification_sent_at'),
             'notification_claimed_at': file_data.get('notification_claimed_at'),
+            'receipt_hash': file_data.get('receipt_hash'),
         }
 
         self.store.insert(entry)
@@ -174,24 +185,65 @@ class FileRepository:
         """
         self.store.update_fields(file_id, {'status': 'expired'})
 
-    def update_decryption_status(self, file_id: str, success: bool):
-        """
-        Update decryption success status.
-
-        Args:
-            file_id: File UUID
-            success: Whether decryption was successful
-        """
-        self.store.update_fields(file_id, {'decryption_success': success})
-
     def delete(self, file_id: str):
         """
         Delete file entry from database.
+
+        Also drops the key-release share when present — a deleted share
+        must not leave its server half behind.
 
         Args:
             file_id: File UUID
         """
         self.store.delete(file_id)
+        self.store.delete_key_share(file_id)
+
+    # -- server-gated key release ----------------------------------
+
+    def create_key_share(self, created_by: Optional[str] = None
+                         ) -> Tuple[str, str]:
+        """
+        Begin a two-phase key-release upload: mint a file_id plus the random
+        32-byte server share H, and persist the pending share bound to
+        the uploader's username.
+
+        Returns:
+            (file_id, h_hex) — H leaves the server exactly twice in its
+            lifetime: here to the uploader's browser (it holds the
+            plaintext anyway) and once via attempt_key_release.
+        """
+        file_id = str(uuid.uuid4())
+        h_hex = secrets.token_hex(32)
+        self.store.create_key_share(file_id, h_hex, created_by=created_by)
+        return file_id, h_hex
+
+    def get_key_share(self, file_id: str) -> Optional[dict]:
+        """Return the key-share record for a file_id, or None."""
+        return self.store.get_key_share(file_id)
+
+    def bind_key_verifier(self, file_id: str, v_hex: str) -> bool:
+        """Bind the password verifier to a pending share."""
+        return self.store.bind_key_verifier(file_id, v_hex)
+
+    def attempt_key_release(self, file_id: str, v_hex: str,
+                            max_attempts: int,
+                            burn_on_lockout: bool) -> dict:
+        """
+        One atomic release attempt — see FileStore.attempt_key_release.
+
+        Returns:
+            The store's structured result dict (status + payload).
+        """
+        return self.store.attempt_key_release(
+            file_id, v_hex, max_attempts, burn_on_lockout)
+
+    def purge_stale_key_shares(self, older_than_seconds: int) -> int:
+        """Delete pending shares older than the TTL; returns the count."""
+        return self.store.purge_stale_key_shares(older_than_seconds)
+
+    def burn_key_share(self, file_id: str) -> bool:
+        """Destroy the share (and with it H) on lockout burn or expiry."""
+        return self.store.burn_key_share(file_id)
 
     def mark_notification_sent(self, file_id: str):
         """Mark uploader notification as sent."""

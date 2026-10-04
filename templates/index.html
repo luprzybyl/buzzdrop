@@ -545,6 +545,7 @@
 <script id="allowed-extensions-json" type="application/json">{{ allowed_extensions | tojson }}</script>
 <script>
 window.uploadUrl = "{{ url_for('upload_file') }}";
+window.uploadBeginUrl = "{{ url_for('upload_begin') }}";
 </script>
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}" integrity="{{ sri_hash('js/main.js') }}" crossorigin="anonymous"></script>
 {% endblock %}

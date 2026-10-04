@@ -49,6 +49,13 @@ Full signatures: `db/base.py`. The semantics the contract suite enforces:
 | `update_fields(file_id, fields) -> bool` | `False` when the record doesn't exist |
 | `claim_download(file_id, ip) -> bool` | **ATOMIC** — a single conditional `UPDATE ... WHERE id=? AND downloaded_at IS NULL AND (status IS NULL OR status != 'expired') AND expiry_at > now` (or equivalent); `True` for the race winner only |
 | `claim_notification_send(file_id) -> bool` | ditto, for the `notification_sent_at` field |
+| `record_decryption_result(file_id, success) -> bool` | **ATOMIC** — conditional write `WHERE decryption_success IS NULL`; `True` only for the first valid report |
+| `create_key_share(file_id, h, created_by=None, created_at=None) -> bool` | `False` when a share for `file_id` already exists; `created_by` records the uploading account for owner binding |
+| `get_key_share(file_id)` | dict or `None` — includes `h`, `v`, `attempts`, `released_at`, `created_by`, `created_at` |
+| `bind_key_verifier(file_id, v) -> bool` | single-shot: `True` only when `v` is currently NULL |
+| `attempt_key_release(file_id, v, max_attempts, burn_on_lockout) -> dict` | **ATOMIC — one transaction covering read, expiry check, verifier compare, attempt counting, lockout/burn and release.** Statuses: `missing_file`/`missing_share`/`pending`/`released`/`locked`/`expired`/`ok`/`denied`. On `ok`: return `h`, set `released_at`, wipe `h`/`v`. On `denied`: increment `attempts`. On `expired`: delete the share row and mark the file expired. Expired-after-release still reports `released` |
+| `delete_key_share(file_id) -> bool` / `burn_key_share(file_id) -> bool` | delete the row; `burn` additionally runs whatever WAL/vacuum hygiene the engine needs so deleted bytes don't linger in journals |
+| `purge_stale_key_shares(older_than_seconds) -> int` | delete pending (unbound, `v` NULL) shares older than the TTL; malformed `created_at` counts as stale |
 | `delete(file_id) -> bool` / `truncate()` | — |
 
 ### TokenStore
@@ -62,6 +69,19 @@ Analogous: `insert`, `get_by_id`, `get_by_token_hash`, `get_by`/`list_by`/`all`,
 - **`claim_download` must be engine-atomic** — not "SELECT then UPDATE".
   An 8-thread race must produce exactly 1 winner
   (test `test_claim_download_concurrent_single_winner`).
+- **`attempt_key_release` must be one transaction** — the read, expiry
+  check, verifier compare, attempt count and release are all inside a
+  single write transaction (SQLite: `BEGIN IMMEDIATE`; Postgres: a
+  `SERIALIZABLE` or row-locked `SELECT ... FOR UPDATE` block). Racing
+  attempts must serialize: exactly one `ok`, misses counted once each,
+  and a released share reports `released` — never a second `ok`
+  (`test_attempt_key_release_concurrent_single_winner`,
+  `test_attempt_key_release_mixed_race`,
+  `test_attempt_key_release_race_never_exceeds_max`).
+- **Key-material deletion should be physical, not just logical** —
+  enable whatever secure-delete semantics the engine offers
+  (SQLite: `PRAGMA secure_delete=ON` + `wal_checkpoint(TRUNCATE)` after
+  burns) so wiped `h`/`v` bytes don't survive in journals.
 - **Types round-trip**: `True`/`False`/`None` come back as such,
   `shared_with` comes back as a list (JSON), `doc_id` as int.
 - **Unknown fields** go into the `extra` column (JSON) and merge back

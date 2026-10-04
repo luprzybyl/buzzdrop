@@ -9,34 +9,48 @@ from auth import get_users
 # Test users from conftest.py: 'testuser:password:false', 'adminuser:adminpass:true'
 
 def login_user(client, username, password):
-    return client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    response = client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    with client.session_transaction() as session:
+        session['csrf_token'] = 'test-csrf-token'
+    return response
 
 # Helper function to upload a file for a user
 def upload_file_for_user(client, app, files_store, filename, content, username_for_db_record):
-    file_data = {'file': (io.BytesIO(content.encode()), filename)}
+    import hashlib
+    import secrets
+    import uuid
+    file_id = str(uuid.uuid4())
+    receipt = secrets.token_bytes(32)
+    files_store.create_key_share(
+        file_id, secrets.token_hex(32), created_by=username_for_db_record)
+    file_data = {
+        'file': (io.BytesIO(content.encode()), filename),
+        'file_id': file_id,
+        'key_verifier': 'cc' * 32,
+        'receipt_hash': hashlib.sha256(receipt).hexdigest(),
+        'csrf_token': 'test-csrf-token',
+    }
     client.post(url_for('upload_file'), data=file_data, content_type='multipart/form-data')
 
 
     file_info = files_store.get_by(original_name=filename, uploaded_by=username_for_db_record)
-    return file_info['id'] if file_info else None
+    return (file_info['id'], receipt.hex()) if file_info else (None, None)
 
 def test_upload_file_requires_login(client):
     response = client.post(url_for('upload_file'), data={'file': (io.BytesIO(b"test content"), "test.txt")}, follow_redirects=True)
     assert url_for('login') in response.request.path
     assert b'Please log in to access this page' in response.data
 
-def test_upload_file_success(client, app, files_store):
+def test_upload_file_success(client, app, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
     file_content = b"This is a test file."
     file_name = "upload_test.txt"
     data = {'file': (io.BytesIO(file_content), file_name)}
 
-    data = {'file': (io.BytesIO(file_content), file_name)}
-
     # Using follow_redirects=False. If successful, should render success.html directly with 200.
     # If it redirects, status would be 302.
-    response = client.post(url_for('upload_file'), data=data, content_type='multipart/form-data', follow_redirects=False)
+    file_id, _h, receipt, response = key_release_upload(data=data, xhr=False)
 
     assert response.status_code == 200
     # Ensure content from success.html is present, not index.html
@@ -44,8 +58,9 @@ def test_upload_file_success(client, app, files_store):
     assert b'id="share-link"' in response.data # Check that the input field for the link is there
 
 
-    file_info = files_store.get_by(original_name=file_name)
+    file_info = files_store.get_by_id(file_id)
     assert file_info is not None
+    assert file_info['original_name'] == file_name
     assert file_info['uploaded_by'] == 'testuser'
 
     # Use the path from file_info which is set by storage backend
@@ -54,41 +69,63 @@ def test_upload_file_success(client, app, files_store):
     with open(file_path_on_disk, 'rb') as f:
         assert f.read() == file_content
 
-def test_upload_file_stores_private_note(client, files_store):
+def test_upload_file_stores_private_note(client, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
-    response = client.post(
-        url_for('upload_file'),
+    file_id, _h, receipt, response = key_release_upload(
         data={
             'file': (io.BytesIO(b"test content"), "private_note.txt"),
             'private_note': 'Internal handoff note'
         },
-        content_type='multipart/form-data',
-        follow_redirects=False
+        xhr=False,
     )
 
     assert response.status_code == 200
 
 
-    file_info = files_store.get_by(original_name='private_note.txt')
+    file_info = files_store.get_by_id(file_id)
     assert file_info is not None
     assert file_info['private_note'] == 'Internal handoff note'
 
-def test_upload_file_no_file_part(client):
+def test_upload_file_no_file_part(client, key_share):
     login_user(client, 'testuser', 'password')
-    response = client.post(url_for('upload_file'), data={}, follow_redirects=True)
+    file_id, _h = key_share()
+    response = client.post(
+        url_for('upload_file'),
+        data={'file_id': file_id, 'key_verifier': 'cc' * 32,
+              'receipt_hash': 'aa' * 32, 'csrf_token': 'test-csrf-token'},
+        follow_redirects=True,
+    )
     assert b'No file part' in response.data
     assert url_for('index') in response.request.path # Redirects to index
 
-def test_upload_file_no_selected_file(client):
+def test_upload_file_no_selected_file(client, key_share):
     login_user(client, 'testuser', 'password')
-    response = client.post(url_for('upload_file'), data={'file': (io.BytesIO(b""), "")}, follow_redirects=True) # Empty filename
+    file_id, _h = key_share()
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'file': (io.BytesIO(b""), ""),
+            'file_id': file_id,
+            'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
+        },
+        follow_redirects=True,
+    ) # Empty filename
     assert b'No selected file' in response.data
     assert url_for('index') in response.request.path
 
-def test_upload_file_disallowed_extension(client, app):
+def test_upload_file_disallowed_extension(client, app, key_share):
     login_user(client, 'testuser', 'password')
-    data = {'file': (io.BytesIO(b"some data"), "test.exe")}
+    file_id, _h = key_share()
+    data = {
+        'file': (io.BytesIO(b"some data"), "test.exe"),
+        'file_id': file_id,
+        'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
+    }
     response = client.post(url_for('upload_file'), data=data, content_type='multipart/form-data', follow_redirects=True)
     assert b'File type not allowed' in response.data
     assert url_for('index') in response.request.path
@@ -99,25 +136,24 @@ def test_upload_file_too_large(client, app):
     app.config['MAX_CONTENT_LENGTH'] = 10 # Set a very small limit for testing
 
     file_content = b"This content is larger than 10 bytes."
-    data = {'file': (io.BytesIO(file_content), "large_file.txt")}
+    data = {'file': (io.BytesIO(file_content), "large_file.txt"),
+            'csrf_token': 'test-csrf-token'}
 
     response_no_redirect = client.post(url_for('upload_file'), data=data, content_type='multipart/form-data')
     assert response_no_redirect.status_code == 413 # Request Entity Too Large
 
     app.config['MAX_CONTENT_LENGTH'] = original_max_length # Reset
 
-def test_download_file_success(client, app, files_store):
+def test_download_file_success(client, app, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
     file_content = b"Downloadable content."
     file_name = "download_me.txt"
-    upload_data = {'file': (io.BytesIO(file_content), file_name)}
-    client.post(url_for('upload_file'), data=upload_data, content_type='multipart/form-data')
+    file_id, _h, _rcpt, _resp = key_release_upload(
+        data={'file': (io.BytesIO(file_content), file_name)})
 
-
-    file_info = files_store.get_by(original_name=file_name)
+    file_info = files_store.get_by_id(file_id)
     assert file_info is not None
-    file_id = file_info['id']
 
     # Use the path from file_info which is set by storage backend
     file_path_on_disk = file_info['path']
@@ -140,52 +176,44 @@ def test_download_file_not_found(client):
     assert b'File not found' in response.data
     assert url_for('index') in response.request.path
 
-def test_download_file_already_downloaded(client, app, files_store):
+def test_download_file_already_downloaded(client, app, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
     file_content = b"Already downloaded."
     file_name = "download_once.txt"
-    client.post(url_for('upload_file'), data={'file': (io.BytesIO(file_content), file_name)}, content_type='multipart/form-data')
-
-    file_info = files_store.get_by(original_name=file_name)
-    file_id = file_info['id']
+    file_id, _h, _rcpt, _resp = key_release_upload(
+        data={'file': (io.BytesIO(file_content), file_name)})
     client.get(url_for('download_file', file_id=file_id))
 
     response = client.get(url_for('download_file', file_id=file_id), follow_redirects=True)
     assert b'This file has already been downloaded' in response.data
     assert url_for('index') in response.request.path
 
-def test_view_file_success(client, app, files_store):
+def test_view_file_success(client, app, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
     file_name = "view_me.txt"
-    client.post(url_for('upload_file'), data={'file': (io.BytesIO(b"view content"), file_name)}, content_type='multipart/form-data')
-
-    file_info = files_store.get_by(original_name=file_name)
-    assert file_info is not None
-    file_id = file_info['id']
+    file_id, _h, _rcpt, _resp = key_release_upload(
+        data={'file': (io.BytesIO(b"view content"), file_name)})
 
     response = client.get(url_for('view_file', file_id=file_id))
     assert response.status_code == 200
     assert file_name.encode() in response.data
     assert file_id.encode() in response.data
 
-def test_public_views_do_not_show_private_note(client, files_store, csrf_form_data):
+def test_public_views_do_not_show_private_note(client, files_store, csrf_form_data, key_release_upload):
     login_user(client, 'testuser', 'password')
 
-    response = client.post(
-        url_for('upload_file'),
+    file_id, _h, receipt, response = key_release_upload(
         data={
             'file': (io.BytesIO(b"view content"), "private_view.txt"),
             'private_note': 'Only uploader should see this'
         },
-        content_type='multipart/form-data',
-        follow_redirects=False
     )
     assert response.status_code == 200
 
 
-    file_info = files_store.get_by(original_name='private_view.txt')
+    file_info = files_store.get_by_id(file_id)
     assert file_info is not None
 
     client.get(url_for('logout'))
@@ -213,7 +241,7 @@ def test_delete_file_requires_login(client):
 def test_delete_file_before_download(client, app, files_store, csrf_form_data):
     login_user(client, 'testuser', 'password')
 
-    file_id = upload_file_for_user(client, app, files_store, 'del.txt', 'hi', 'testuser')
+    file_id, _rc = upload_file_for_user(client, app, files_store, 'del.txt', 'hi', 'testuser')
 
     file_info = files_store.get_by_id(file_id)
     file_path = file_info['path']
@@ -229,7 +257,7 @@ def test_delete_file_before_download(client, app, files_store, csrf_form_data):
 def test_delete_file_requires_csrf(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
-    file_id = upload_file_for_user(client, app, files_store, 'needs_csrf.txt', 'hi', 'testuser')
+    file_id, _rc = upload_file_for_user(client, app, files_store, 'needs_csrf.txt', 'hi', 'testuser')
     response = client.post(url_for('delete_file', file_id=file_id), follow_redirects=True)
 
     assert response.status_code == 200
@@ -241,7 +269,7 @@ def test_delete_file_requires_csrf(client, app, files_store):
 def test_delete_file_after_download(client, app, files_store, csrf_form_data):
     login_user(client, 'testuser', 'password')
 
-    file_id = upload_file_for_user(client, app, files_store, 'del_after.txt', 'content', 'testuser')
+    file_id, _rc = upload_file_for_user(client, app, files_store, 'del_after.txt', 'content', 'testuser')
     download_response = client.get(url_for('download_file', file_id=file_id))
     assert download_response.status_code == 200
     _ = download_response.data
@@ -257,7 +285,7 @@ def test_delete_file_after_download(client, app, files_store, csrf_form_data):
     assert files_store.get_by_id(file_id) is None
 
 
-def test_view_file_expired(client, app, files_store):
+def test_view_file_expired(client, app, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
     expiry = (datetime.now() - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M')
@@ -265,11 +293,7 @@ def test_view_file_expired(client, app, files_store):
         'file': (io.BytesIO(b'expired'), 'exp.txt'),
         'expiry': expiry
     }
-    client.post(url_for('upload_file'), data=file_data, content_type='multipart/form-data')
-
-
-    file_info = files_store.get_by(original_name='exp.txt')
-    file_id = file_info['id']
+    file_id, _h, _rcpt, _resp = key_release_upload(data=file_data)
 
     response = client.get(url_for('view_file', file_id=file_id), follow_redirects=True)
     assert b'File has expired' in response.data
@@ -280,11 +304,13 @@ def test_view_file_expired(client, app, files_store):
 def test_report_decryption_success(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
-    file_id = upload_file_for_user(client, app, files_store, 'dec.txt', 'content', 'testuser')
+    file_id, receipt = upload_file_for_user(client, app, files_store, 'dec.txt', 'content', 'testuser')
 
     client.get(url_for('download_file', file_id=file_id))
 
-    res = client.post(url_for('report_decryption', file_id=file_id), json={'success': True})
+    res = client.post(
+        url_for('report_decryption', file_id=file_id),
+        json={'success': True, 'receipt': receipt})
     assert res.status_code == 200
 
 
@@ -292,7 +318,7 @@ def test_report_decryption_success(client, app, files_store):
     assert info['decryption_success'] is True
 
 
-def test_upload_file_uses_verified_account_notification_email(client, app, files_store, monkeypatch):
+def test_upload_file_uses_verified_account_notification_email(client, app, files_store, monkeypatch, key_release_upload):
     monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     get_users.cache_clear()
     login_user(client, 'testuser', 'password')
@@ -301,25 +327,22 @@ def test_upload_file_uses_verified_account_notification_email(client, app, files
         'SMTP_FROM_EMAIL': 'buzzdrop@example.com',
     })
 
-    response = client.post(
-        url_for('upload_file'),
+    file_id, _h, receipt, response = key_release_upload(
         data={
             'file': (io.BytesIO(b"test content"), "notify_me.txt"),
             'notify_on_open': 'true',
         },
-        content_type='multipart/form-data',
-        headers={'X-Requested-With': 'XMLHttpRequest'},
     )
 
     assert response.status_code == 200
 
 
-    info = files_store.get_by(original_name='notify_me.txt')
+    info = files_store.get_by_id(file_id)
     assert info['notify_on_open'] is True
     assert info['notification_email'] == 'testuser@example.com'
 
 
-def test_report_decryption_sends_notification_once(client, app, files_store, monkeypatch):
+def test_report_decryption_sends_notification_once(client, app, files_store, monkeypatch, key_release_upload):
     monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     get_users.cache_clear()
     login_user(client, 'testuser', 'password')
@@ -330,23 +353,23 @@ def test_report_decryption_sends_notification_once(client, app, files_store, mon
     })
     monkeypatch.setattr('app._send_email', lambda recipient, subject, body: sent_messages.append((recipient, subject, body)))
 
-    response = client.post(
-        url_for('upload_file'),
+    file_id, _h, receipt, response = key_release_upload(
         data={
             'file': (io.BytesIO(b"content"), "notify_once.txt"),
             'notify_on_open': 'true',
         },
-        content_type='multipart/form-data',
-        headers={'X-Requested-With': 'XMLHttpRequest'},
     )
-    file_id = response.get_json()['file_id']
 
     client.get(url_for('download_file', file_id=file_id))
 
-    res = client.post(url_for('report_decryption', file_id=file_id), json={'success': True})
+    res = client.post(
+        url_for('report_decryption', file_id=file_id),
+        json={'success': True, 'receipt': receipt})
     assert res.status_code == 200
 
-    res = client.post(url_for('report_decryption', file_id=file_id), json={'success': True})
+    res = client.post(
+        url_for('report_decryption', file_id=file_id),
+        json={'success': True, 'receipt': receipt})
     assert res.status_code == 200
 
     assert len(sent_messages) == 1
@@ -368,19 +391,34 @@ def test_report_decryption_sends_notification_once(client, app, files_store, mon
 ])
 def test_report_decryption_requires_boolean_success(client, app, files_store, payload):
     login_user(client, 'testuser', 'password')
-    file_id = upload_file_for_user(client, app, files_store, 'bool.txt', 'content', 'testuser')
+    file_id, _rc = upload_file_for_user(client, app, files_store, 'bool.txt', 'content', 'testuser')
 
     res = client.post(url_for('report_decryption', file_id=file_id), json=payload)
     assert res.status_code == 400
 
 
+def test_report_decryption_rejects_forged_receipt(client, app, files_store):
+    """A receipt whose hash doesn't match proves nothing — UUID alone
+    must not be enough to fake a decryption report."""
+    login_user(client, 'testuser', 'password')
+    file_id, _rc = upload_file_for_user(
+        client, app, files_store, 'forge.txt', 'content', 'testuser')
+
+    res = client.post(
+        url_for('report_decryption', file_id=file_id),
+        json={'success': True, 'receipt': 'ff' * 32})
+    assert res.status_code == 403
+    assert files_store.get_by_id(file_id)['decryption_success'] is None
+
+
 @pytest.mark.parametrize('request_kwargs', [
     {},
     {'data': 'success=true', 'content_type': 'application/x-www-form-urlencoded'},
+    {'json': ['not', 'a', 'dict']},
 ])
 def test_report_decryption_requires_json_body(client, app, files_store, request_kwargs):
     login_user(client, 'testuser', 'password')
-    file_id = upload_file_for_user(client, app, files_store, 'bool-json.txt', 'content', 'testuser')
+    file_id, _rc = upload_file_for_user(client, app, files_store, 'bool-json.txt', 'content', 'testuser')
 
     res = client.post(url_for('report_decryption', file_id=file_id), **request_kwargs)
     assert res.status_code == 400

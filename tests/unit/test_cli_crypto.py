@@ -2,16 +2,19 @@
 Unit tests for the CLI encryption/decryption functions.
 
 These tests verify that the Python encrypt_file() output can be correctly
-parsed (correct header offsets, correct binary layout), that a round-trip
-encrypt→decrypt produces the original data, and that the versioned payload
-format is honoured:
+parsed (correct header offsets, correct binary layout) and that a
+round-trip encrypt→decrypt produces the original data for the key-release
+(BKV3) payload format:
 
-    v2: 'BKV2' (4B) + salt (16B) + iv (12B) + AES-GCM ciphertext, 600k iters
-    v1 (legacy): salt (16B) + iv (12B) + AES-GCM ciphertext,      100k iters
+    'BKV3' (4B) + salt (16B) + iv (12B) + AES-GCM ciphertext
+    master   = PBKDF2-SHA256(password, salt, 600k)
+    Kp       = HKDF(master, salt, 'enc'); V = HKDF(master, salt, 'ver')
+    file_key = HKDF(Kp ‖ H, salt, 'file')
 
-The V1_FIXTURE/V2_FIXTURE hex blobs below are shared verbatim with
+The V3_FIXTURE hex blob below is shared verbatim with
 tests/js/crypto.test.mjs so both implementations are pinned to identical
 bytes: salt = bytes(range(16)), iv = bytes(range(16, 28)),
+h = bytes(range(32, 64)), receipt = bytes(range(64, 96)),
 password = 'fixture-password-123', plaintext payload = b'fixture-data'.
 """
 import os
@@ -48,152 +51,145 @@ requires_cryptography = pytest.mark.skipif(
     reason='cryptography package not installed',
 )
 
-# Deterministic fixtures (salt = 0x00..0x0f, iv = 0x10..0x1b).
+# Deterministic fixtures (salt = 0x00..0x0f, iv = 0x10..0x1b,
+# h = 0x20..0x3f, receipt = 0x40..0x5f).
 FIXTURE_PASSWORD = 'fixture-password-123'
 FIXTURE_DATA = b'fixture-data'
-# Legacy v1 blob: salt(16) + iv(12) + AES-GCM('BKP-FILE' + data), 100k iters.
-V1_FIXTURE = bytes.fromhex(
+# v3 blob: 'BKV3' + salt(16) + iv(12) + AES-GCM('BKP-FILE' + receipt + data),
+# key-release KDF.
+V3_FIXTURE = bytes.fromhex(
+    '424b5633'
     '000102030405060708090a0b0c0d0e0f'
     '101112131415161718191a1b'
-    'd56b4e5b1641d0eaeacce061df6849f4af753cdfd77c893e82c18731742215deb41d16c7'
+    '9d9e3a85dc0667cf2d932f2ff111e26d53863a05b353260ca7f44e971372b9'
+    '1bc0238a04ef05c5b1e79f2b61b3a603b53c45ea318ba552f5d223fffcaa'
+    'e506cbea569cd3'
 )
-# v2 blob: 'BKV2' + salt(16) + iv(12) + AES-GCM('BKP-FILE' + data), 600k iters.
-V2_FIXTURE = bytes.fromhex(
-    '424b5632'
-    '000102030405060708090a0b0c0d0e0f'
-    '101112131415161718191a1b'
-    'e3e9c2fdac1fb1a52e4bbc89c1ba01a137ea1936f57eec0d0ccf39fff550f508ee017e67'
+V3_FIXTURE_H = bytes.fromhex(
+    '202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f'
 )
-
-
-def _manual_decrypt(blob: bytes, password: str, iterations: int, offset: int = 0) -> bytes:
-    """Decrypt salt+iv+ct at `offset` with an explicit iteration count."""
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    from cryptography.hazmat.primitives import hashes
-
-    salt = blob[offset:offset + 16]
-    iv = blob[offset + 16:offset + 28]
-    ciphertext = blob[offset + 28:]
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=iterations,
-    )
-    key = kdf.derive(password.encode('utf-8'))
-    return AESGCM(key).decrypt(iv, ciphertext, None)
+V3_FIXTURE_V = (
+    '0ec3a6fe37dd4e652583c3dcde17bad20e019cbbf47d8f281bbf3f028ab482db'
+)
+V3_FIXTURE_RECEIPT = bytes.fromhex(
+    '404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f'
+)
 
 
 @requires_cryptography
 def test_encrypt_output_length():
     buzz = _import_buzz()
     data = b'hello world'
-    password = 'test-password'
-    result = buzz.encrypt_file(data, password)
-    # magic(4) + salt(16) + iv(12) + AES-GCM(tag=16 + plaintext with 8-byte header)
-    expected_min = 4 + 16 + 12 + 16 + 8 + len(data)
-    assert len(result) == expected_min
+    blob, _v, receipt_hash = buzz.encrypt_file(
+        data, 'test-password', h=os.urandom(32))
+    # magic(4) + salt(16) + iv(12) + AES-GCM(tag=16 + plaintext with
+    # 8-byte header + 32-byte receipt)
+    expected_min = 4 + 16 + 12 + 16 + 8 + 32 + len(data)
+    assert len(blob) == expected_min
+    assert len(receipt_hash) == 64
 
 
 @requires_cryptography
-def test_encrypt_produces_v2_envelope():
-    """encrypt_file() must emit the v2 envelope magic at offset 0."""
+def test_encrypt_receipt_hash_matches_payload():
+    """The stored receipt_hash is SHA-256 of the in-plaintext receipt."""
+    import hashlib
     buzz = _import_buzz()
-    result = buzz.encrypt_file(b'data', 'pw')
-    assert result[:4] == buzz.MAGIC_V2 == b'BKV2'
+    h = os.urandom(32)
+    blob, _v, receipt_hash = buzz.encrypt_file(b'data', 'pw', h)
+    _data, receipt = buzz.decrypt_file(blob, 'pw', h)
+    assert hashlib.sha256(receipt).hexdigest() == receipt_hash
+
+
+@requires_cryptography
+def test_encrypt_produces_v3_envelope():
+    """encrypt_file() must emit the BKV3 envelope magic at offset 0."""
+    buzz = _import_buzz()
+    blob, v_hex, _rh = buzz.encrypt_file(b'data', 'pw', h=os.urandom(32))
+    assert blob[:4] == buzz.MAGIC_V3 == b'BKV3'
+    assert len(v_hex) == 64
+
+
+@requires_cryptography
+def test_encrypt_rejects_bad_h_length():
+    buzz = _import_buzz()
+    with pytest.raises(ValueError):
+        buzz.encrypt_file(b'data', 'pw', h=b'too-short')
 
 
 @requires_cryptography
 def test_encrypt_decrypt_roundtrip():
-    """Python-encrypted v2 data should decrypt to original bytes."""
+    """encrypt_file + decrypt_file(h) returns the original bytes."""
     buzz = _import_buzz()
-    original = b'The quick brown fox jumps over the lazy dog'
-    password = 'correct-horse-battery-staple'
-
-    encrypted = buzz.encrypt_file(original, password)
-
-    # Parse the v2 binary format: magic(4) + salt(16) + iv(12) + ct
-    plaintext = _manual_decrypt(encrypted, password, iterations=600_000, offset=4)
-
-    assert plaintext[:8] == b'BKP-FILE'
-    assert plaintext[8:] == original
+    original = b'key-release payload \x00\xff'
+    h = os.urandom(32)
+    blob, _v, _rh = buzz.encrypt_file(original, 'pw', h)
+    data, receipt = buzz.decrypt_file(blob, 'pw', h=h)
+    assert data == original
+    assert len(receipt) == 32
 
 
 @requires_cryptography
-def test_decrypt_file_v2_roundtrip():
-    """decrypt_file() round-trips encrypt_file() output."""
+def test_v3_fixture_decrypts_and_verifier_matches():
+    """Pinned v3 fixture: same bytes in JS test (crypto.test.mjs)."""
     buzz = _import_buzz()
-    original = b'roundtrip me \x00\x01\xff'
-    encrypted = buzz.encrypt_file(original, 'some-password')
-    assert buzz.decrypt_file(encrypted, 'some-password') == original
+    data, receipt = buzz.decrypt_file(
+        V3_FIXTURE, FIXTURE_PASSWORD, h=V3_FIXTURE_H)
+    assert data == FIXTURE_DATA
+    assert receipt == V3_FIXTURE_RECEIPT
+    # The verifier the client binds is derivable from password + blob salt.
+    salt = V3_FIXTURE[4:20]
+    _kp, v = buzz.derive_key_release_keys(FIXTURE_PASSWORD, salt)
+    assert v.hex() == V3_FIXTURE_V
 
 
 @requires_cryptography
-def test_decrypt_file_v2_fixture():
-    """Pinned v2 fixture decrypts (anchors Python/JS to identical bytes)."""
+def test_decrypt_requires_v3_magic():
+    """Only BKV3 is supported — other formats fail loudly."""
     buzz = _import_buzz()
-    assert buzz.decrypt_file(V2_FIXTURE, FIXTURE_PASSWORD) == FIXTURE_DATA
+    with pytest.raises(ValueError):
+        buzz.decrypt_file(b'BKV2' + V3_FIXTURE[4:], FIXTURE_PASSWORD, h=V3_FIXTURE_H)
+    with pytest.raises(ValueError):
+        buzz.decrypt_file(os.urandom(64), FIXTURE_PASSWORD, h=V3_FIXTURE_H)
 
 
 @requires_cryptography
-def test_decrypt_file_v1_legacy_fixture():
-    """Existing v1 shares (no magic, 100k iterations) must still decrypt."""
+def test_decrypt_requires_server_share():
+    """The whole point: a blob alone cannot be decrypted."""
     buzz = _import_buzz()
-    assert not V1_FIXTURE.startswith(buzz.MAGIC_V2)
-    assert buzz.decrypt_file(V1_FIXTURE, FIXTURE_PASSWORD) == FIXTURE_DATA
+    with pytest.raises(ValueError):
+        buzz.decrypt_file(V3_FIXTURE, FIXTURE_PASSWORD, h=None)
+    with pytest.raises(ValueError):
+        buzz.decrypt_file(V3_FIXTURE, FIXTURE_PASSWORD, h=b'short')
 
 
 @requires_cryptography
-def test_v2_actually_uses_600k_iterations():
-    """v2 payloads must not decrypt with the legacy 100k iteration count."""
+def test_wrong_password_or_h_fails():
     from cryptography.exceptions import InvalidTag
-
     buzz = _import_buzz()
-    encrypted = buzz.encrypt_file(b'secret', 'pw')
-
-    # Legacy iteration count fails...
     with pytest.raises(InvalidTag):
-        _manual_decrypt(encrypted, 'pw', iterations=100_000, offset=4)
-    # ...while the v2 count succeeds.
-    assert _manual_decrypt(encrypted, 'pw', iterations=600_000, offset=4)
+        buzz.decrypt_file(V3_FIXTURE, 'wrong-password', h=V3_FIXTURE_H)
+    with pytest.raises(InvalidTag):
+        buzz.decrypt_file(V3_FIXTURE, FIXTURE_PASSWORD, h=os.urandom(32))
 
 
 @requires_cryptography
-def test_v1_fixture_actually_uses_100k_iterations():
-    """The pinned v1 blob must fail under v2 iterations and pass under v1."""
-    from cryptography.exceptions import InvalidTag
-
-    with pytest.raises(InvalidTag):
-        _manual_decrypt(V1_FIXTURE, FIXTURE_PASSWORD, iterations=600_000)
-    plaintext = _manual_decrypt(V1_FIXTURE, FIXTURE_PASSWORD, iterations=100_000)
-    assert plaintext[8:] == FIXTURE_DATA
+def test_hkdf_domain_separation():
+    """Kp, V and file_key must be pairwise distinct for the same master."""
+    buzz = _import_buzz()
+    salt = bytes(range(16))
+    kp, v = buzz.derive_key_release_keys('pw', salt)
+    fk = buzz._derive_file_key(kp, bytes(range(32, 64)), salt)
+    assert kp != v != fk
 
 
 @requires_cryptography
 def test_encrypt_is_non_deterministic():
     """Each call should produce different ciphertext (random salt+iv)."""
     buzz = _import_buzz()
-    data = b'same data'
-    password = 'same-password'
-    result1 = buzz.encrypt_file(data, password)
-    result2 = buzz.encrypt_file(data, password)
-    assert result1 != result2
-
-
-@requires_cryptography
-def test_wrong_password_raises():
-    """Decrypting with the wrong password should raise an exception."""
-    from cryptography.exceptions import InvalidTag
-
-    buzz = _import_buzz()
-    encrypted = buzz.encrypt_file(b'secret', 'correct')
-
-    with pytest.raises(InvalidTag):
-        _manual_decrypt(encrypted, 'wrong', iterations=600_000, offset=4)
-
-    with pytest.raises((InvalidTag, ValueError)):
-        buzz.decrypt_file(encrypted, 'wrong')
+    h = os.urandom(32)
+    blob1, _v1, _r1 = buzz.encrypt_file(b'same data', 'same-password', h)
+    blob2, _v2, _r2 = buzz.encrypt_file(b'same data', 'same-password', h)
+    assert blob1 != blob2
 
 
 @requires_cryptography
@@ -202,10 +198,11 @@ def test_unicode_password():
     buzz = _import_buzz()
     original = b'secret data'
     password = 'pässwörd-日本語'
+    h = os.urandom(32)
 
-    encrypted = buzz.encrypt_file(original, password)
-    plaintext = _manual_decrypt(encrypted, password, iterations=600_000, offset=4)
-    assert plaintext[8:] == original
+    blob, _v, _rh = buzz.encrypt_file(original, password, h)
+    data, _receipt = buzz.decrypt_file(blob, password, h=h)
+    assert data == original
 
 
 def test_generate_passphrase_format():

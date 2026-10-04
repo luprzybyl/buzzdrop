@@ -1,6 +1,10 @@
+import hashlib
+import io
 import os
+import secrets
 import sys
 import tempfile
+import uuid
 import pytest
 from dotenv import load_dotenv
 
@@ -81,10 +85,33 @@ def app():
     del os.environ['FLASK_USER_2']
 
 
+CSRF_TOKEN = 'test-csrf-token'
+
+
 @pytest.fixture
 def client(app):
-    """A test client for the app."""
-    return app.test_client()
+    """
+    A test client for the app — pre-seeded with a session CSRF token.
+
+    Session-authed mutating routes (POST /upload, /upload/begin,
+    /api/token, /delete, /view/<id>/confirm) require a matching token;
+    send ``CSRF_TOKEN`` as the ``X-CSRF-Token`` header, a ``csrf_token``
+    form field, or a JSON field. Tests proving a 403 must clear the
+    token via ``client.session_transaction()`` first.
+    """
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session['csrf_token'] = CSRF_TOKEN
+    return client
+
+
+@pytest.fixture
+def csrf_headers(client):
+    """XHR headers carrying the seeded session CSRF token."""
+    return {
+        'X-CSRF-Token': CSRF_TOKEN,
+        'X-Requested-With': 'XMLHttpRequest',
+    }
 
 
 @pytest.fixture
@@ -133,3 +160,60 @@ def files_store(db_instance):
 def tokens_store(db_instance):
     """Provides a direct reference to the api_tokens store of the test backend."""
     return db_instance.tokens
+
+
+def receipt_pair():
+    """Return (receipt_hex, receipt_hash_hex) for a fresh fake receipt."""
+    receipt = secrets.token_bytes(32)
+    return receipt.hex(), hashlib.sha256(receipt).hexdigest()
+
+
+@pytest.fixture
+def key_share(files_store):
+    """
+    Create a pending key share directly in the store — the same
+    state /upload/begin produces, without spending a rate-limited request.
+
+    Returns a factory: _create(file_id=None, created_by='testuser')
+    -> (file_id, h_hex). ``created_by`` defaults to the test user so
+    owner binding lets the logged-in client finish the upload.
+    """
+    def _create(file_id=None, created_by='testuser'):
+        file_id = file_id or str(uuid.uuid4())
+        h_hex = secrets.token_hex(32)
+        files_store.create_key_share(file_id, h_hex, created_by=created_by)
+        return file_id, h_hex
+    return _create
+
+
+@pytest.fixture
+def key_release_upload(client, key_share):
+    """
+    POST a complete two-phase key-release upload and return
+    (file_id, h_hex, receipt_hex, response).
+
+    ``data`` is merged into the multipart form; pass note fields for text
+    notes. ``verifier`` defaults to a fixed valid hex string — the real
+    V is only meaningful to crypto tests, not to route tests.
+    """
+    def _upload(data=None, filename='test.txt', content=b'content',
+                headers=None, verifier='cc' * 32, xhr=True):
+        file_id, h_hex = key_share()
+        receipt_hex, receipt_hash = receipt_pair()
+        form = dict(data or {})
+        if 'file' not in form and 'note_text' not in form:
+            form['file'] = (io.BytesIO(content), filename)
+        form['file_id'] = file_id
+        form['key_verifier'] = verifier
+        form['receipt_hash'] = receipt_hash
+        form.setdefault('csrf_token', CSRF_TOKEN)
+        if headers is None:
+            headers = {'X-Requested-With': 'XMLHttpRequest'} if xhr else {}
+        response = client.post(
+            '/upload',
+            data=form,
+            content_type='multipart/form-data',
+            headers=headers,
+        )
+        return file_id, h_hex, receipt_hex, response
+    return _upload

@@ -1,5 +1,5 @@
 // Import CryptoService for encryption
-import { CryptoService } from './crypto.js';
+import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
 import { buildSharedFilesUrl, getSharedFilesPage } from './shared-files.mjs';
 import { assessPassword, generatePassphrase } from './passphrase.mjs';
 
@@ -171,6 +171,47 @@ function enforcePasswordStrength(password) {
 }
 
 // --- Shared Upload Logic ---
+
+// Session-authed mutating routes require the CSRF token the server
+// renders into <meta name="csrf-token"> — read once, reused per request.
+const csrfToken =
+    document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+/**
+ * Encrypt data for upload through the two-phase key-release handshake:
+ * /upload/begin mints file_id + the server share H, the client derives
+ * Kp/V from the password, encrypts under HKDF(Kp ‖ H), and returns the
+ * blob plus the fields the finish POST needs.
+ * @param {Uint8Array} data - Raw plaintext
+ * @param {string} password
+ * @returns {Promise<{blob: Uint8Array, fileId: string, keyVerifier: string, receiptHash: string}>}
+ * @throws {Error} When the server refuses the handshake
+ */
+async function encryptForUpload(data, password) {
+    const res = await fetch(window.uploadBeginUrl, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-Token': csrfToken,
+        },
+    });
+    if (!res.ok) {
+        throw new Error('The server refused the upload handshake.');
+    }
+    const { file_id, h } = await res.json();
+    const { blob, verifier, receipt } = await cryptoService.encrypt(
+        data, password, hexToBytes(h));
+    return {
+        blob,
+        fileId: file_id,
+        keyVerifier: bytesToHex(verifier),
+        // SHA-256 of the in-ciphertext receipt — the server stores the
+        // hash so /report_decryption can prove the client really
+        // decrypted the payload.
+        receiptHash: await cryptoService.receiptHash(receipt),
+    };
+}
+
 /**
  * Upload data with progress tracking via XHR.
  * @param {FormData} formData - Form data to upload
@@ -201,6 +242,7 @@ function uploadWithProgress(formData, password, uiElements) {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', window.uploadUrl, true);
     xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.setRequestHeader('X-CSRF-Token', csrfToken);
 
     xhr.upload.onprogress = function(e) {
         if (e.lengthComputable) {
@@ -345,14 +387,23 @@ if (fileUploadForm) {
         if (!file || !password) return;
         if (!enforcePasswordStrength(password)) return;
 
-        // Read and encrypt file data
+        // Read and encrypt file data via the key-release handshake
         const fileData = new Uint8Array(await file.arrayBuffer());
-        const encrypted = await cryptoService.encrypt(fileData, password);
+        let prepared;
+        try {
+            prepared = await encryptForUpload(fileData, password);
+        } catch (err) {
+            alert(err && err.message ? err.message : 'Upload failed');
+            return;
+        }
 
         // Prepare FormData
-        const encBlob = new Blob([encrypted], { type: 'application/octet-stream' });
+        const encBlob = new Blob([prepared.blob], { type: 'application/octet-stream' });
         const formData = new FormData();
         formData.append('file', new File([encBlob], file.name));
+        formData.append('file_id', prepared.fileId);
+        formData.append('key_verifier', prepared.keyVerifier);
+        formData.append('receipt_hash', prepared.receiptHash);
         const expiryInput = document.getElementById('shared-expiry');
         const privateNoteInput = document.getElementById('shared-private-note');
         const notifyOnOpenInput = document.getElementById('notify-on-open');
@@ -396,16 +447,25 @@ async function uploadNote() {
     }
     if (!enforcePasswordStrength(password)) return;
 
-    // Encrypt text data
+    // Encrypt text data via the key-release handshake
     const enc = new TextEncoder();
     const textData = enc.encode(noteText);
-    const encrypted = await cryptoService.encrypt(textData, password);
+    let prepared;
+    try {
+        prepared = await encryptForUpload(textData, password);
+    } catch (err) {
+        alert(err && err.message ? err.message : 'Upload failed');
+        return;
+    }
 
     // Prepare FormData with base64 encoded encrypted data
-    const base64Encrypted = btoa(String.fromCharCode(...encrypted));
+    const base64Encrypted = btoa(String.fromCharCode(...prepared.blob));
     const formData = new FormData();
     formData.append('note_text', base64Encrypted);
     formData.append('type', 'text');
+    formData.append('file_id', prepared.fileId);
+    formData.append('key_verifier', prepared.keyVerifier);
+    formData.append('receipt_hash', prepared.receiptHash);
     if (expiry) {
         formData.append('expiry', expiry);
     }

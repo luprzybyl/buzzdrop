@@ -40,7 +40,7 @@ The key observation: the encrypted blob is **self-verifying**.
 The format is `salt ‖ iv ‖ AES-GCM(key, data)`. The GCM tag is checked
 on every decryption attempt — guess the password right and the tag
 verifies; guess wrong and you get an error. This means the ciphertext
-carries an **oracle** inside it: anyone holding it can test any password
+carries a **password checker** inside it: anyone holding it can test any password
 forever, without asking anyone's permission.
 
 This is the foundation of the entire problem. As long as all the
@@ -150,6 +150,13 @@ The only way to make "one-time" a fact rather than a hope:
 **the blob must not contain everything needed for decryption**.
 A piece of the key is held by the server and released once, under
 conditions the server itself enforces.
+
+> **Terminology.** This design is called *server-gated key release*; it
+> was developed under the codename *"the oracle"* (in cryptography, a
+> service answering yes/no queries — here, "is this the right password?" —
+> which the ciphertext itself used to play for free, infinitely often).
+> Unrelated to **Oracle** the database vendor, which appears in this
+> project only as a future `DATABASE_URL` scheme (`oracle://`).
 
 ### 6.1. Concepts (plainly, no jargon)
 
@@ -283,7 +290,7 @@ swap the code. No design fixes that.
 
 ### 6.6. What this changes — the same threat model after implementation
 
-| Actor | Today | With oracle |
+| Actor | Today | With key release |
 |---|---|---|
 | Link thief without password | blob → offline brute force | **dead blob** — no H; guessing only via `/release` under rate limit |
 | Theft of `uploads/` / public S3 | ciphertext → offline | **dead bytes** — no H and no password |
@@ -296,7 +303,7 @@ Two additional properties worth stressing:
 
 - **The blob stops being self-verifying.** A wrong password yields a
   wrong `Kp`, but without `H` the attacker can't even check whether
-  they guessed — the oracle moved to the server, where every question
+  they guessed — the password check moved to the server, where every question
   costs and is counted.
 - **"Typo = file lost" disappears.** Since the server counts attempts,
   we can allow 3–5 tries instead of instant death — closing the
@@ -364,10 +371,10 @@ whole value of the added complexity.
 | Passphrase entropy (600k PBKDF2, 77+ bits) | offline brute force on any ciphertext | anything else — it is the only universal barrier |
 | One-time deletion + atomic claim | races, re-download | offline cracking of the blob |
 | Crypto-shredding (DEK) | disk forensics, backups, S3 versioning | a thief with the ciphertext — rejected as redundant after the entropy fix |
-| **Oracle (server-held H + V)** | offline cracking of the blob at all; turns "one attempt" into server policy | db+uploads theft (V crackable), admin, analog hole |
+| **Server-gated key release (server-held H + V)** | offline cracking of the blob at all; turns "one attempt" into server policy | db+uploads theft (V crackable), admin, analog hole |
 | PAKE instead of V | even db+uploads theft | admin, analog hole — too expensive today |
 
-**Sentence for the auditor:** in the oracle model a downloaded blob
+**Sentence for the auditor:** in the key-release model a downloaded blob
 without server cooperation is mathematically dead bytes — password
 guessing requires asking `/release`, where a rate limit, lockout and
 optional key-burn apply. One-time semantics stop being a JavaScript
@@ -388,3 +395,65 @@ decryption.
 - Requires as foundation: #129, #130, #133, #135.
 - If demand returns (e.g. a client requirement for "provable
   one-time"), this document is the implementation spec.
+
+### Implementation note
+
+The §6 design is implemented as the **only** share format —
+**breaking change: no backward compatibility with pre-key-release shares
+(acceptable per owner; pre-production wipe)**. `KEY_RELEASE_ENABLED`
+(default: on) gates the upload handshake; when off, `/upload/begin`
+returns 404 and uploads are refused.
+
+- Rate-limit accounting: `/upload/begin` and `/upload` share the
+  `UPLOAD_RATE_LIMIT` bucket — a complete upload costs 2 hits
+  (effective 15 files/h at the default `30 per hour`).
+- Wire format: `BKV3 ‖ salt(16) ‖ iv(12) ‖ AES-GCM`, inner plaintext
+  `BKP-FILE ‖ receipt(32B random) ‖ payload`. `Kp`/`V`/`file_key` use
+  HKDF-SHA256 with the blob salt and `info` labels `enc`/`ver`/`file`.
+  Only `BKV3` is read or written; the magic stays for future version
+  bumps.
+- Upload (always two-phase): `POST /upload/begin` → `{file_id, h}`
+  (share is owner-bound via `created_by`); `POST /upload` requires
+  `file_id` + `key_verifier` + `receipt_hash`, refuses to finish another
+  account's pending share (403), binds V atomically, and stores
+  `receipt_hash = SHA-256(receipt)` on the file record.
+- Download: `POST /release/<file_id> {v}` runs **one transaction**
+  (`FileStore.attempt_key_release`): read → expiry check → verifier
+  compare → attempt count → release-or-deny, all inside a single write
+  transaction. Exactly one racing request can ever receive H — no
+  separate read-then-claim window exists. A released share answers 410;
+  a wrong verifier 403; lockout 429; missing, pending or burned shares
+  all answer a uniform 404.
+- Decryption proof: the receipt is only reachable inside the
+  ciphertext, so `POST /report_decryption {success, receipt}` cannot be
+  forged with the file_id alone — the server compares
+  `SHA-256(receipt)` against the stored hash (constant-time) and the
+  `decryption_success` write is NULL-guarded: first valid report wins,
+  later reports return 200 but change nothing.
+- Key material lives in a `file_keys` table (H, V, attempts,
+  released_at, created_by), not on `files`: the share must exist before
+  the file record (two-phase upload), and burning the share is a row
+  delete, not a flag.
+- Failure policy is configurable: `KEY_RELEASE_RATE_LIMIT`
+  (per file_id), `KEY_RELEASE_MAX_ATTEMPTS` (default 1 — a single
+  wrong password locks the share), and `KEY_RELEASE_BURN_ON_LOCKOUT`
+  (default off — lockout only; when on, the share row is deleted,
+  destroying H).
+- Post-release cleanup: the winning attempt sets `h = NULL, v = NULL`
+  inside the release transaction — the row keeps only bookkeeping
+  (`released_at`, `attempts`), so a post-release DB theft yields no
+  crackable verifier or key material.
+- Destructive key hygiene: expiry flips the file to `expired` **and**
+  burns the share inside the same transaction; `PRAGMA secure_delete=ON`
+  plus `wal_checkpoint(TRUNCATE)` after burns keeps `H`/`V` bytes out of
+  freelist/WAL remnants on the SQLite backend.
+- Pending-share hygiene: shares begun but never finished are swept at
+  startup and on each `/upload/begin` after
+  `KEY_SHARE_PENDING_TTL_SECONDS` (default 3600); shares with malformed
+  `created_at` are purged too (fail closed).
+- No-store: `/upload/begin` and `/release` responses carry
+  `Cache-Control: no-store` — H must not land in shared caches.
+- CLI parity: `cli/buzz` performs the same handshake, embeds the same
+  receipt, refuses plain-`http://` server URLs outside localhost without
+  `--insecure`, and aborts when the server returns 404 on
+  `/upload/begin`.

@@ -58,9 +58,31 @@ class Config:
     RATE_LIMIT_STORAGE_URI = os.getenv('RATE_LIMIT_STORAGE_URI', 'memory://')
     LOGIN_RATE_LIMIT = os.getenv('LOGIN_RATE_LIMIT', '10 per minute')
     API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '10 per hour')
+    # Two-phase upload: /upload/begin and /upload share this bucket —
+    # one file costs 2 hits.
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '30 per hour')
     PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '60 per hour')
-    
+
+    # Server-gated key release (docs/true-one-time.md §6).
+    # When enabled, new uploads split the file key: the server holds a
+    # random 32-byte share H and releases it exactly once, after the
+    # recipient proves the password via a one-way verifier V. Disabling
+    # only affects NEW uploads — already-created v3 shares can still
+    # release their key share.
+    KEY_RELEASE_ENABLED = _env_bool('KEY_RELEASE_ENABLED', True)
+    # Per-file_id rate limit on /release (rotating IPs don't help).
+    KEY_RELEASE_RATE_LIMIT = os.getenv('KEY_RELEASE_RATE_LIMIT', '10 per minute')
+    # Total failed verifier attempts a share tolerates before lockout.
+    KEY_RELEASE_MAX_ATTEMPTS = int(os.getenv('KEY_RELEASE_MAX_ATTEMPTS', '1'))
+    # What lockout does to the share: burn destroys H (the ciphertext is
+    # mathematically dead — confidentiality over availability); the
+    # default False keeps H but refuses all further releases.
+    KEY_RELEASE_BURN_ON_LOCKOUT = _env_bool('KEY_RELEASE_BURN_ON_LOCKOUT', False)
+    # TTL for pending shares (/upload/begin done, /upload never finished).
+    # Older unbound shares are purged at startup and on each begin call.
+    KEY_SHARE_PENDING_TTL_SECONDS = int(
+        os.getenv('KEY_SHARE_PENDING_TTL_SECONDS', '3600'))
+
     @classmethod
     def validate(cls):
         """
@@ -92,6 +114,9 @@ class Config:
 
         if cls.SMTP_USE_TLS and cls.SMTP_USE_SSL:
             raise ValueError("SMTP_USE_TLS and SMTP_USE_SSL cannot both be enabled")
+
+        if cls.KEY_RELEASE_MAX_ATTEMPTS < 1:
+            raise ValueError("KEY_RELEASE_MAX_ATTEMPTS must be at least 1")
 
     @classmethod
     def get_database_url(cls) -> str:
@@ -147,6 +172,7 @@ class Config:
             's3_configured': bool(cls.S3_BUCKET) if cls.STORAGE_BACKEND == 's3' else False,
             's3_region': cls.S3_REGION if cls.STORAGE_BACKEND == 's3' else 'N/A',
             'email_notifications_configured': bool(cls.SMTP_HOST and cls.SMTP_FROM_EMAIL),
+            'key_release_enabled': cls.KEY_RELEASE_ENABLED,
         }
 
 
@@ -169,6 +195,7 @@ class TestingConfig(Config):
     API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '1000 per hour')
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '1000 per hour')
     PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '1000 per hour')
+    KEY_RELEASE_RATE_LIMIT = os.getenv('KEY_RELEASE_RATE_LIMIT', '1000 per hour')
 
 
 class ProductionConfig(Config):

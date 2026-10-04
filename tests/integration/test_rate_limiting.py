@@ -5,7 +5,10 @@ from flask import url_for
 
 
 def login_user(client, username, password):
-    return client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    response = client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    with client.session_transaction() as session:
+        session['csrf_token'] = 'test-csrf-token'
+    return response
 
 
 @pytest.fixture
@@ -60,44 +63,59 @@ def test_api_token_rate_limit_returns_json(client, app, restore_rate_limits):
     app.config['API_TOKEN_RATE_LIMIT'] = '1 per minute'
     login_user(client, 'testuser', 'password')
 
-    first = client.post(url_for('create_api_token'), json={})
+    first = client.post(
+        url_for('create_api_token'), json={'csrf_token': 'test-csrf-token'})
     assert first.status_code == 201
     assert 'token' in first.get_json()
 
-    second = client.post(url_for('create_api_token'), json={})
+    second = client.post(
+        url_for('create_api_token'), json={'csrf_token': 'test-csrf-token'})
     assert second.status_code == 429
     assert second.get_json()['error'] == 'Too many requests. Please try again later.'
 
 
-def test_upload_rate_limit_returns_json(client, app, restore_rate_limits):
+def test_upload_rate_limit_returns_json(client, app, files_store, key_share, restore_rate_limits):
     app.config['UPLOAD_RATE_LIMIT'] = '1 per minute'
     login_user(client, 'testuser', 'password')
 
-    first = client.post(
-        url_for('upload_file'),
-        data={'file': (io.BytesIO(b'first upload'), 'first.txt')},
-        headers={'X-Requested-With': 'XMLHttpRequest'},
-        content_type='multipart/form-data',
-    )
+    def _post_key_release_upload(name):
+        file_id, _h = key_share()
+        return client.post(
+            url_for('upload_file'),
+            data={
+                'file': (io.BytesIO(b'x'), name),
+                'file_id': file_id,
+                'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
+            },
+            headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
+            content_type='multipart/form-data',
+        )
+
+    first = _post_key_release_upload('first.txt')
     assert first.status_code == 200
 
-    second = client.post(
-        url_for('upload_file'),
-        data={'file': (io.BytesIO(b'second upload'), 'second.txt')},
-        headers={'X-Requested-With': 'XMLHttpRequest'},
-        content_type='multipart/form-data',
-    )
+    second = _post_key_release_upload('second.txt')
     assert second.status_code == 429
     assert second.get_json()['error'] == 'Too many requests. Please try again later.'
 
 
-def test_public_file_rate_limit_is_shared_across_view_and_download(client, app, files_store, restore_rate_limits, csrf_form_data):
+def test_public_file_rate_limit_is_shared_across_view_and_download(client, app, files_store, key_share, restore_rate_limits, csrf_form_data):
     app.config['PUBLIC_FILE_RATE_LIMIT'] = '2 per minute'
     login_user(client, 'testuser', 'password')
 
+    file_id, _h = key_share()
     upload = client.post(
         url_for('upload_file'),
-        data={'file': (io.BytesIO(b'downloadable content'), 'shared.txt')},
+        data={
+            'file': (io.BytesIO(b'downloadable content'), 'shared.txt'),
+            'file_id': file_id,
+            'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
+        },
         content_type='multipart/form-data',
     )
     assert upload.status_code == 200

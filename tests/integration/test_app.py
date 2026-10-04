@@ -7,13 +7,29 @@ import io
 # Test users from conftest.py: 'testuser:password:false', 'adminuser:adminpass:true'
 
 def login_user(client, username, password):
-    return client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    response = client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    with client.session_transaction() as session:
+        session['csrf_token'] = 'test-csrf-token'
+    return response
 
 # Helper function to upload a file for a user (for testing index page listings)
 def upload_file_for_user(client, app, files_store, filename, content, username_for_db_record):
     # Assumes client is already logged in as the user who can upload
     # username_for_db_record is the 'uploaded_by' field in the db
-    file_data = {'file': (io.BytesIO(content.encode()), filename)}
+    import hashlib
+    import secrets
+    import uuid
+    file_id = str(uuid.uuid4())
+    receipt = secrets.token_bytes(32)
+    files_store.create_key_share(
+        file_id, secrets.token_hex(32), created_by=username_for_db_record)
+    file_data = {
+        'file': (io.BytesIO(content.encode()), filename),
+        'file_id': file_id,
+        'key_verifier': 'cc' * 32,
+        'receipt_hash': hashlib.sha256(receipt).hexdigest(),
+        'csrf_token': 'test-csrf-token',
+    }
     # Make sure to use the logged-in client to POST
     response = client.post(url_for('upload_file'), data=file_data, content_type='multipart/form-data')
 
@@ -21,7 +37,7 @@ def upload_file_for_user(client, app, files_store, filename, content, username_f
 
     # Query by original_name AND the user who uploaded it to ensure uniqueness if multiple users upload same filename
     file_info = files_store.get_by(original_name=filename, uploaded_by=username_for_db_record)
-    return file_info['id'] if file_info else None
+    return (file_info['id'], receipt.hex()) if file_info else (None, None)
 
 def test_index_anonymous_user(client, app):
     # Ensure ALLOWED_EXTENSIONS and MAX_CONTENT_LENGTH are available in app.config
@@ -86,7 +102,7 @@ def test_index_logged_in_user_uses_shared_controls_for_both_tabs(client, app, db
 def test_index_logged_in_user_with_own_files(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
-    file_id = upload_file_for_user(client, app, files_store, "my_document.txt", "Hello world", "testuser")
+    file_id, _rc = upload_file_for_user(client, app, files_store, "my_document.txt", "Hello world", "testuser")
     assert file_id is not None
 
     response = client.get(url_for('index'))
@@ -140,11 +156,20 @@ def test_user_file_status_endpoint_returns_only_owned_file_statuses(client, app,
 def test_index_logged_in_user_sees_own_private_note(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
+    import secrets
+    import uuid
+    file_id = str(uuid.uuid4())
+    files_store.create_key_share(
+        file_id, secrets.token_hex(32), created_by='testuser')
     response = client.post(
         url_for('upload_file'),
         data={
             'file': (io.BytesIO(b"Hello world"), "noted_document.txt"),
-            'private_note': 'haslo do wordpressa'
+            'private_note': 'haslo do wordpressa',
+            'file_id': file_id,
+            'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
         },
         content_type='multipart/form-data',
         follow_redirects=False
