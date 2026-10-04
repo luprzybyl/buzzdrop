@@ -680,9 +680,6 @@ def upload_begin():
     bound to the uploader's username and completed by /upload carrying
     ``file_id`` + ``key_verifier`` + ``receipt_hash``.
     """
-    if not current_app.config.get('KEY_RELEASE_ENABLED', False):
-        return {'error': 'Server-gated key release is disabled'}, 404
-
     if not _session_csrf_required():
         return {'error': 'CSRF validation failed'}, 403
 
@@ -741,8 +738,7 @@ def upload_file():
         return _fail('Invalid key-release upload')
     share = file_repo.get_key_share(file_id)
     if (
-        not current_app.config.get('KEY_RELEASE_ENABLED', False)
-        or share is None
+        share is None
         or share.get('v') is not None
         or share.get('released_at') is not None
         or file_repo.get_by_id(file_id) is not None

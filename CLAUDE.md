@@ -135,7 +135,7 @@ Encrypts files using the same `BKV3` format as the browser client and runs the s
 
 ### Key Routes
 
-- `/upload/begin` (POST): Mints `file_id` + server share `H` for the two-phase key-release upload; 404 when `KEY_RELEASE_ENABLED` is off. Shares the `UPLOAD_RATE_LIMIT` bucket with `/upload`
+- `/upload/begin` (POST): Mints `file_id` + server share `H` for the two-phase key-release upload. Shares the `UPLOAD_RATE_LIMIT` bucket with `/upload`
 - `/upload` (POST): Completes the key-release upload — requires `file_id` + `key_verifier` + `receipt_hash` form fields, refuses to finish another account's share (403), binds V to the pending share atomically, stores the encrypted blob, returns share link. On storage/DB failure the pending share is burned
 - `/view/<file_id>` (GET): Shows download confirmation page
 - `/view/<file_id>/confirm` (POST): Shows decryption interface
@@ -152,7 +152,7 @@ Encrypts files using the same `BKV3` format as the browser client and runs the s
 4. Share link generated: `/view/{uuid}`
 5. Recipient visits link → confirms → JS fetches the ciphertext via `/download/<id>` (served once; `downloaded_at` set, storage deleted)
 6. JS derives `V` from the password and posts it to `/release/<id>` → server returns `H` exactly once (later calls get 410)
-7. JS derives `file_key`, decrypts, triggers browser download; wrong passwords consume `attempts` → lockout at `KEY_RELEASE_MAX_ATTEMPTS` (with `KEY_RELEASE_BURN_ON_LOCKOUT`, the `file_keys` row is deleted and H is gone)
+7. JS derives `file_key`, decrypts, triggers browser download; wrong passwords consume `attempts` → lockout at `KEY_RELEASE_MAX_ATTEMPTS` (with `KEY_RELEASE_BURN_ON_LOCKOUT` — the default — the `file_keys` row is deleted and H is gone)
 8. Optional: Files with `expiry_at` are auto-deleted by `check_and_handle_expiry()` — which also burns the `file_keys` row inside the same transaction so H never outlives the file
 
 ### Test Configuration
@@ -175,7 +175,7 @@ Key variables in `.env`:
 - S3: `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`
 - Limits: `MAX_CONTENT_LENGTH`, `ALLOWED_EXTENSIONS`
 - Database: `DATABASE_URL` (`DATABASE_PATH` deprecated → sqlite:/// fallback)
-- Key release: `KEY_RELEASE_ENABLED` (default on — when off, `/upload/begin` 404s and `/upload` refuses uploads), `KEY_RELEASE_RATE_LIMIT` (default `10 per minute`, per file_id), `KEY_RELEASE_MAX_ATTEMPTS` (default 1), `KEY_RELEASE_BURN_ON_LOCKOUT` (default off — lockout only, keeps H), `KEY_SHARE_PENDING_TTL_SECONDS` (default 3600 — TTL for begun-but-never-finished shares)
+- Key release: `KEY_RELEASE_RATE_LIMIT` (default `10 per minute`, per file_id), `KEY_RELEASE_MAX_ATTEMPTS` (default 1), `KEY_RELEASE_BURN_ON_LOCKOUT` (default on — lockout deletes the `file_keys` row, H+V destroyed; off keeps the row but permanently refuses releases — currently no unlock path), `KEY_SHARE_PENDING_TTL_SECONDS` (default 3600 — TTL for begun-but-never-finished shares)
 
 ### Deployment
 

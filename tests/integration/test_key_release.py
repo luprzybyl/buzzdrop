@@ -38,7 +38,6 @@ def _clear_csrf(client):
 def key_release_settings(app):
     """Mutate key-release config and restore it afterwards."""
     keys = (
-        'KEY_RELEASE_ENABLED',
         'KEY_RELEASE_RATE_LIMIT',
         'KEY_RELEASE_MAX_ATTEMPTS',
         'KEY_RELEASE_BURN_ON_LOCKOUT',
@@ -157,17 +156,6 @@ def test_upload_begin_returns_pending_share(client, files_store):
     assert files_store.get_by_id(body['file_id']) is None
 
 
-def test_upload_begin_disabled(client, key_release_settings):
-    key_release_settings['KEY_RELEASE_ENABLED'] = False
-    login_user(client)
-    response = client.post(
-        url_for('upload_begin'),
-        headers={'X-Requested-With': 'XMLHttpRequest',
-                      'X-CSRF-Token': 'test-csrf-token'},
-    )
-    assert response.status_code == 404
-
-
 # ---------------------------------------------------------------------------
 # /upload finish (key-release fields)
 # ---------------------------------------------------------------------------
@@ -243,33 +231,6 @@ def test_key_release_upload_rejects_partial_handshake(client):
                       'X-CSRF-Token': 'test-csrf-token'},
         )
         assert response.status_code == 400
-
-
-def test_key_release_upload_rejected_when_disabled(client, files_store, key_release_settings):
-    """A share created while enabled cannot be finished after opt-out."""
-    login_user(client)
-    begin = client.post(
-        url_for('upload_begin'),
-        headers={'X-Requested-With': 'XMLHttpRequest',
-                      'X-CSRF-Token': 'test-csrf-token'},
-    )
-    file_id = begin.get_json()['file_id']
-
-    key_release_settings['KEY_RELEASE_ENABLED'] = False
-    finish = client.post(
-        url_for('upload_file'),
-        data={
-            'file': (io.BytesIO(b'blob'), 'x.txt'),
-            'file_id': file_id,
-            'key_verifier': 'cc' * 32,
-            'receipt_hash': 'aa' * 32,
-            'csrf_token': 'test-csrf-token',
-        },
-        content_type='multipart/form-data',
-        headers={'X-Requested-With': 'XMLHttpRequest',
-                      'X-CSRF-Token': 'test-csrf-token'},
-    )
-    assert finish.status_code == 409
 
 
 def test_upload_finish_requires_csrf_on_session(client, key_share):
@@ -392,7 +353,9 @@ def test_release_returns_h_once(client, files_store):
     assert second.status_code == 410
 
 
-def test_release_wrong_verifier_counts_attempts(client, files_store):
+def test_release_wrong_verifier_counts_attempts(client, files_store, key_release_settings):
+    # Opt out of the default burn to cover the lockout-keeps-row path.
+    key_release_settings['KEY_RELEASE_BURN_ON_LOCKOUT'] = False
     file_id, _h, _v = _bound_share(files_store)
 
     # With the default of 1 max attempt, the first wrong verifier is
@@ -409,6 +372,7 @@ def test_release_wrong_verifier_counts_attempts(client, files_store):
 
 def test_release_lockout_after_max_attempts(client, files_store, key_release_settings):
     key_release_settings['KEY_RELEASE_MAX_ATTEMPTS'] = 2
+    key_release_settings['KEY_RELEASE_BURN_ON_LOCKOUT'] = False
     file_id, _h, _v = _bound_share(files_store)
 
     for expected_status in (403, 429):
@@ -428,8 +392,8 @@ def test_release_lockout_after_max_attempts(client, files_store, key_release_set
 
 
 def test_release_burn_on_lockout(client, files_store, key_release_settings):
+    # Burn is the default — only the attempt budget needs overriding.
     key_release_settings['KEY_RELEASE_MAX_ATTEMPTS'] = 1
-    key_release_settings['KEY_RELEASE_BURN_ON_LOCKOUT'] = True
     file_id, _h, _v = _bound_share(files_store)
 
     miss = client.post(

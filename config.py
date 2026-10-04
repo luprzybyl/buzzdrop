@@ -63,21 +63,21 @@ class Config:
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '30 per hour')
     PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '60 per hour')
 
-    # Server-gated key release (docs/true-one-time.md §6).
-    # When enabled, new uploads split the file key: the server holds a
-    # random 32-byte share H and releases it exactly once, after the
-    # recipient proves the password via a one-way verifier V. Disabling
-    # only affects NEW uploads — already-created v3 shares can still
-    # release their key share.
-    KEY_RELEASE_ENABLED = _env_bool('KEY_RELEASE_ENABLED', True)
+    # Server-gated key release (docs/true-one-time.md §6) — the only
+    # share format, no opt-out: uploads split the file key, the server
+    # holds a random 32-byte share H and releases it exactly once,
+    # after the recipient proves the password via a one-way verifier V.
     # Per-file_id rate limit on /release (rotating IPs don't help).
     KEY_RELEASE_RATE_LIMIT = os.getenv('KEY_RELEASE_RATE_LIMIT', '10 per minute')
     # Total failed verifier attempts a share tolerates before lockout.
     KEY_RELEASE_MAX_ATTEMPTS = int(os.getenv('KEY_RELEASE_MAX_ATTEMPTS', '1'))
-    # What lockout does to the share: burn destroys H (the ciphertext is
-    # mathematically dead — confidentiality over availability); the
-    # default False keeps H but refuses all further releases.
-    KEY_RELEASE_BURN_ON_LOCKOUT = _env_bool('KEY_RELEASE_BURN_ON_LOCKOUT', False)
+    # What lockout does to the share: burn destroys H+V (the ciphertext
+    # is mathematically dead — confidentiality over availability);
+    # False keeps the row but permanently refuses releases — there is
+    # currently no unlock path, so that also bricks the share in
+    # practice. Strict by default per owner; kept as an option for a
+    # future unlock path.
+    KEY_RELEASE_BURN_ON_LOCKOUT = _env_bool('KEY_RELEASE_BURN_ON_LOCKOUT', True)
     # TTL for pending shares (/upload/begin done, /upload never finished).
     # Older unbound shares are purged at startup and on each begin call.
     KEY_SHARE_PENDING_TTL_SECONDS = int(
@@ -172,7 +172,6 @@ class Config:
             's3_configured': bool(cls.S3_BUCKET) if cls.STORAGE_BACKEND == 's3' else False,
             's3_region': cls.S3_REGION if cls.STORAGE_BACKEND == 's3' else 'N/A',
             'email_notifications_configured': bool(cls.SMTP_HOST and cls.SMTP_FROM_EMAIL),
-            'key_release_enabled': cls.KEY_RELEASE_ENABLED,
         }
 
 
