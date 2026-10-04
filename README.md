@@ -163,7 +163,7 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 ### Input Validation:
 - Base64 validation with size limits on encrypted uploads.
 - File type and size restrictions (configurable in `.env`).
-- Expiry date validation and automatic cleanup.
+- Expiry date validation and automatic cleanup — expired drops are swept at startup and re-swept every `EXPIRY_SWEEP_INTERVAL_SECONDS` (default 300, `0` disables the periodic sweep), so a drop nobody ever opens is still destroyed: ciphertext and key share.
 
 ### Open Notification Configuration:
 - Extend user records to optionally include an account email in `.env`: `FLASK_USER_N=username:password:is_admin[:email]`
