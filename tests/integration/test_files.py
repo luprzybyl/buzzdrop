@@ -216,7 +216,7 @@ def test_public_views_do_not_show_private_note(client, files_store, csrf_form_da
     file_info = files_store.get_by_id(file_id)
     assert file_info is not None
 
-    client.get(url_for('logout'))
+    client.post(url_for('logout'), data={'csrf_token': 'test-csrf-token'})
 
     public_response = client.get(url_for('view_file', file_id=file_info['id']))
     assert public_response.status_code == 200

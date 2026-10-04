@@ -102,6 +102,31 @@ def test_token_hash_requires_stable_secret_configuration(app, monkeypatch):
             _hash_token('a' * 64)
 
 
+def test_token_hash_secret_required_in_production(app, monkeypatch):
+    """In production the FLASK_SECRET_KEY fallback is refused outright."""
+    with app.app_context():
+        from tokens import _hash_token
+
+        monkeypatch.setenv('FLASK_ENV', 'production')
+        monkeypatch.delenv('TOKEN_HASH_SECRET', raising=False)
+        app.config.pop('TOKEN_HASH_SECRET', None)
+
+        with pytest.raises(RuntimeError, match='TOKEN_HASH_SECRET must be set in production'):
+            _hash_token('a' * 64)
+
+
+def test_token_hash_secret_used_in_production_when_set(app, monkeypatch):
+    with app.app_context():
+        from tokens import _hash_token
+
+        monkeypatch.setenv('FLASK_ENV', 'production')
+        monkeypatch.setenv('TOKEN_HASH_SECRET', 'dedicated-token-secret')
+        app.config.pop('TOKEN_HASH_SECRET', None)
+
+        # No exception — dedicated secret is honored.
+        assert _hash_token('a' * 64)
+
+
 def test_validate_api_token_rejects_legacy_hash(app, db_instance):
     with app.app_context():
         from app import get_backend

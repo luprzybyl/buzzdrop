@@ -58,11 +58,26 @@ def _serialize_token(entry: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _is_production() -> bool:
+    """Mirror the FLASK_ENV switch used by config.get_config()."""
+    return os.getenv('FLASK_ENV', 'development').strip().lower() == 'production'
+
+
 def _get_token_hash_secret() -> bytes:
     token_hash_secret = current_app.config.get('TOKEN_HASH_SECRET') if has_app_context() else None
 
     if not token_hash_secret:
-        token_hash_secret = os.getenv('TOKEN_HASH_SECRET') or os.getenv('FLASK_SECRET_KEY')
+        token_hash_secret = os.getenv('TOKEN_HASH_SECRET')
+    if not token_hash_secret and _is_production():
+        # One secret must not protect both session cookies and token
+        # hashes — fail loudly instead of silently reusing the key.
+        raise RuntimeError(
+            'TOKEN_HASH_SECRET must be set in production; refusing to fall '
+            'back to FLASK_SECRET_KEY'
+        )
+    if not token_hash_secret:
+        # Development/testing only: tolerate the FLASK_SECRET_KEY fallback.
+        token_hash_secret = os.getenv('FLASK_SECRET_KEY')
     if not token_hash_secret:
         raise RuntimeError('API token hashing requires TOKEN_HASH_SECRET or FLASK_SECRET_KEY')
     if isinstance(token_hash_secret, str):

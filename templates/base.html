@@ -68,7 +68,10 @@
                                 <span class="h-1.5 w-1.5 rounded-full bg-honey-400" aria-hidden="true"></span>
                                 {{ session.get('username') }}
                             </span>
-                            <a href="{{ url_for('logout') }}" class="btn-danger">Logout</a>
+                            <form method="post" action="{{ url_for('logout') }}" class="inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn-danger">Logout</button>
+                            </form>
                         {% else %}
                             <a href="{{ url_for('login') }}" class="btn-primary">Login</a>
                         {% endif %}

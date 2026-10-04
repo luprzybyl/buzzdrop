@@ -104,7 +104,7 @@ Passwords are hashed with PBKDF2-SHA256 via Werkzeug. `get_users()` function rea
 - `@admin_required`: Checks both login and admin flag
 - `@api_auth_required`: Accepts `Authorization: Bearer <token>` header **or** session cookie. If Bearer is present and invalid → 401 JSON (no session fallback). Sets `flask.g.username` on success; routes must read `g.username` not `session['username']`.
 
-**CSRF**: Session-authed mutating routes (`/upload`, `/upload/begin`, `/api/token`, `/delete/<id>`, `/view/<id>/confirm`, token revocation) call `_session_csrf_required()` — it accepts the token via `X-CSRF-Token` header, `csrf_token` form field, or JSON field; a request carrying an `Authorization` header is exempt (cross-site requests can't set one — Bearer clients are CSRF-immune). Public unauthenticated POSTs (`/release`, `/report_decryption`) intentionally have no CSRF gate. JS clients read the token from `<meta name="csrf-token">` in base.html.
+**CSRF**: Session-authed mutating routes (`/upload`, `/upload/begin`, `/logout`, `/api/token`, `/delete/<id>`, `/view/<id>/confirm`, token revocation) call `_session_csrf_required()` — it accepts the token via `X-CSRF-Token` header, `csrf_token` form field, or JSON field; a request carrying an `Authorization` header is exempt (cross-site requests can't set one — Bearer clients are CSRF-immune). Public unauthenticated POSTs (`/release`, `/report_decryption`) intentionally have no CSRF gate. JS clients read the token from `<meta name="csrf-token">` in base.html.
 
 ### API Token Management
 
@@ -173,7 +173,9 @@ Key variables in `.env`:
 - User management: `FLASK_USER_N=username:password:is_admin`
 - Storage: `STORAGE_BACKEND`, `UPLOAD_FOLDER`
 - S3: `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`
-- Limits: `MAX_CONTENT_LENGTH`, `ALLOWED_EXTENSIONS`
+- Limits: `MAX_CONTENT_LENGTH` (default 100 MB), `ALLOWED_EXTENSIONS`
+- Session cookies: `SESSION_COOKIE_SECURE` (default true, but false in development/testing since dev runs over HTTP), `SESSION_COOKIE_HTTPONLY` (default true), `SESSION_COOKIE_SAMESITE` (default `Lax`), `PERMANENT_SESSION_LIFETIME` (seconds, default 28800)
+- Secrets: `TOKEN_HASH_SECRET` is required in `FLASK_ENV=production` and must differ from `FLASK_SECRET_KEY` (dev falls back to `FLASK_SECRET_KEY`)
 - Database: `DATABASE_URL` (`DATABASE_PATH` deprecated → sqlite:/// fallback)
 - Key release: `KEY_RELEASE_RATE_LIMIT` (default `10 per minute`, per file_id), `KEY_RELEASE_MAX_ATTEMPTS` (default 1), `KEY_RELEASE_BURN_ON_LOCKOUT` (default on — lockout deletes the `file_keys` row, H+V destroyed; off keeps the row but permanently refuses releases — currently no unlock path), `KEY_SHARE_PENDING_TTL_SECONDS` (default 3600 — TTL for begun-but-never-finished shares)
 
