@@ -3,8 +3,8 @@
 // Steps:
 // 1. Download the encrypted file from the server
 // 2. Wait for user to enter password and click 'Decrypt'
-// 3. v1/v2: decrypt locally. v3 (oracle): prove the password to /release,
-//    receive the server share H, then decrypt with Kp ‖ H
+// 3. Prove the password to /release, receive the server share H,
+//    then decrypt with Kp ‖ H (docs/true-one-time.md §6.4)
 // 4. Save file to disk and notify server
 
 import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
@@ -15,9 +15,19 @@ const cryptoService = new CryptoService();
     // Download the encrypted file as a single Uint8Array
     const res = await fetch(window.downloadUrl);
     const encryptedData = new Uint8Array(await res.arrayBuffer());
-    const payloadInfo = cryptoService.detectVersion(encryptedData);
     const decryptBtn = document.getElementById('decrypt-btn');
     const passInput = document.getElementById('password-input');
+
+    let salt;
+    try {
+        ({ salt } = cryptoService.parseBlob(encryptedData));
+    } catch (err) {
+        decryptBtn.disabled = true;
+        passInput.disabled = true;
+        document.getElementById('status').textContent =
+            'This share uses an unsupported format. Ask the author to upload it again.';
+        return;
+    }
 
     // Auto-fill password from sessionStorage if available (from URL fragment)
     const savedPassword = sessionStorage.getItem('downloadPassword');
@@ -77,13 +87,11 @@ const cryptoService = new CryptoService();
         }
     }
 
-    // v3 oracle flow: the blob alone is mathematically dead — the password
-    // must be proven to /release, which hands out the server share H once.
-    // Returns the decrypted bytes, or null when the attempt failed in a
-    // recoverable way (wrong password with attempts left).
+    // The blob alone is mathematically dead — the password must be proven
+    // to /release, which hands out the server share H once. Returns the
+    // decrypted bytes, or null when the attempt failed in a recoverable
+    // way (wrong password with attempts left).
     async function decryptOracle(password) {
-        const salt = encryptedData.slice(
-            payloadInfo.offset, payloadInfo.offset + cryptoService.SALT_LENGTH);
         const v = await cryptoService.deriveVerifier(password, salt);
 
         let res;
@@ -125,7 +133,7 @@ const cryptoService = new CryptoService();
         }
 
         const h = hexToBytes(body.h);
-        return cryptoService.decryptV3(encryptedData, password, h);
+        return cryptoService.decrypt(encryptedData, password, h);
     }
 
     // When user clicks 'Decrypt', attempt to decrypt the file
@@ -136,18 +144,13 @@ const cryptoService = new CryptoService();
         passInput.disabled = true;
 
         try {
-            let fileBytes;
-            if (payloadInfo.version === 3) {
-                fileBytes = await decryptOracle(password);
-                if (fileBytes === null) {
-                    // Wrong password, attempts remaining — let them retry.
-                    decryptBtn.disabled = false;
-                    passInput.disabled = false;
-                    passInput.select();
-                    return;
-                }
-            } else {
-                fileBytes = await cryptoService.decrypt(encryptedData, password);
+            const fileBytes = await decryptOracle(password);
+            if (fileBytes === null) {
+                // Wrong password, attempts remaining — let them retry.
+                decryptBtn.disabled = false;
+                passInput.disabled = false;
+                passInput.select();
+                return;
             }
 
             showPlaintext(fileBytes);

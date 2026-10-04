@@ -546,7 +546,6 @@
 <script>
 window.uploadUrl = "{{ url_for('upload_file') }}";
 window.uploadBeginUrl = "{{ url_for('upload_begin') }}";
-window.oracleEnabled = {{ config['ORACLE_ENABLED'] | tojson }};
 </script>
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}" integrity="{{ sri_hash('js/main.js') }}" crossorigin="anonymous"></script>
 {% endblock %}

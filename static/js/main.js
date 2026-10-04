@@ -4,10 +4,6 @@ import { buildSharedFilesUrl, getSharedFilesPage } from './shared-files.mjs';
 import { assessPassword, generatePassphrase } from './passphrase.mjs';
 
 const cryptoService = new CryptoService();
-// Server-gated key release (docs/true-one-time.md §6): when the server
-// advertises ORACLE_ENABLED, uploads run the /upload/begin handshake and
-// produce v3 payloads; otherwise they stay on the self-contained v2 format.
-const oracleEnabled = window.oracleEnabled === true;
 let activeShareMode = 'file';
 let uploadInProgress = false;
 
@@ -177,35 +173,31 @@ function enforcePasswordStrength(password) {
 // --- Shared Upload Logic ---
 
 /**
- * Encrypt data for upload, running the two-phase oracle handshake when
- * the server enables it. Falls back to a self-contained v2 blob when the
- * begin call fails, so an upgrade never strands a client mid-upload.
+ * Encrypt data for upload through the two-phase oracle handshake:
+ * /upload/begin mints file_id + the server share H, the client derives
+ * Kp/V from the password, encrypts under HKDF(Kp ‖ H), and returns the
+ * blob plus the fields the finish POST needs.
  * @param {Uint8Array} data - Raw plaintext
  * @param {string} password
- * @returns {Promise<{blob: Uint8Array, oracleFileId?: string, keyVerifier?: string}>}
+ * @returns {Promise<{blob: Uint8Array, oracleFileId: string, keyVerifier: string}>}
+ * @throws {Error} When the server refuses the handshake
  */
 async function encryptForUpload(data, password) {
-    if (oracleEnabled) {
-        try {
-            const res = await fetch(window.uploadBeginUrl, {
-                method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
-            if (res.ok) {
-                const { file_id, h } = await res.json();
-                const { blob, verifier } = await cryptoService.encryptV3(
-                    data, password, hexToBytes(h));
-                return {
-                    blob,
-                    oracleFileId: file_id,
-                    keyVerifier: bytesToHex(verifier),
-                };
-            }
-        } catch (err) {
-            // fall through to the legacy path
-        }
+    const res = await fetch(window.uploadBeginUrl, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    if (!res.ok) {
+        throw new Error('The server refused the upload handshake.');
     }
-    return { blob: await cryptoService.encrypt(data, password) };
+    const { file_id, h } = await res.json();
+    const { blob, verifier } = await cryptoService.encrypt(
+        data, password, hexToBytes(h));
+    return {
+        blob,
+        oracleFileId: file_id,
+        keyVerifier: bytesToHex(verifier),
+    };
 }
 
 /**
@@ -382,19 +374,22 @@ if (fileUploadForm) {
         if (!file || !password) return;
         if (!enforcePasswordStrength(password)) return;
 
-        // Read and encrypt file data (oracle handshake when enabled)
+        // Read and encrypt file data via the oracle handshake
         const fileData = new Uint8Array(await file.arrayBuffer());
-        const { blob: encrypted, oracleFileId, keyVerifier } =
-            await encryptForUpload(fileData, password);
+        let prepared;
+        try {
+            prepared = await encryptForUpload(fileData, password);
+        } catch (err) {
+            alert(err && err.message ? err.message : 'Upload failed');
+            return;
+        }
 
         // Prepare FormData
-        const encBlob = new Blob([encrypted], { type: 'application/octet-stream' });
+        const encBlob = new Blob([prepared.blob], { type: 'application/octet-stream' });
         const formData = new FormData();
         formData.append('file', new File([encBlob], file.name));
-        if (oracleFileId) {
-            formData.append('oracle_file_id', oracleFileId);
-            formData.append('key_verifier', keyVerifier);
-        }
+        formData.append('oracle_file_id', prepared.oracleFileId);
+        formData.append('key_verifier', prepared.keyVerifier);
         const expiryInput = document.getElementById('shared-expiry');
         const privateNoteInput = document.getElementById('shared-private-note');
         const notifyOnOpenInput = document.getElementById('notify-on-open');
@@ -438,21 +433,24 @@ async function uploadNote() {
     }
     if (!enforcePasswordStrength(password)) return;
 
-    // Encrypt text data (oracle handshake when enabled)
+    // Encrypt text data via the oracle handshake
     const enc = new TextEncoder();
     const textData = enc.encode(noteText);
-    const { blob: encrypted, oracleFileId, keyVerifier } =
-        await encryptForUpload(textData, password);
+    let prepared;
+    try {
+        prepared = await encryptForUpload(textData, password);
+    } catch (err) {
+        alert(err && err.message ? err.message : 'Upload failed');
+        return;
+    }
 
     // Prepare FormData with base64 encoded encrypted data
-    const base64Encrypted = btoa(String.fromCharCode(...encrypted));
+    const base64Encrypted = btoa(String.fromCharCode(...prepared.blob));
     const formData = new FormData();
     formData.append('note_text', base64Encrypted);
     formData.append('type', 'text');
-    if (oracleFileId) {
-        formData.append('oracle_file_id', oracleFileId);
-        formData.append('key_verifier', keyVerifier);
-    }
+    formData.append('oracle_file_id', prepared.oracleFileId);
+    formData.append('key_verifier', prepared.keyVerifier);
     if (expiry) {
         formData.append('expiry', expiry);
     }

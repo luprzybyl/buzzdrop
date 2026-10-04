@@ -4,7 +4,9 @@ buzz — Buzzdrop CLI for sharing files from the command line.
 
 Authentication: reads ~/.buzz_token (JSON with 'token' and 'server' fields).
 Tokens created before the PBKDF2 API-token rollout must be regenerated.
-Encryption: AES-GCM with PBKDF2-SHA256 key derivation, compatible with the
+Encryption: AES-GCM under a split key — file_key = HKDF(Kp ‖ H), where
+Kp derives from the password and H is the server share from the two-phase
+/upload/begin handshake (docs/true-one-time.md §6). Compatible with the
 Buzzdrop web UI.
 
 Usage:
@@ -1010,28 +1012,21 @@ TOKEN_FILE = os.path.expanduser('~/.buzz_token')
 # ---------------------------------------------------------------------------
 # Crypto wire format (shared with static/js/crypto.js).
 #
-#   v3 (oracle): MAGIC_V3 (4 bytes) + salt (16) + iv (12) + AES-GCM ct
-#       master = PBKDF2-SHA256(password, salt, 600k)   [32 bytes]
-#       Kp = HKDF(master, salt, 'enc'); V = HKDF(master, salt, 'ver')
+#   MAGIC (4 bytes) + salt (16) + iv (12) + AES-GCM ciphertext
+#       master   = PBKDF2-SHA256(password, salt, 600k)   [32 bytes]
+#       Kp       = HKDF(master, salt, 'enc')
+#       V        = HKDF(master, salt, 'ver')
 #       file_key = HKDF(Kp || H, salt, 'file')  — needs the server share H
-#   v2: MAGIC_V2 (4 bytes) + salt (16) + iv (12) + AES-GCM ciphertext
-#       PBKDF2-SHA256, 600,000 iterations
-#   v1 (legacy): salt (16) + iv (12) + AES-GCM ciphertext
-#       PBKDF2-SHA256, 100,000 iterations
 #
-# The version marker sits outside the encrypted data so the iteration count
-# is known before key derivation. v1 blobs are detected by the ABSENCE of the
-# magic; a v1 salt colliding with b'BKV*' has probability ~2^-31 per blob —
-# negligible, and the worst case is a failed GCM auth tag (wrong password).
-# Plaintext always starts with b'BKP-FILE' (inside the ciphertext) for
-# integrity validation.
+# Server-gated key release (docs/true-one-time.md §6): the file key needs
+# both halves, so a blob alone is mathematically dead. The magic keeps a
+# version marker for future bumps; only 'BKV3' is supported. Plaintext
+# always starts with b'BKP-FILE' (inside the ciphertext) for integrity
+# validation.
 # ---------------------------------------------------------------------------
-MAGIC_V2 = b'BKV2'
 MAGIC_V3 = b'BKV3'
 PLAINTEXT_MAGIC = b'BKP-FILE'
-ITERATIONS_V1 = 100_000
-ITERATIONS_V2 = 600_000
-ITERATIONS_V3 = 600_000
+ITERATIONS = 600_000
 _SALT_LEN = 16
 _IV_LEN = 12
 _H_LEN = 32
@@ -1253,14 +1248,14 @@ def _crypto_imports():
         sys.exit(1)
 
 
-def _derive_key(password: str, salt: bytes, iterations: int) -> bytes:
-    """Derive a 32-byte AES key via PBKDF2-SHA256."""
+def _derive_master(password: str, salt: bytes) -> bytes:
+    """Master key: PBKDF2-SHA256(password, salt, 600k) → 32 bytes."""
     _AESGCM, PBKDF2HMAC, _HKDF, hashes = _crypto_imports()
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=salt,
-        iterations=iterations,
+        iterations=ITERATIONS,
     )
     return kdf.derive(password.encode('utf-8'))
 
@@ -1274,11 +1269,6 @@ def _hkdf(ikm: bytes, salt: bytes, info: bytes) -> bytes:
         salt=salt,
         info=info,
     ).derive(ikm)
-
-
-def _derive_master(password: str, salt: bytes) -> bytes:
-    """v3 master key: PBKDF2-SHA256(password, salt, 600k) → 32 bytes."""
-    return _derive_key(password, salt, ITERATIONS_V3)
 
 
 def derive_oracle_keys(password: str, salt: bytes) -> tuple[bytes, bytes]:
@@ -1297,7 +1287,7 @@ def _derive_file_key(kp: bytes, h: bytes, salt: bytes) -> bytes:
     return _hkdf(kp + h, salt, _HKDF_INFO_FILE)
 
 
-def encrypt_file_v3(file_bytes: bytes, password: str, h: bytes) -> tuple[bytes, str]:
+def encrypt_file(file_bytes: bytes, password: str, h: bytes) -> tuple[bytes, str]:
     """
     Encrypt file_bytes for an oracle share (docs/true-one-time.md §6).
 
@@ -1323,64 +1313,31 @@ def encrypt_file_v3(file_bytes: bytes, password: str, h: bytes) -> tuple[bytes, 
     return MAGIC_V3 + salt + iv + ciphertext, v.hex()
 
 
-def encrypt_file(file_bytes: bytes, password: str) -> bytes:
+def decrypt_file(encrypted: bytes, password: str, h: bytes) -> bytes:
     """
-    Encrypt file_bytes with password using AES-GCM + PBKDF2-SHA256.
+    Decrypt a Buzzdrop payload produced by encrypt_file() or the web UI.
 
-    Always produces a v2 payload (same format as the browser client):
-        MAGIC_V2 (4 bytes) + salt (16 bytes) + iv (12 bytes)
-        + AES-GCM ciphertext (with 16-byte tag)
-
-    The plaintext has the magic header b'BKP-FILE' prepended before encryption
-    so the client can detect a wrong password.
-    """
-    AESGCM, _PBKDF2HMAC, _HKDF, _hashes = _crypto_imports()
-
-    salt = os.urandom(_SALT_LEN)
-    iv = os.urandom(_IV_LEN)
-    key = _derive_key(password, salt, ITERATIONS_V2)
-
-    plaintext = PLAINTEXT_MAGIC + file_bytes
-    ciphertext = AESGCM(key).encrypt(iv, plaintext, None)
-    return MAGIC_V2 + salt + iv + ciphertext
-
-
-def decrypt_file(encrypted: bytes, password: str, h: bytes = None) -> bytes:
-    """
-    Decrypt a Buzzdrop payload produced by encrypt_file()/encrypt_file_v3()
-    or the web UI.
-
-    Auto-detects the format version:
-        v3 (oracle): starts with MAGIC_V3 -> requires the released server
-            share ``h`` (32 bytes); derives Kp from the password and
-            assembles file_key = HKDF(Kp ‖ h)
-        v2: starts with MAGIC_V2 -> 600,000 PBKDF2 iterations
-        v1 (legacy): no magic    -> 100,000 PBKDF2 iterations
+    The blob must start with MAGIC_V3 and ``h`` must be the 32-byte server
+    share released by /release; Kp is derived from the password and
+    file_key = HKDF(Kp ‖ h).
 
     Returns the original file bytes (inner 'BKP-FILE' header stripped and
-    validated). Raises InvalidTag/ValueError on wrong password or corruption.
+    validated). Raises InvalidTag/ValueError on wrong password, wrong/missing
+    H, or corruption.
     """
     AESGCM, _PBKDF2HMAC, _HKDF, _hashes = _crypto_imports()
 
-    if encrypted[:len(MAGIC_V3)] == MAGIC_V3:
-        if h is None or len(h) != _H_LEN:
-            raise ValueError(
-                'v3 payload requires the 32-byte server share H')
-        offset = len(MAGIC_V3)
-        salt = encrypted[offset:offset + _SALT_LEN]
-        iv = encrypted[offset + _SALT_LEN:offset + _SALT_LEN + _IV_LEN]
-        ciphertext = encrypted[offset + _SALT_LEN + _IV_LEN:]
-        kp, _v = derive_oracle_keys(password, salt)
-        key = _derive_file_key(kp, h, salt)
-    else:
-        offset = len(MAGIC_V2) if encrypted[:len(MAGIC_V2)] == MAGIC_V2 else 0
-        iterations = ITERATIONS_V2 if offset else ITERATIONS_V1
+    if encrypted[:len(MAGIC_V3)] != MAGIC_V3:
+        raise ValueError('Unsupported share format')
+    if h is None or len(h) != _H_LEN:
+        raise ValueError('payload requires the 32-byte server share H')
 
-        salt = encrypted[offset:offset + _SALT_LEN]
-        iv = encrypted[offset + _SALT_LEN:offset + _SALT_LEN + _IV_LEN]
-        ciphertext = encrypted[offset + _SALT_LEN + _IV_LEN:]
-
-        key = _derive_key(password, salt, iterations)
+    offset = len(MAGIC_V3)
+    salt = encrypted[offset:offset + _SALT_LEN]
+    iv = encrypted[offset + _SALT_LEN:offset + _SALT_LEN + _IV_LEN]
+    ciphertext = encrypted[offset + _SALT_LEN + _IV_LEN:]
+    kp, _v = derive_oracle_keys(password, salt)
+    key = _derive_file_key(kp, h, salt)
     plaintext = AESGCM(key).decrypt(iv, ciphertext, None)
 
     if not plaintext.startswith(PLAINTEXT_MAGIC):
@@ -1394,7 +1351,7 @@ def upload_begin(server: str, token: str) -> dict | None:
 
     Returns the JSON body on success, or None when the server does not
     offer server-gated key release (ORACLE_ENABLED off / older server) —
-    the caller then falls back to a self-contained v2 blob.
+    every upload is two-phase, so the caller must abort in that case.
     """
     requests = _requests()
     try:
@@ -1438,8 +1395,7 @@ def upload_begin(server: str, token: str) -> dict | None:
 
 
 def upload(server: str, token: str, filename: str, encrypted: bytes,
-           expiry: str = None, oracle_file_id: str = None,
-           key_verifier: str = None) -> dict:
+           oracle_file_id: str, key_verifier: str, expiry: str = None) -> dict:
     """
     POST the encrypted blob to /upload and return the JSON response.
 
@@ -1454,12 +1410,12 @@ def upload(server: str, token: str, filename: str, encrypted: bytes,
     files = {
         'file': (os.path.basename(filename), BytesIO(encrypted), 'application/octet-stream'),
     }
-    data = {}
+    data = {
+        'oracle_file_id': oracle_file_id,
+        'key_verifier': key_verifier,
+    }
     if expiry:
         data['expiry'] = expiry
-    if oracle_file_id:
-        data['oracle_file_id'] = oracle_file_id
-        data['key_verifier'] = key_verifier
 
     headers = {
         'Authorization': f'Bearer {token}',
@@ -1593,9 +1549,16 @@ def main():
             sys.exit(1)
         upload_name = args.file
 
-    # Oracle handshake first: when the server supports server-gated key
-    # release, the file key needs its share H before we can encrypt (v3).
+    # Oracle handshake first: the file key needs the server share H
+    # before we can encrypt.
     begin = upload_begin(server, token)
+    if begin is None:
+        print(
+            "Error: this server does not accept oracle uploads "
+            "(server-gated key release disabled).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     # Encrypt
     print(
@@ -1603,19 +1566,14 @@ def main():
         f"  ({_format_size(len(file_bytes))})...",
         end=' ', flush=True,
     )
-    if begin:
-        encrypted, key_verifier = encrypt_file_v3(file_bytes, password, begin['h'])
-        oracle_file_id = begin['file_id']
-    else:
-        encrypted, key_verifier, oracle_file_id = (
-            encrypt_file(file_bytes, password), None, None)
+    encrypted, key_verifier = encrypt_file(file_bytes, password, begin['h'])
     print(f"done  ({_format_size(len(encrypted))} on wire)")
 
     # Upload with live progress bar
     result = upload(
         server, token, upload_name, encrypted,
         expiry=args.expiry,
-        oracle_file_id=oracle_file_id,
+        oracle_file_id=begin['file_id'],
         key_verifier=key_verifier,
     )
 
