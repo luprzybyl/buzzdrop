@@ -22,7 +22,7 @@ const BITS_PER_WORD = Math.log2(EFF_WORDLIST.length); // ~12.92
 export const PASSPHRASE_WORDS = 6;
 
 // Below this the upload is refused. 45 bits is roughly "8 mixed random
-// characters" — anything worse is brute-forceable against PBKDF2-100k.
+// characters" — anything worse is brute-forceable against PBKDF2-600k.
 export const MIN_ENTROPY_BITS = 45;
 // At/above this the meter reports "strong" (a 6-word EFF phrase is ~77.5).
 export const STRONG_ENTROPY_BITS = 75;
