@@ -64,6 +64,21 @@ V2_FIXTURE = bytes.fromhex(
     '101112131415161718191a1b'
     'e3e9c2fdac1fb1a52e4bbc89c1ba01a137ea1936f57eec0d0ccf39fff550f508ee017e67'
 )
+# v3 blob: 'BKV3' + salt(16) + iv(12) + AES-GCM('BKP-FILE' + data), oracle KDF.
+# server share H = bytes(range(32, 64)); derived with the same
+# password/salt/iv as the other fixtures.
+V3_FIXTURE = bytes.fromhex(
+    '424b5633'
+    '000102030405060708090a0b0c0d0e0f'
+    '101112131415161718191a1b'
+    '9d9e3a85dc0667cf0bbb1518c026c1077fae042f4b6eb1a5a413d9fc50b9b4d6cbdf69ba'
+)
+V3_FIXTURE_H = bytes.fromhex(
+    '202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f'
+)
+V3_FIXTURE_V = (
+    '0ec3a6fe37dd4e652583c3dcde17bad20e019cbbf47d8f281bbf3f028ab482db'
+)
 
 
 def _manual_decrypt(blob: bytes, password: str, iterations: int, offset: int = 0) -> bytes:
@@ -206,6 +221,87 @@ def test_unicode_password():
     encrypted = buzz.encrypt_file(original, password)
     plaintext = _manual_decrypt(encrypted, password, iterations=600_000, offset=4)
     assert plaintext[8:] == original
+
+
+# ---------------------------------------------------------------------------
+# v3 oracle format (server-gated key release, docs/true-one-time.md §6)
+# ---------------------------------------------------------------------------
+
+@requires_cryptography
+def test_encrypt_v3_produces_v3_envelope():
+    buzz = _import_buzz()
+    blob, v_hex = buzz.encrypt_file_v3(b'data', 'pw', h=os.urandom(32))
+    assert blob[:4] == buzz.MAGIC_V3 == b'BKV3'
+    assert len(v_hex) == 64
+
+
+@requires_cryptography
+def test_encrypt_v3_rejects_bad_h_length():
+    buzz = _import_buzz()
+    with pytest.raises(ValueError):
+        buzz.encrypt_file_v3(b'data', 'pw', h=b'too-short')
+
+
+@requires_cryptography
+def test_v3_roundtrip():
+    """encrypt_file_v3 + decrypt_file(h) returns the original bytes."""
+    buzz = _import_buzz()
+    original = b'oracle payload \x00\xff'
+    h = os.urandom(32)
+    blob, _v = buzz.encrypt_file_v3(original, 'pw', h)
+    assert buzz.decrypt_file(blob, 'pw', h=h) == original
+
+
+@requires_cryptography
+def test_v3_fixture_decrypts_and_verifier_matches():
+    """Pinned v3 fixture: same bytes in JS test (crypto.test.mjs)."""
+    buzz = _import_buzz()
+    assert buzz.decrypt_file(V3_FIXTURE, FIXTURE_PASSWORD, h=V3_FIXTURE_H) == FIXTURE_DATA
+    # The verifier the client binds is derivable from password + blob salt.
+    salt = V3_FIXTURE[4:20]
+    _kp, v = buzz.derive_oracle_keys(FIXTURE_PASSWORD, salt)
+    assert v.hex() == V3_FIXTURE_V
+
+
+@requires_cryptography
+def test_v3_requires_server_share():
+    """The whole point: a v3 blob alone cannot be decrypted."""
+    buzz = _import_buzz()
+    with pytest.raises(ValueError):
+        buzz.decrypt_file(V3_FIXTURE, FIXTURE_PASSWORD)
+    with pytest.raises(ValueError):
+        buzz.decrypt_file(V3_FIXTURE, FIXTURE_PASSWORD, h=b'short')
+    blob, _v = buzz.encrypt_file_v3(b'x', 'pw', os.urandom(32))
+    with pytest.raises(ValueError):
+        buzz.decrypt_file(blob, 'pw')
+
+
+@requires_cryptography
+def test_v3_wrong_password_or_h_fails():
+    from cryptography.exceptions import InvalidTag
+    buzz = _import_buzz()
+    with pytest.raises(InvalidTag):
+        buzz.decrypt_file(V3_FIXTURE, 'wrong-password', h=V3_FIXTURE_H)
+    with pytest.raises(InvalidTag):
+        buzz.decrypt_file(V3_FIXTURE, FIXTURE_PASSWORD, h=os.urandom(32))
+
+
+@requires_cryptography
+def test_v3_hkdf_domain_separation():
+    """Kp, V and file_key must be pairwise distinct for the same master."""
+    buzz = _import_buzz()
+    salt = bytes(range(16))
+    kp, v = buzz.derive_oracle_keys('pw', salt)
+    fk = buzz._derive_file_key(kp, bytes(range(32, 64)), salt)
+    assert kp != v != fk
+
+
+@requires_cryptography
+def test_v1_v2_still_decrypt_without_h():
+    """Backward compat: legacy blobs never needed and never need H."""
+    buzz = _import_buzz()
+    assert buzz.decrypt_file(V1_FIXTURE, FIXTURE_PASSWORD) == FIXTURE_DATA
+    assert buzz.decrypt_file(V2_FIXTURE, FIXTURE_PASSWORD) == FIXTURE_DATA
 
 
 def test_generate_passphrase_format():
