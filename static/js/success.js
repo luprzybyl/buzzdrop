@@ -2,7 +2,7 @@
 // This file controls the UI for the upload success page:
 // - Copying the share link to clipboard
 // - Toggling password visibility
-// - Auto-filling the password from sessionStorage
+// - Auto-filling the password from the URL fragment
 
 // One region for the page announces every copy; the button flash is visual.
 function setCopyStatus(message) {
@@ -68,10 +68,20 @@ function togglePasswordVisibility() {
     }
 }
 
-// On page load, auto-fill password from sessionStorage if present
-// (This helps the user copy/share the password after upload)
+// On page load, auto-fill the password from the URL fragment (the upload
+// flow navigates here with it). Read it once, then scrub it from the
+// address bar and history entry — nothing is persisted.
 document.addEventListener('DOMContentLoaded', function() {
-    const pwd = sessionStorage.getItem('uploadPassword');
+    const hash = window.location.hash;
+    if (hash.length <= 1) return;
+    let pwd = null;
+    try {
+        pwd = decodeURIComponent(hash.substring(1));
+    } catch (e) {
+        pwd = null;
+    }
+    window.history.replaceState(
+        null, '', window.location.pathname + window.location.search);
     if (pwd) {
         document.getElementById('password-display').value = pwd;
 
@@ -79,7 +89,5 @@ document.addEventListener('DOMContentLoaded', function() {
         const shareLink = document.getElementById('share-link').value;
         const linkWithPassword = shareLink + '#' + encodeURIComponent(pwd);
         document.getElementById('share-link-with-password').value = linkWithPassword;
-
-        sessionStorage.removeItem('uploadPassword');
     }
 });

@@ -1654,6 +1654,8 @@ def main():
         print(f"Password:       {password}")
     print()
     print(f"One-click link: {share_link}#{password}")
+    print("  (embeds the password — whoever holds the link holds the key;")
+    print("   sharing link and password separately is stronger)")
 
 
 if __name__ == '__main__':
