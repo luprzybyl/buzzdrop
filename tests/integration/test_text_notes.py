@@ -1,6 +1,6 @@
 import base64
 from flask import url_for
-from tinydb import Query
+
 from unittest import mock
 
 def login_user(client, username, password):
@@ -19,7 +19,7 @@ def test_upload_text_note_requires_login(client):
     assert response.status_code == 302  # Redirect to login
     assert b'/login' in response.data or response.location.endswith('/login')
 
-def test_upload_text_note_success(client, app, files_table):
+def test_upload_text_note_success(client, app, files_store):
     """Test successful text note upload."""
     login_user(client, 'testuser', 'password')
 
@@ -46,15 +46,15 @@ def test_upload_text_note_success(client, app, files_table):
     assert json_data['type'] == 'text'
 
     # Verify database entry
-    File = Query()
-    note_info = files_table.get(File.id == json_data['file_id'])
+
+    note_info = files_store.get_by_id(json_data['file_id'])
     assert note_info is not None
     assert note_info['type'] == 'text'
     assert note_info['original_name'] == 'Secret Note'
     assert note_info['uploaded_by'] == 'testuser'
     assert note_info['status'] == 'active'
 
-def test_upload_text_note_with_expiry(client, app, files_table):
+def test_upload_text_note_with_expiry(client, app, files_store):
     """Test text note upload with expiry date."""
     login_user(client, 'testuser', 'password')
 
@@ -77,13 +77,13 @@ def test_upload_text_note_with_expiry(client, app, files_table):
     assert response.status_code == 200
     json_data = response.get_json()
 
-    File = Query()
-    note_info = files_table.get(File.id == json_data['file_id'])
+
+    note_info = files_store.get_by_id(json_data['file_id'])
     assert note_info is not None
     assert note_info['expiry_at'] is not None
     assert '2025-12-31' in note_info['expiry_at']
 
-def test_upload_text_note_stores_private_note(client, files_table):
+def test_upload_text_note_stores_private_note(client, files_store):
     """Test text note upload stores a private note for the uploader."""
     login_user(client, 'testuser', 'password')
 
@@ -99,12 +99,12 @@ def test_upload_text_note_stores_private_note(client, files_table):
 
     assert response.status_code == 200
 
-    File = Query()
-    note_info = files_table.get(File.id == response.get_json()['file_id'])
+
+    note_info = files_store.get_by_id(response.get_json()['file_id'])
     assert note_info is not None
     assert note_info['private_note'] == 'Password for the ZIP'
 
-def test_view_text_note_shows_correct_template(client, app, files_table):
+def test_view_text_note_shows_correct_template(client, app, files_store):
     """Test that viewing a text note shows the correct template with text type."""
     login_user(client, 'testuser', 'password')
 
@@ -126,7 +126,7 @@ def test_view_text_note_shows_correct_template(client, app, files_table):
     assert b'If the sender shared the password separately' in response.data
     assert b'One-click links already include it.' in response.data
 
-def test_confirm_view_text_note(client, app, files_table, csrf_form_data):
+def test_confirm_view_text_note(client, app, files_store, csrf_form_data):
     """Test the confirm view page for text notes."""
     login_user(client, 'testuser', 'password')
 
@@ -146,7 +146,7 @@ def test_confirm_view_text_note(client, app, files_table, csrf_form_data):
     assert b'window.fileType = "text"' in response.data
     assert b'text-display' in response.data  # Text display div should be present
 
-def test_text_note_type_field_in_database(client, app, files_table):
+def test_text_note_type_field_in_database(client, app, files_store):
     """Test that text notes have correct type field in database."""
     login_user(client, 'testuser', 'password')
 
@@ -160,8 +160,8 @@ def test_text_note_type_field_in_database(client, app, files_table):
     note_id = response.get_json()['file_id']
 
     # Check database
-    File = Query()
-    note_info = files_table.get(File.id == note_id)
+
+    note_info = files_store.get_by_id(note_id)
     assert note_info['type'] == 'text'
 
     # Compare with regular file upload
@@ -176,7 +176,7 @@ def test_text_note_type_field_in_database(client, app, files_table):
     assert file_response.status_code == 200
 
     # Get the most recent file that's not the note
-    all_files = files_table.all()
+    all_files = files_store.all()
     file_upload = [f for f in all_files if f['id'] != note_id][0]
     assert file_upload['type'] == 'file'
 
@@ -197,7 +197,7 @@ def test_text_note_success_page(client, app):
     assert b'Note is in the hive' in response.data
     assert b'is destroyed as soon as the recipient continues' in response.data
 
-def test_text_note_deletion_after_view(client, app, files_table):
+def test_text_note_deletion_after_view(client, app, files_store):
     """Test that text note is marked as downloaded after viewing."""
     login_user(client, 'testuser', 'password')
 
@@ -215,15 +215,15 @@ def test_text_note_deletion_after_view(client, app, files_table):
     assert response.status_code == 200
 
     # Verify it's marked as downloaded
-    File = Query()
-    note_info = files_table.get(File.id == note_id)
+
+    note_info = files_store.get_by_id(note_id)
     assert note_info['downloaded_at'] is not None
 
     # Try to view again - should fail
     response = client.get(url_for('view_file', file_id=note_id), follow_redirects=False)
     assert response.status_code == 302  # Redirect because already downloaded
 
-def test_delete_text_note_before_view(client, app, files_table, csrf_form_data):
+def test_delete_text_note_before_view(client, app, files_store, csrf_form_data):
     """Test manual deletion of text note before it's viewed."""
     login_user(client, 'testuser', 'password')
 
@@ -241,8 +241,8 @@ def test_delete_text_note_before_view(client, app, files_table, csrf_form_data):
     assert response.status_code == 200
 
     # Verify it's removed from database
-    File = Query()
-    note_info = files_table.get(File.id == note_id)
+
+    note_info = files_store.get_by_id(note_id)
     assert note_info is None
 
 def test_text_note_empty_content(client, app):
@@ -266,7 +266,7 @@ def test_text_note_empty_content(client, app):
     # and fall through to file upload logic which will fail
     assert response.status_code in [302, 400]
 
-def test_report_decryption_for_text_note(client, app, files_table):
+def test_report_decryption_for_text_note(client, app, files_store):
     """Test reporting decryption success for text notes."""
     login_user(client, 'testuser', 'password')
 
@@ -287,12 +287,12 @@ def test_report_decryption_for_text_note(client, app, files_table):
     assert response.status_code == 200
 
     # Verify in database
-    File = Query()
-    note_info = files_table.get(File.id == note_id)
+
+    note_info = files_store.get_by_id(note_id)
     assert note_info['decryption_success'] is True
 
 
-def test_report_decryption_for_text_note_sends_failed_notification(client, app, files_table, monkeypatch):
+def test_report_decryption_for_text_note_sends_failed_notification(client, app, files_store, monkeypatch):
     """Test reporting a failed decryption sends one notification for text notes."""
     monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     from auth import get_users
@@ -330,7 +330,7 @@ def test_report_decryption_for_text_note_sends_failed_notification(client, app, 
     assert 'Decryption status: failed' in sent_messages[0][2]
 
 
-def test_text_note_notifications_can_use_verified_account_email(client, app, files_table, monkeypatch):
+def test_text_note_notifications_can_use_verified_account_email(client, app, files_store, monkeypatch):
     login_user(client, 'testuser', 'password')
     app.config.update({
         'SMTP_HOST': 'smtp.example.com',

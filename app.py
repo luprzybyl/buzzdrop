@@ -24,7 +24,7 @@ from flask import (
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 from flask_limiter import Limiter
-from tinydb import TinyDB, Query
+from db import create_backend
 from dotenv import load_dotenv
 import base64
 import hashlib
@@ -277,10 +277,9 @@ def sri_hash_processor():
 if app.config['STORAGE_BACKEND'] == 'local':
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Initialize TinyDB
-db = TinyDB(app.config['DATABASE_PATH'])
-app.db = db
-File = Query()
+# Initialize the storage backend (sqlite:// today, swappable via DATABASE_URL)
+backend = create_backend(config_class.get_database_url())
+app.backend = backend
 
 # Initialize storage backend
 storage = get_storage_backend(app.config)
@@ -289,45 +288,70 @@ print_backend_info(storage)
 # Initialize file repository
 file_repo = FileRepository()
 
-def get_db():
+def _resolve_database_url() -> str:
     """
-    Return a TinyDB instance, reopening it if necessary.
-    
-    This function handles the complexity of TinyDB connections across Flask app contexts.
-    It checks if the database handle is still open and reconnects if needed. This is
-    particularly important for:
-    - Test scenarios where the database file may be recreated between tests
-    - Long-running applications where file handles may become stale
-    - Multiple app contexts accessing the same database
-    
+    Resolve the effective, canonicalized DATABASE_URL for the current app
+    context.
+
+    Bare paths are wrapped in sqlite:/// and SQLite paths are absolutized so
+    the result compares equal to Backend.url — otherwise every call would
+    mint a fresh backend and leak the old one's connections.
+    """
+    configured = (
+        current_app.config if has_app_context() else app.config
+    )
+    url = configured.get('DATABASE_URL')
+    if not url:
+        # Deprecated fallback: plain file path → sqlite:///
+        url = f"sqlite:///{configured.get('DATABASE_PATH') or 'buzzdrop.db'}"
+
+    if url.startswith('sqlite:///'):
+        path = url[len('sqlite:///'):]
+        url = f'sqlite:///{os.path.abspath(path)}'
+    elif '://' not in url:
+        url = f'sqlite:///{os.path.abspath(url)}'
+    return url
+
+
+def get_backend():
+    """
+    Return the storage Backend for the current app context.
+
+    A new backend is created when the app's cached instance is missing,
+    closed, or was opened against a different DATABASE_URL (e.g. test
+    scenarios that point the app at a temporary database file). A displaced
+    backend is closed so its connections are not leaked.
+
     Returns:
-        TinyDB: Active database instance for the current app context
+        Backend: Active backend exposing .files/.tokens stores
     """
+    url = _resolve_database_url()
     if has_app_context():
-        database = getattr(current_app, 'db', None)
-        path = current_app.config.get('DATABASE_PATH', app.config['DATABASE_PATH'])
-        if database is None or getattr(database._storage, '_handle', None) is None or database._storage._handle.closed:
-            database = TinyDB(path)
-            current_app.db = database
+        backend = getattr(current_app, 'backend', None)
+        if backend is None or backend.url != url or getattr(backend, 'closed', False):
+            if backend is not None:
+                backend.close()
+            backend = create_backend(url)
+            current_app.backend = backend
     else:
-        database = getattr(app, 'db', None)
-        path = app.config['DATABASE_PATH']
-        if database is None or getattr(database._storage, '_handle', None) is None or database._storage._handle.closed:
-            database = TinyDB(path)
-            app.db = database
-    return database
+        backend = getattr(app, 'backend', None)
+        if backend is None or backend.url != url or getattr(backend, 'closed', False):
+            if backend is not None:
+                backend.close()
+            backend = create_backend(url)
+            app.backend = backend
+    return backend
 
 
-def get_files_table():
-    """Return the TinyDB table respecting the current app configuration."""
-    database = get_db()
-    return database.table('files')
+def get_files_store():
+    """Return the files store respecting the current app configuration."""
+    return get_backend().files
 
 # Clean up orphaned files on startup (local storage only)
 if app.config['STORAGE_BACKEND'] == 'local':
-    files_table = get_files_table()
+    files_store = get_files_store()
     tracked_files = set(
-        file_info['path'].split(os.sep)[-1] for file_info in files_table.all()
+        file_info['path'].split(os.sep)[-1] for file_info in files_store.all()
     )
     cleanup_orphaned_files(app.config['UPLOAD_FOLDER'], tracked_files)
 
@@ -440,11 +464,7 @@ def user_file_statuses():
         return {'error': 'Too many file IDs'}, 400
 
     current_user = get_current_user()
-    query = Query()
-    files = file_repo.table.search(
-        (query.uploaded_by == current_user['username']) &
-        query.id.one_of(requested_ids)
-    )
+    files = file_repo.get_user_files_by_ids(current_user['username'], requested_ids)
     statuses = []
     for file_info in files:
         check_and_handle_expiry(file_info)
@@ -744,18 +764,31 @@ def download_file(file_id):
     # Get client IP address
     client_ip = get_client_ip()
 
-    # Mark file as downloaded
-    file_repo.mark_downloaded(file_id, client_ip)
-    
+    # Atomically claim the file — exactly one concurrent requester wins.
+    if not file_repo.mark_downloaded(file_id, client_ip):
+        # Losers get the reason that fits: expired vs. already consumed.
+        latest = file_repo.get_by_id(file_id) or {}
+        if latest.get('status') == 'expired':
+            flash('File has expired')
+        else:
+            flash('This file has already been downloaded')
+        return redirect(url_for('index'))
+
     # Stream file from storage
     def generate():
-        for chunk in storage.retrieve(file_info['path']):
-            yield chunk
-        # Delete file after streaming completes
         try:
-            storage.delete(file_info['path'])
+            for chunk in storage.retrieve(file_info['path']):
+                yield chunk
         except Exception:
-            pass
+            # The claim is already consumed — surface the loss loudly.
+            current_app.logger.error(
+                'Storage retrieve failed for claimed file %s', file_id)
+            raise
+        finally:
+            try:
+                storage.delete(file_info['path'])
+            except Exception:
+                pass
     
     response = current_app.response_class(
         generate(),

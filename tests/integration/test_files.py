@@ -1,23 +1,23 @@
 import pytest
 import os
 from flask import url_for, session, current_app
-from tinydb import Query
+
 import io # For creating dummy file content for uploads
 from datetime import datetime, timedelta
 from auth import get_users
-# Fixtures: 'app', 'client', 'db_instance', 'files_table' from conftest.py
+# Fixtures: 'app', 'client', 'db_instance', 'files_store' from conftest.py
 # Test users from conftest.py: 'testuser:password:false', 'adminuser:adminpass:true'
 
 def login_user(client, username, password):
     return client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
 
 # Helper function to upload a file for a user
-def upload_file_for_user(client, app, files_table, filename, content, username_for_db_record):
+def upload_file_for_user(client, app, files_store, filename, content, username_for_db_record):
     file_data = {'file': (io.BytesIO(content.encode()), filename)}
     client.post(url_for('upload_file'), data=file_data, content_type='multipart/form-data')
 
-    File = Query()
-    file_info = files_table.get((File.original_name == filename) & (File.uploaded_by == username_for_db_record))
+
+    file_info = files_store.get_by(original_name=filename, uploaded_by=username_for_db_record)
     return file_info['id'] if file_info else None
 
 def test_upload_file_requires_login(client):
@@ -25,7 +25,7 @@ def test_upload_file_requires_login(client):
     assert url_for('login') in response.request.path
     assert b'Please log in to access this page' in response.data
 
-def test_upload_file_success(client, app, files_table):
+def test_upload_file_success(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
     file_content = b"This is a test file."
@@ -43,8 +43,8 @@ def test_upload_file_success(client, app, files_table):
     assert b'File is in the hive' in response.data
     assert b'id="share-link"' in response.data # Check that the input field for the link is there
 
-    File = Query()
-    file_info = files_table.get(File.original_name == file_name)
+
+    file_info = files_store.get_by(original_name=file_name)
     assert file_info is not None
     assert file_info['uploaded_by'] == 'testuser'
 
@@ -54,7 +54,7 @@ def test_upload_file_success(client, app, files_table):
     with open(file_path_on_disk, 'rb') as f:
         assert f.read() == file_content
 
-def test_upload_file_stores_private_note(client, files_table):
+def test_upload_file_stores_private_note(client, files_store):
     login_user(client, 'testuser', 'password')
 
     response = client.post(
@@ -69,8 +69,8 @@ def test_upload_file_stores_private_note(client, files_table):
 
     assert response.status_code == 200
 
-    File = Query()
-    file_info = files_table.get(File.original_name == 'private_note.txt')
+
+    file_info = files_store.get_by(original_name='private_note.txt')
     assert file_info is not None
     assert file_info['private_note'] == 'Internal handoff note'
 
@@ -106,7 +106,7 @@ def test_upload_file_too_large(client, app):
 
     app.config['MAX_CONTENT_LENGTH'] = original_max_length # Reset
 
-def test_download_file_success(client, app, files_table):
+def test_download_file_success(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
     file_content = b"Downloadable content."
@@ -114,11 +114,11 @@ def test_download_file_success(client, app, files_table):
     upload_data = {'file': (io.BytesIO(file_content), file_name)}
     client.post(url_for('upload_file'), data=upload_data, content_type='multipart/form-data')
 
-    File = Query()
-    file_info = files_table.get(File.original_name == file_name)
+
+    file_info = files_store.get_by(original_name=file_name)
     assert file_info is not None
     file_id = file_info['id']
-    
+
     # Use the path from file_info which is set by storage backend
     file_path_on_disk = file_info['path']
     assert os.path.exists(file_path_on_disk)
@@ -128,7 +128,7 @@ def test_download_file_success(client, app, files_table):
     assert response.data == file_content
     assert response.headers['Content-Disposition'] == f'attachment; filename={file_name}'
 
-    updated_file_info = files_table.get(File.id == file_id)
+    updated_file_info = files_store.get_by_id(file_id)
     assert updated_file_info is not None
     assert updated_file_info['downloaded_at'] is not None
     # File should be deleted after download
@@ -140,14 +140,14 @@ def test_download_file_not_found(client):
     assert b'File not found' in response.data
     assert url_for('index') in response.request.path
 
-def test_download_file_already_downloaded(client, app, files_table):
+def test_download_file_already_downloaded(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
     file_content = b"Already downloaded."
     file_name = "download_once.txt"
     client.post(url_for('upload_file'), data={'file': (io.BytesIO(file_content), file_name)}, content_type='multipart/form-data')
-    File = Query()
-    file_info = files_table.get(File.original_name == file_name)
+
+    file_info = files_store.get_by(original_name=file_name)
     file_id = file_info['id']
     client.get(url_for('download_file', file_id=file_id))
 
@@ -155,13 +155,13 @@ def test_download_file_already_downloaded(client, app, files_table):
     assert b'This file has already been downloaded' in response.data
     assert url_for('index') in response.request.path
 
-def test_view_file_success(client, app, files_table):
+def test_view_file_success(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
     file_name = "view_me.txt"
     client.post(url_for('upload_file'), data={'file': (io.BytesIO(b"view content"), file_name)}, content_type='multipart/form-data')
-    File = Query()
-    file_info = files_table.get(File.original_name == file_name)
+
+    file_info = files_store.get_by(original_name=file_name)
     assert file_info is not None
     file_id = file_info['id']
 
@@ -170,7 +170,7 @@ def test_view_file_success(client, app, files_table):
     assert file_name.encode() in response.data
     assert file_id.encode() in response.data
 
-def test_public_views_do_not_show_private_note(client, files_table, csrf_form_data):
+def test_public_views_do_not_show_private_note(client, files_store, csrf_form_data):
     login_user(client, 'testuser', 'password')
 
     response = client.post(
@@ -184,8 +184,8 @@ def test_public_views_do_not_show_private_note(client, files_table, csrf_form_da
     )
     assert response.status_code == 200
 
-    File = Query()
-    file_info = files_table.get(File.original_name == 'private_view.txt')
+
+    file_info = files_store.get_by(original_name='private_view.txt')
     assert file_info is not None
 
     client.get(url_for('logout'))
@@ -210,54 +210,54 @@ def test_delete_file_requires_login(client):
     assert b'Please log in to access this page' in response.data
 
 
-def test_delete_file_before_download(client, app, files_table, csrf_form_data):
+def test_delete_file_before_download(client, app, files_store, csrf_form_data):
     login_user(client, 'testuser', 'password')
 
-    file_id = upload_file_for_user(client, app, files_table, 'del.txt', 'hi', 'testuser')
-    File = Query()
-    file_info = files_table.get(File.id == file_id)
+    file_id = upload_file_for_user(client, app, files_store, 'del.txt', 'hi', 'testuser')
+
+    file_info = files_store.get_by_id(file_id)
     file_path = file_info['path']
     assert os.path.exists(file_path)
 
     response = client.post(url_for('delete_file', file_id=file_id), data=csrf_form_data(), follow_redirects=True)
     assert response.status_code == 200
     assert b'File deleted successfully' in response.data
-    assert files_table.get(File.id == file_id) is None
+    assert files_store.get_by_id(file_id) is None
     assert not os.path.exists(file_path)
 
 
-def test_delete_file_requires_csrf(client, app, files_table):
+def test_delete_file_requires_csrf(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
-    file_id = upload_file_for_user(client, app, files_table, 'needs_csrf.txt', 'hi', 'testuser')
+    file_id = upload_file_for_user(client, app, files_store, 'needs_csrf.txt', 'hi', 'testuser')
     response = client.post(url_for('delete_file', file_id=file_id), follow_redirects=True)
 
     assert response.status_code == 200
     assert b'Invalid request' in response.data
-    File = Query()
-    assert files_table.get(File.id == file_id) is not None
+
+    assert files_store.get_by_id(file_id) is not None
 
 
-def test_delete_file_after_download(client, app, files_table, csrf_form_data):
+def test_delete_file_after_download(client, app, files_store, csrf_form_data):
     login_user(client, 'testuser', 'password')
 
-    file_id = upload_file_for_user(client, app, files_table, 'del_after.txt', 'content', 'testuser')
+    file_id = upload_file_for_user(client, app, files_store, 'del_after.txt', 'content', 'testuser')
     download_response = client.get(url_for('download_file', file_id=file_id))
     assert download_response.status_code == 200
     _ = download_response.data
 
-    File = Query()
-    file_info = files_table.get(File.id == file_id)
+
+    file_info = files_store.get_by_id(file_id)
     file_path = file_info['path']
     assert not os.path.exists(file_path)
 
     response = client.post(url_for('delete_file', file_id=file_id), data=csrf_form_data(), follow_redirects=True)
     assert response.status_code == 200
     assert b'File deleted successfully' in response.data
-    assert files_table.get(File.id == file_id) is None
+    assert files_store.get_by_id(file_id) is None
 
 
-def test_view_file_expired(client, app, files_table):
+def test_view_file_expired(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
     expiry = (datetime.now() - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M')
@@ -267,32 +267,32 @@ def test_view_file_expired(client, app, files_table):
     }
     client.post(url_for('upload_file'), data=file_data, content_type='multipart/form-data')
 
-    File = Query()
-    file_info = files_table.get(File.original_name == 'exp.txt')
+
+    file_info = files_store.get_by(original_name='exp.txt')
     file_id = file_info['id']
 
     response = client.get(url_for('view_file', file_id=file_id), follow_redirects=True)
     assert b'File has expired' in response.data
-    updated = files_table.get(File.id == file_id)
+    updated = files_store.get_by_id(file_id)
     assert updated['status'] == 'expired'
     assert not os.path.exists(updated['path'])
 
-def test_report_decryption_success(client, app, files_table):
+def test_report_decryption_success(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
-    file_id = upload_file_for_user(client, app, files_table, 'dec.txt', 'content', 'testuser')
+    file_id = upload_file_for_user(client, app, files_store, 'dec.txt', 'content', 'testuser')
 
     client.get(url_for('download_file', file_id=file_id))
 
     res = client.post(url_for('report_decryption', file_id=file_id), json={'success': True})
     assert res.status_code == 200
 
-    File = Query()
-    info = files_table.get(File.id == file_id)
+
+    info = files_store.get_by_id(file_id)
     assert info['decryption_success'] is True
 
 
-def test_upload_file_uses_verified_account_notification_email(client, app, files_table, monkeypatch):
+def test_upload_file_uses_verified_account_notification_email(client, app, files_store, monkeypatch):
     monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     get_users.cache_clear()
     login_user(client, 'testuser', 'password')
@@ -313,13 +313,13 @@ def test_upload_file_uses_verified_account_notification_email(client, app, files
 
     assert response.status_code == 200
 
-    File = Query()
-    info = files_table.get(File.original_name == 'notify_me.txt')
+
+    info = files_store.get_by(original_name='notify_me.txt')
     assert info['notify_on_open'] is True
     assert info['notification_email'] == 'testuser@example.com'
 
 
-def test_report_decryption_sends_notification_once(client, app, files_table, monkeypatch):
+def test_report_decryption_sends_notification_once(client, app, files_store, monkeypatch):
     monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     get_users.cache_clear()
     login_user(client, 'testuser', 'password')
@@ -354,8 +354,8 @@ def test_report_decryption_sends_notification_once(client, app, files_table, mon
     assert 'notify_once.txt' in sent_messages[0][1]
     assert 'Decryption status: successful' in sent_messages[0][2]
 
-    File = Query()
-    info = files_table.get(File.id == file_id)
+
+    info = files_store.get_by_id(file_id)
     assert info['notification_sent_at'] is not None
 
 
@@ -366,9 +366,9 @@ def test_report_decryption_sends_notification_once(client, app, files_table, mon
     {'success': 1},
     {'success': None},
 ])
-def test_report_decryption_requires_boolean_success(client, app, files_table, payload):
+def test_report_decryption_requires_boolean_success(client, app, files_store, payload):
     login_user(client, 'testuser', 'password')
-    file_id = upload_file_for_user(client, app, files_table, 'bool.txt', 'content', 'testuser')
+    file_id = upload_file_for_user(client, app, files_store, 'bool.txt', 'content', 'testuser')
 
     res = client.post(url_for('report_decryption', file_id=file_id), json=payload)
     assert res.status_code == 400
@@ -378,9 +378,9 @@ def test_report_decryption_requires_boolean_success(client, app, files_table, pa
     {},
     {'data': 'success=true', 'content_type': 'application/x-www-form-urlencoded'},
 ])
-def test_report_decryption_requires_json_body(client, app, files_table, request_kwargs):
+def test_report_decryption_requires_json_body(client, app, files_store, request_kwargs):
     login_user(client, 'testuser', 'password')
-    file_id = upload_file_for_user(client, app, files_table, 'bool-json.txt', 'content', 'testuser')
+    file_id = upload_file_for_user(client, app, files_store, 'bool-json.txt', 'content', 'testuser')
 
     res = client.post(url_for('report_decryption', file_id=file_id), **request_kwargs)
     assert res.status_code == 400

@@ -6,7 +6,13 @@ services:
       - "5000:5000"
     volumes:
       - ./uploads:/app/uploads
-      - ./db.json:/app/db.json
+      # Directory mount (not a single file): WAL/-shm sidecars must persist
+      # alongside the main database file.
+      - ./data:/app/data
+    environment:
+      # Overrides DATABASE_URL from .env inside the container so the DB
+      # lands on the mounted directory. Keep it in sync with the volume.
+      - DATABASE_URL=sqlite:///data/buzzdrop.db
     env_file:
       - .env
     restart: unless-stopped

@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from flask import current_app, has_app_context
-from tinydb import Query
 
 DEFAULT_TOKEN_EXPIRY_DAYS = 30
 TOKEN_HASH_ITERATIONS = 310_000
@@ -18,9 +17,9 @@ TOKEN_HASH_BYTES = 32
 TOKEN_HASH_VERSION = 'pbkdf2-sha256-v1'
 
 
-def _get_tokens_table():
-    from app import get_db
-    return get_db().table('api_tokens')
+def _get_token_store():
+    from app import get_backend
+    return get_backend().tokens
 
 
 def _parse_timestamp(value: Optional[str]) -> Optional[datetime]:
@@ -51,7 +50,7 @@ def _is_token_expired(entry: Dict[str, Any]) -> bool:
 def _serialize_token(entry: Dict[str, Any]) -> Dict[str, Any]:
     expires_at = _get_token_expiry(entry)
     return {
-        'id': entry.doc_id,
+        'id': entry['doc_id'],
         'username': entry['username'],
         'created_at': entry.get('created_at'),
         'last_used_at': entry.get('last_used_at'),
@@ -100,7 +99,7 @@ def generate_api_token(username: str, expires_at: Optional[datetime] = None) -> 
     raw_token = secrets.token_hex(32)
     token_hash = _hash_token(raw_token)
     expires_at = expires_at or (now + timedelta(days=DEFAULT_TOKEN_EXPIRY_DAYS))
-    _get_tokens_table().insert({
+    _get_token_store().insert({
         'token_hash': token_hash,
         'token_hash_version': TOKEN_HASH_VERSION,
         'username': username,
@@ -124,20 +123,19 @@ def validate_api_token(raw_token: str) -> Optional[str]:
         Username string if valid, None otherwise
     """
     token_hash = _hash_token(raw_token)
-    Q = Query()
-    table = _get_tokens_table()
+    store = _get_token_store()
 
-    entry = table.get(Q.token_hash == token_hash)
+    entry = store.get_by_token_hash(token_hash)
     if not entry:
         return None
 
     from auth import get_users
     if entry['username'] not in get_users():
-        table.remove(doc_ids=[entry.doc_id])
+        store.remove_by_id(entry['doc_id'])
         return None
 
     if _is_token_expired(entry):
-        table.remove(doc_ids=[entry.doc_id])
+        store.remove_by_id(entry['doc_id'])
         return None
 
     updates = {'last_used_at': datetime.now().isoformat()}
@@ -148,7 +146,7 @@ def validate_api_token(raw_token: str) -> Optional[str]:
     if not entry.get('token_hash_version'):
         updates['token_hash_version'] = TOKEN_HASH_VERSION
 
-    table.update(updates, doc_ids=[entry.doc_id])
+    store.update_fields(entry['doc_id'], updates)
     return entry['username']
 
 
@@ -158,41 +156,42 @@ def list_api_tokens(username: Optional[str] = None) -> List[Dict[str, Any]]:
 
     Expired tokens are removed from storage as part of the listing operation.
     """
-    table = _get_tokens_table()
+    store = _get_token_store()
     active_tokens = []
     expired_token_ids = []
 
-    for entry in table.all():
+    # Cheap first pass: rows with an explicit expires_at already past due.
+    store.purge_expired(datetime.now().isoformat())
+
+    for entry in store.all():
         if _is_token_expired(entry):
-            expired_token_ids.append(entry.doc_id)
+            expired_token_ids.append(entry['doc_id'])
             continue
         if username and entry.get('username') != username:
             continue
         active_tokens.append(_serialize_token(entry))
 
     if expired_token_ids:
-        table.remove(doc_ids=expired_token_ids)
+        store.remove_by_ids(expired_token_ids)
 
     return sorted(active_tokens, key=lambda token: token['created_at'] or '', reverse=True)
 
 
 def get_api_token(token_id: int) -> Optional[Dict[str, Any]]:
-    """Return active token metadata by TinyDB document ID."""
-    table = _get_tokens_table()
-    entry = table.get(doc_id=token_id)
+    """Return active token metadata by document ID."""
+    store = _get_token_store()
+    entry = store.get_by_id(token_id)
     if not entry:
         return None
     if _is_token_expired(entry):
-        table.remove(doc_ids=[token_id])
+        store.remove_by_id(token_id)
         return None
     return _serialize_token(entry)
 
 
 def revoke_api_token_by_id(token_id: int) -> bool:
-    """Revoke a token by TinyDB document ID."""
-    table = _get_tokens_table()
-    removed = table.remove(doc_ids=[token_id])
-    return bool(removed)
+    """Revoke a token by document ID."""
+    return _get_token_store().remove_by_id(token_id)
 
 
 def revoke_api_token(raw_token: str) -> bool:
@@ -206,7 +205,4 @@ def revoke_api_token(raw_token: str) -> bool:
         True if the token existed and was removed, False otherwise
     """
     token_hash = _hash_token(raw_token)
-    Q = Query()
-    table = _get_tokens_table()
-    removed = table.remove(Q.token_hash == token_hash)
-    return bool(removed)
+    return _get_token_store().remove_by_hash(token_hash)

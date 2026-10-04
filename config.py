@@ -18,8 +18,11 @@ class Config:
     SECRET_KEY = os.getenv('FLASK_SECRET_KEY')
     TOKEN_HASH_SECRET = os.getenv('TOKEN_HASH_SECRET')
     
-    # Database
-    DATABASE_PATH = os.getenv('DATABASE_PATH', 'db.json')
+    # Database — scheme selects the storage backend (sqlite:// only for now)
+    DATABASE_URL = os.getenv('DATABASE_URL')
+    # Deprecated: plain file path; used to build a sqlite:/// URL when
+    # DATABASE_URL is not set.
+    DATABASE_PATH = os.getenv('DATABASE_PATH', 'buzzdrop.db')
     
     # Upload settings
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
@@ -89,7 +92,38 @@ class Config:
 
         if cls.SMTP_USE_TLS and cls.SMTP_USE_SSL:
             raise ValueError("SMTP_USE_TLS and SMTP_USE_SSL cannot both be enabled")
-    
+
+    @classmethod
+    def get_database_url(cls) -> str:
+        """
+        Resolve the effective DATABASE_URL.
+
+        DATABASE_URL wins; otherwise the deprecated DATABASE_PATH is wrapped
+        in a sqlite:/// URL.
+        """
+        if cls.DATABASE_URL:
+            return cls.DATABASE_URL
+        return f'sqlite:///{cls.DATABASE_PATH or "buzzdrop.db"}'
+
+    @staticmethod
+    def _sanitize_database_url(url: str) -> str:
+        """Strip credentials from a DATABASE_URL before logging it."""
+        try:
+            from urllib.parse import urlsplit, urlunsplit
+            parts = urlsplit(url)
+        except ValueError:
+            return url
+        if not parts.password:
+            return url
+        netloc = parts.username or ''
+        netloc += ':***'
+        if parts.hostname:
+            netloc += f'@{parts.hostname}'
+        if parts.port:
+            netloc += f':{parts.port}'
+        return urlunsplit((parts.scheme, netloc, parts.path,
+                           parts.query, parts.fragment))
+
     @classmethod
     def get_display_info(cls) -> dict:
         """
@@ -102,7 +136,7 @@ class Config:
         return {
             'storage_backend': cls.STORAGE_BACKEND,
             'upload_folder': cls.UPLOAD_FOLDER if cls.STORAGE_BACKEND == 'local' else 'N/A',
-            'database_path': cls.DATABASE_PATH,
+            'database_url': cls._sanitize_database_url(cls.get_database_url()),
             'max_file_size_mb': cls.MAX_CONTENT_LENGTH / (1024 * 1024),
             'allowed_extensions': ', '.join(sorted(cls.ALLOWED_EXTENSIONS)),
             'rate_limit_enabled': cls.RATE_LIMIT_ENABLED,
@@ -130,7 +164,7 @@ class TestingConfig(Config):
     """Testing environment configuration."""
     TESTING = True
     DEBUG = True
-    # Tests will override DATABASE_PATH in conftest.py
+    # Tests will override DATABASE_URL in conftest.py
     LOGIN_RATE_LIMIT = os.getenv('LOGIN_RATE_LIMIT', '1000 per minute')
     API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '1000 per hour')
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '1000 per hour')

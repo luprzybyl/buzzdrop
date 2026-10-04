@@ -164,6 +164,17 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 
 Just fill out your `.env` with your S3 details. Buzzdrop will handle the swarm.
 
+## Upgrading from the TinyDB era
+
+Buzzdrop now stores its data in SQLite via `DATABASE_URL` (default `sqlite:///buzzdrop.db`). If you upgraded from a release that used a `db.json` file:
+
+1. Keep a backup of `db.json`, then migrate it:
+   ```bash
+   python migrate_db.py --source db.json --target buzzdrop.db
+   ```
+2. Set `DATABASE_URL=sqlite:///buzzdrop.db` in `.env` (a stale `DATABASE_PATH=db.json` now refuses to start instead of silently corrupting).
+3. Under Docker, the database and its WAL sidecars live in the mounted `./data` directory (`DATABASE_URL=sqlite:///data/buzzdrop.db`).
+
 ---
 
 Ready to buzz? Drop a file and watch it fly—then disappear!  
@@ -252,7 +263,7 @@ Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; t
 The application is built with:
 - **Flask** (Python web framework)
 - **Werkzeug** (secure password hashing and file handling)
-- **TinyDB** (lightweight JSON database)
+- **SQLite** (stdlib `sqlite3`, swappable `db/` backend package — `DATABASE_URL` selects the backend)
 - **Flask-Limiter** (rate limiting middleware)
 - **Boto3** (AWS S3 integration)
 - **Tailwind CSS** (modern responsive styling)

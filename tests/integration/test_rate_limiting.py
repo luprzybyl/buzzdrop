@@ -2,7 +2,6 @@ import io
 
 import pytest
 from flask import url_for
-from tinydb import Query
 
 
 def login_user(client, username, password):
@@ -92,7 +91,7 @@ def test_upload_rate_limit_returns_json(client, app, restore_rate_limits):
     assert second.get_json()['error'] == 'Too many requests. Please try again later.'
 
 
-def test_public_file_rate_limit_is_shared_across_view_and_download(client, app, files_table, restore_rate_limits, csrf_form_data):
+def test_public_file_rate_limit_is_shared_across_view_and_download(client, app, files_store, restore_rate_limits, csrf_form_data):
     app.config['PUBLIC_FILE_RATE_LIMIT'] = '2 per minute'
     login_user(client, 'testuser', 'password')
 
@@ -103,7 +102,7 @@ def test_public_file_rate_limit_is_shared_across_view_and_download(client, app, 
     )
     assert upload.status_code == 200
 
-    file_info = files_table.get(Query().original_name == 'shared.txt')
+    file_info = files_store.get_by(original_name='shared.txt')
     assert file_info is not None
 
     first = client.get(url_for('view_file', file_id=file_info['id']))

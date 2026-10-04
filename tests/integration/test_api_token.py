@@ -119,12 +119,12 @@ def test_user_cannot_list_other_users_tokens(app, user_client, db_instance):
 
 def test_user_can_revoke_own_token(app, user_client, db_instance):
     with app.app_context():
-        from app import get_db
+        from app import get_backend
         from tokens import generate_api_token, validate_api_token
 
         token = generate_api_token('testuser')
-        token_entry = get_db().table('api_tokens').get(lambda item: item['username'] == 'testuser')
-        token_id = token_entry.doc_id
+        token_entry = get_backend().tokens.get_by(username='testuser')
+        token_id = token_entry['doc_id']
         assert validate_api_token(token) == 'testuser'
 
     resp = user_client.post(
@@ -141,12 +141,12 @@ def test_user_can_revoke_own_token(app, user_client, db_instance):
 
 def test_user_cannot_revoke_other_users_token(app, user_client, db_instance):
     with app.app_context():
-        from app import get_db
+        from app import get_backend
         from tokens import generate_api_token
 
         generate_api_token('adminuser')
-        token_entry = get_db().table('api_tokens').get(lambda item: item['username'] == 'adminuser')
-        token_id = token_entry.doc_id
+        token_entry = get_backend().tokens.get_by(username='adminuser')
+        token_id = token_entry['doc_id']
 
     resp = user_client.post(
         f'/api/tokens/{token_id}/revoke',
@@ -157,12 +157,12 @@ def test_user_cannot_revoke_other_users_token(app, user_client, db_instance):
 
 def test_admin_can_revoke_other_users_token(app, admin_client, db_instance):
     with app.app_context():
-        from app import get_db
+        from app import get_backend
         from tokens import generate_api_token, validate_api_token
 
         token = generate_api_token('testuser')
-        token_entry = get_db().table('api_tokens').get(lambda item: item['username'] == 'testuser')
-        token_id = token_entry.doc_id
+        token_entry = get_backend().tokens.get_by(username='testuser')
+        token_id = token_entry['doc_id']
         assert validate_api_token(token) == 'testuser'
 
     resp = admin_client.post(
@@ -180,12 +180,12 @@ def test_admin_can_revoke_other_users_token(app, admin_client, db_instance):
 
 def test_revoke_token_requires_csrf(app, user_client, db_instance):
     with app.app_context():
-        from app import get_db
+        from app import get_backend
         from tokens import generate_api_token
 
         generate_api_token('testuser')
-        token_entry = get_db().table('api_tokens').get(lambda item: item['username'] == 'testuser')
-        token_id = token_entry.doc_id
+        token_entry = get_backend().tokens.get_by(username='testuser')
+        token_id = token_entry['doc_id']
 
     resp = user_client.post(
         f'/api/tokens/{token_id}/revoke',

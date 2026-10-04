@@ -83,7 +83,10 @@ dmypy.json
 # Pytest
 .pytest_cache/
 
+# Legacy TinyDB file (pre-SQLite)
 db.json
+buzzdrop.db*
+data/
 
 # Node build artifacts
 node_modules/
