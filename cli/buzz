@@ -1452,7 +1452,7 @@ def upload_begin(server: str, token: str) -> dict | None:
 
 def upload(server: str, token: str, filename: str, encrypted: bytes,
            file_id: str, key_verifier: str, receipt_hash: str,
-           expiry: str = None) -> dict:
+           expiry: str = None, show_filename: bool = False) -> dict:
     """
     POST the encrypted blob to /upload and return the JSON response.
 
@@ -1476,6 +1476,9 @@ def upload(server: str, token: str, filename: str, encrypted: bytes,
     }
     if expiry:
         data['expiry'] = expiry
+    if show_filename:
+        # Opt-in: the recipient sees the real filename instead of "a file".
+        data['show_filename'] = 'true'
 
     headers = {
         'Authorization': f'Bearer {token}',
@@ -1564,6 +1567,12 @@ def main():
         help='Optional expiry datetime in ISO format, e.g. 2025-12-31T23:59',
     )
     parser.add_argument(
+        '--show-filename',
+        action='store_true',
+        help='Show the filename to the recipient on the download page '
+             '(default: hidden — they only see "a file")',
+    )
+    parser.add_argument(
         '--server',
         metavar='URL',
         help='Override server URL from ~/.buzz_token',
@@ -1645,6 +1654,7 @@ def main():
         file_id=begin['file_id'],
         key_verifier=key_verifier,
         receipt_hash=receipt_hash,
+        show_filename=args.show_filename,
     )
 
     share_link = result.get('share_link') or f"{server}/view/{result['file_id']}"

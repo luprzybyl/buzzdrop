@@ -92,6 +92,10 @@ class Config:
     # one file costs 2 hits.
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '30 per hour')
     PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '60 per hour')
+    # /report_decryption is unauthenticated — the receipt is the
+    # credential — so cap it per file_id like /release.
+    REPORT_DECRYPTION_RATE_LIMIT = os.getenv(
+        'REPORT_DECRYPTION_RATE_LIMIT', '10 per minute')
 
     # Server-gated key release (docs/true-one-time.md §6) — the only
     # share format, no opt-out: uploads split the file key, the server
@@ -249,6 +253,7 @@ class Config:
             'upload_rate_limit': cls.UPLOAD_RATE_LIMIT,
             'public_file_rate_limit': cls.PUBLIC_FILE_RATE_LIMIT,
             'expiry_sweep_interval_seconds': cls.EXPIRY_SWEEP_INTERVAL_SECONDS,
+            'report_decryption_rate_limit': cls.REPORT_DECRYPTION_RATE_LIMIT,
             's3_configured': bool(cls.S3_BUCKET) if cls.STORAGE_BACKEND == 's3' else False,
             's3_region': cls.S3_REGION if cls.STORAGE_BACKEND == 's3' else 'N/A',
             'email_notifications_configured': bool(cls.SMTP_HOST and cls.SMTP_FROM_EMAIL),
@@ -266,6 +271,7 @@ class DevelopmentConfig(Config):
     API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '60 per hour')
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '120 per hour')
     PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '240 per hour')
+    REPORT_DECRYPTION_RATE_LIMIT = os.getenv('REPORT_DECRYPTION_RATE_LIMIT', '100 per minute')
 
 
 class TestingConfig(Config):
@@ -280,6 +286,7 @@ class TestingConfig(Config):
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '1000 per hour')
     PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '1000 per hour')
     KEY_RELEASE_RATE_LIMIT = os.getenv('KEY_RELEASE_RATE_LIMIT', '1000 per hour')
+    REPORT_DECRYPTION_RATE_LIMIT = os.getenv('REPORT_DECRYPTION_RATE_LIMIT', '1000 per hour')
 
 
 class ProductionConfig(Config):
@@ -290,6 +297,7 @@ class ProductionConfig(Config):
     API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '10 per hour')
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '30 per hour')
     PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '60 per hour')
+    REPORT_DECRYPTION_RATE_LIMIT = os.getenv('REPORT_DECRYPTION_RATE_LIMIT', '10 per minute')
 
 
 def get_config():

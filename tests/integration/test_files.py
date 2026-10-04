@@ -150,7 +150,8 @@ def test_download_file_success(client, app, files_store, key_release_upload):
     file_content = b"Downloadable content."
     file_name = "download_me.txt"
     file_id, _h, _rcpt, _resp = key_release_upload(
-        data={'file': (io.BytesIO(file_content), file_name)})
+        data={'file': (io.BytesIO(file_content), file_name),
+              'show_filename': 'true'})
 
     file_info = files_store.get_by_id(file_id)
     assert file_info is not None
@@ -162,7 +163,7 @@ def test_download_file_success(client, app, files_store, key_release_upload):
     response = client.get(url_for('download_file', file_id=file_id))
     assert response.status_code == 200
     assert response.data == file_content
-    assert response.headers['Content-Disposition'] == f'attachment; filename={file_name}'
+    assert response.headers['Content-Disposition'] == f'attachment; filename="{file_name}"'
 
     updated_file_info = files_store.get_by_id(file_id)
     assert updated_file_info is not None
@@ -194,7 +195,8 @@ def test_view_file_success(client, app, files_store, key_release_upload):
 
     file_name = "view_me.txt"
     file_id, _h, _rcpt, _resp = key_release_upload(
-        data={'file': (io.BytesIO(b"view content"), file_name)})
+        data={'file': (io.BytesIO(b"view content"), file_name),
+              'show_filename': 'true'})
 
     response = client.get(url_for('view_file', file_id=file_id))
     assert response.status_code == 200
@@ -301,6 +303,54 @@ def test_view_file_expired(client, app, files_store, key_release_upload):
     assert updated['status'] == 'expired'
     assert not os.path.exists(updated['path'])
 
+
+def test_view_file_hides_filename_by_default(client, app, files_store, key_release_upload):
+    """Unauthenticated recipients get a generic label — the filename is
+    server-side metadata unless the uploader opts in."""
+    login_user(client, 'testuser', 'password')
+
+    file_id, _h, _rcpt, response = key_release_upload(
+        data={'file': (io.BytesIO(b'content'), 'medical-records.txt')})
+    assert response.status_code == 200
+    assert files_store.get_by_id(file_id).get('show_filename') is None
+
+    view = client.get(url_for('view_file', file_id=file_id))
+    assert view.status_code == 200
+    assert b'medical-records.txt' not in view.data
+    assert b'a file' in view.data
+
+    confirm = client.post(
+        url_for('confirm_view_file', file_id=file_id),
+        data={'csrf_token': 'test-csrf-token'})
+    assert confirm.status_code == 200
+    assert b'medical-records.txt' not in confirm.data
+    assert b'"originalName": "a file"' in confirm.data
+
+    download = client.get(url_for('download_file', file_id=file_id))
+    assert download.headers['Content-Disposition'] == 'attachment; filename="a file"'
+
+
+def test_view_file_shows_filename_when_opted_in(client, app, files_store, key_release_upload):
+    login_user(client, 'testuser', 'password')
+
+    file_id, _h, _rcpt, response = key_release_upload(
+        data={
+            'file': (io.BytesIO(b'content'), 'medical-records.txt'),
+            'show_filename': 'true',
+        })
+    assert response.status_code == 200
+    assert files_store.get_by_id(file_id)['show_filename'] is True
+
+    view = client.get(url_for('view_file', file_id=file_id))
+    assert view.status_code == 200
+    assert b'medical-records.txt' in view.data
+
+    confirm = client.post(
+        url_for('confirm_view_file', file_id=file_id),
+        data={'csrf_token': 'test-csrf-token'})
+    assert confirm.status_code == 200
+    assert b'medical-records.txt' in confirm.data
+
 def test_report_decryption_success(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
@@ -374,7 +424,10 @@ def test_report_decryption_sends_notification_once(client, app, files_store, mon
 
     assert len(sent_messages) == 1
     assert sent_messages[0][0] == 'testuser@example.com'
-    assert 'notify_once.txt' in sent_messages[0][1]
+    # Email subjects are not private — the filename never leaks into the
+    # subject; it may still appear in the uploader-only body.
+    assert 'notify_once.txt' not in sent_messages[0][1]
+    assert 'notify_once.txt' in sent_messages[0][2]
     assert 'Decryption status: successful' in sent_messages[0][2]
 
 

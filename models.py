@@ -78,6 +78,11 @@ class FileRepository:
             'receipt_hash': file_data.get('receipt_hash'),
         }
 
+        # Opt-in recipient metadata: only a truthy flag is persisted (it
+        # lands in the backend's `extra` overflow). Absent == hidden.
+        if file_data.get('show_filename'):
+            entry['show_filename'] = True
+
         self.store.insert(entry)
         return file_id
 
