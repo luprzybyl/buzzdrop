@@ -548,6 +548,7 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
                         'DELETE FROM file_keys WHERE file_id = ?',
                         (file_id,))
                     destroyed = True
+                self._mark_release_failed(conn, file_id)
                 result = {'status': 'locked'}
             elif self._share_file_expired(row):
                 # Expired = share gone: flip the record and destroy H in
@@ -585,6 +586,7 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
                             'DELETE FROM file_keys WHERE file_id = ?',
                             (file_id,))
                         destroyed = True
+                    self._mark_release_failed(conn, file_id)
                     result = {'status': 'locked'}
                 else:
                     result = {
@@ -599,6 +601,16 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
         if destroyed:
             self._backend.checkpoint_wal()
         return result
+
+    @staticmethod
+    def _mark_release_failed(conn, file_id: str) -> None:
+        """Lockout is a terminal "never decrypted" — record it on the
+        files row (NULL-guarded, like record_decryption_result) so the
+        dashboard shows Failed instead of a misleading Downloaded."""
+        conn.execute(
+            'UPDATE files SET decryption_success = 0 WHERE id = ? '
+            'AND decryption_success IS NULL',
+            (file_id,))
 
     @staticmethod
     def _share_file_expired(joined_row) -> bool:

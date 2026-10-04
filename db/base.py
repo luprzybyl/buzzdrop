@@ -162,8 +162,11 @@ class FileStore(ABC):
             A dict with ``status`` one of:
             ``'missing_file'`` (no files row), ``'missing_share'``,
             ``'pending'`` (v unbound), ``'released'``,
-            ``'locked'``, ``'expired'`` (share row deleted, files row
-            marked expired, ``path`` included for blob cleanup),
+            ``'locked'`` (attempts exhausted — also NULL-guardedly marks
+            the files row ``decryption_success=0``, since lockout is a
+            terminal never-decrypted outcome), ``'expired'`` (share row
+            deleted, files row marked expired, ``path`` included for
+            blob cleanup),
             ``'ok'`` (with ``h``), or ``'denied'`` (with ``attempts``
             and ``attempts_remaining``).
         """
