@@ -153,6 +153,9 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 - **Download Timestamps**: Track exactly when files were accessed.
 - **Optional uploader notifications**: A one-time email can include the share name/type, open timestamp, and whether client-side decryption was reported as successful or failed.
 - **Sanitized Logging**: No sensitive data (bucket names, file paths) exposed in logs.
+- **Dashboard status badges**: each drop on your dashboard reports exactly one state —
+  `Active` (link live, unclaimed) · `Downloaded` (blob claimed, key-release attempts may remain or no decryption report arrived) · `Success` (receipt-backed report: client decrypted OK) · `Failed` (a receipt-backed report said decryption failed, or the key-release attempt counter ran out — lockout is a terminal never-decrypted) · `Expired` (deadline passed unclaimed).
+  The file row is kept after claim as the delivery audit trail (`downloaded_at`, `downloaded_by_ip`, `decryption_success`) until you delete it.
 
 ### Rate Limiting:
 - **Implemented with Flask-Limiter**: configurable per-route limits protect `/login`, `/api/token`, `/upload` + `/upload/begin`, and public file access (`/view/<id>`, `/view/<id>/confirm`, `/download/<id>`). `/release/<id>` and `/report_decryption/<id>` are rate-limited **per file_id** (not per IP, so rotating addresses doesn't reset them) and failed verifier attempts are counted per share—lockout after `KEY_RELEASE_MAX_ATTEMPTS` (default 1 — one wrong password locks the share), with burn-on-lockout by default (`KEY_RELEASE_BURN_ON_LOCKOUT`, destroys H+V; off keeps the row but refuses releases — currently no unlock path). Pending key shares that were begun but never finished are swept after `KEY_SHARE_PENDING_TTL_SECONDS` (default 3600).
