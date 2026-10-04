@@ -246,12 +246,16 @@ def test_release_returns_h_once(client, files_store):
 def test_release_wrong_verifier_counts_attempts(client, files_store):
     file_id, _h, _v = _bound_share(files_store)
 
+    # With the default of 1 max attempt, the first wrong verifier is
+    # already the lockout event — 429 on the same request.
     response = client.post(
         url_for('release_key', file_id=file_id), json={'v': 'dd' * 32})
-    assert response.status_code == 403
-    assert response.get_json()['attempts_remaining'] == 0
-    assert files_store.get_key_share(file_id)['attempts'] == 1
-    assert files_store.get_key_share(file_id)['released_at'] is None
+    assert response.status_code == 429
+    share = files_store.get_key_share(file_id)
+    assert share['attempts'] == 1
+    assert share['released_at'] is None
+    # Lockout without burn keeps H in place — only releases are refused.
+    assert share['h'] is not None
 
 
 def test_release_lockout_after_max_attempts(client, files_store, key_release_settings):
