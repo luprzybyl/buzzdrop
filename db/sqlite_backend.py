@@ -101,6 +101,25 @@ _TOKENS_HASH_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens (token_hash)
 """
 
+# Columns addable via ALTER TABLE for databases created before they
+# existed. Plain types only — UNIQUE/NOT NULL can't come through ALTER.
+_FILE_MIGRATABLE_COLUMNS = {
+    c: ('INTEGER' if c in FILE_BOOL_COLUMNS else 'TEXT')
+    for c in FILE_COLUMNS
+} | {'extra': 'TEXT'}
+_TOKEN_MIGRATABLE_COLUMNS = {
+    c: 'TEXT' for c in TOKEN_COLUMNS
+} | {'extra': 'TEXT'}
+
+
+def _add_missing_columns(conn: sqlite3.Connection, table: str,
+                         columns: Dict[str, str]) -> None:
+    """ALTER TABLE ADD COLUMN for columns missing from an existing table."""
+    existing = {row[1] for row in conn.execute(f'PRAGMA table_info("{table}")')}
+    for name, col_type in columns.items():
+        if name not in existing:
+            conn.execute(f'ALTER TABLE "{table}" ADD COLUMN "{name}" {col_type}')
+
 
 def _serialize_value(column: str, value: Any,
                      bool_columns: frozenset,
@@ -465,6 +484,11 @@ class SQLiteBackend(Backend):
         conn.execute(_FILES_DDL)
         conn.execute(_TOKENS_DDL)
         conn.execute(_TOKENS_HASH_INDEX)
+        # Additive migrations: CREATE TABLE IF NOT EXISTS won't touch an
+        # existing table, so add any columns introduced since the user's
+        # DB was created (nullable only — no constraints via ALTER).
+        _add_missing_columns(conn, 'files', _FILE_MIGRATABLE_COLUMNS)
+        _add_missing_columns(conn, 'api_tokens', _TOKEN_MIGRATABLE_COLUMNS)
 
     @contextmanager
     def transaction(self):
