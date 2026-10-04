@@ -203,6 +203,119 @@ def test_files_truncate(backend):
 
 
 # ---------------------------------------------------------------------------
+# FileStore contract — server-gated key release (oracle)
+# ---------------------------------------------------------------------------
+
+_H = 'aa' * 32
+_V = 'bb' * 32
+
+
+def test_key_share_lifecycle(backend):
+    assert backend.files.create_key_share('f1', _H) is True
+    # duplicate share for the same file_id is refused
+    assert backend.files.create_key_share('f1', _H) is False
+
+    share = backend.files.get_key_share('f1')
+    assert share is not None
+    assert share['file_id'] == 'f1'
+    assert share['h'] == _H
+    assert share['v'] is None
+    assert share['attempts'] == 0
+    assert share['released_at'] is None
+    assert share['created_at'] is not None
+
+    assert backend.files.bind_key_verifier('f1', _V) is True
+    # second bind is refused — the verifier is set at upload finish, once
+    assert backend.files.bind_key_verifier('f1', 'cc' * 32) is False
+    assert backend.files.get_key_share('f1')['v'] == _V
+
+    # verifier miss releases nothing and burns no release
+    assert backend.files.claim_key_release('f1', 'dd' * 32) is None
+    assert backend.files.get_key_share('f1')['released_at'] is None
+
+    # correct verifier releases H exactly once
+    assert backend.files.claim_key_release('f1', _V) == _H
+    assert backend.files.get_key_share('f1')['released_at'] is not None
+    assert backend.files.claim_key_release('f1', _V) is None
+
+
+def test_key_share_get_missing(backend):
+    assert backend.files.get_key_share('nope') is None
+    assert backend.files.claim_key_release('nope', _V) is None
+    assert backend.files.record_key_attempt('nope') is None
+    assert backend.files.delete_key_share('nope') is False
+
+
+def test_unbound_key_share_cannot_be_claimed(backend):
+    """A pending share (finish not called) releases nothing."""
+    backend.files.create_key_share('f1', _H)
+    assert backend.files.claim_key_release('f1', _V) is None
+    assert backend.files.claim_key_release('f1', _H) is None
+
+
+def test_claim_key_release_concurrent_single_winner(backend):
+    """≥8 racing releases must produce exactly one H — the oracle guarantee."""
+    backend.files.create_key_share('f1', _H)
+    backend.files.bind_key_verifier('f1', _V)
+
+    workers = 8
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = list(pool.map(
+            lambda _i: backend.files.claim_key_release('f1', _V),
+            range(workers),
+        ))
+
+    assert results.count(_H) == 1
+    assert results.count(None) == workers - 1
+    assert backend.files.get_key_share('f1')['released_at'] is not None
+
+
+def test_claim_key_release_concurrent_mixed_verifiers(backend):
+    """Racing releases where only some hold the right V still yield one win."""
+    backend.files.create_key_share('f1', _H)
+    backend.files.bind_key_verifier('f1', _V)
+
+    verifiers = [_V] * 4 + ['ee' * 32] * 4
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(
+            lambda v: backend.files.claim_key_release('f1', v),
+            verifiers,
+        ))
+
+    assert results.count(_H) == 1
+
+
+def test_record_key_attempt_counts(backend):
+    backend.files.create_key_share('f1', _H)
+    assert backend.files.record_key_attempt('f1') == 1
+    assert backend.files.record_key_attempt('f1') == 2
+    assert backend.files.get_key_share('f1')['attempts'] == 2
+
+
+def test_record_key_attempt_stops_after_release(backend):
+    backend.files.create_key_share('f1', _H)
+    backend.files.bind_key_verifier('f1', _V)
+    backend.files.claim_key_release('f1', _V)
+    assert backend.files.record_key_attempt('f1') is None
+    assert backend.files.get_key_share('f1')['attempts'] == 0
+
+
+def test_delete_key_share(backend):
+    backend.files.create_key_share('f1', _H)
+    assert backend.files.delete_key_share('f1') is True
+    assert backend.files.get_key_share('f1') is None
+    # burned share is gone for good — no claim can resurrect H
+    assert backend.files.bind_key_verifier('f1', _V) is False
+    assert backend.files.claim_key_release('f1', _V) is None
+
+
+def test_truncate_clears_key_shares(backend):
+    backend.files.create_key_share('f1', _H)
+    backend.files.truncate()
+    assert backend.files.get_key_share('f1') is None
+
+
+# ---------------------------------------------------------------------------
 # TokenStore contract
 # ---------------------------------------------------------------------------
 

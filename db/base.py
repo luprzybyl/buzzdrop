@@ -79,6 +79,90 @@ class FileStore(ABC):
     def delete(self, file_id: str) -> bool:
         """Delete the record; True when a row was removed."""
 
+    # -- server-gated key release (oracle) ----------------------------------
+    #
+    # The oracle design (docs/true-one-time.md §6) splits the file key in
+    # two: Kp is derived client-side from the password, H is a random
+    # 32-byte share the server holds and releases exactly once. The server
+    # stores {H, V, attempts, released_at} per file_id where V is a
+    # one-way password verifier (HKDF domain-separated from Kp — the
+    # server can check the password without ever seeing it or the key).
+    # Rows are created by /upload/begin (H only, V unbound) and completed
+    # by /upload/finish. Legacy v1/v2 shares simply have no key-share row.
+
+    @abstractmethod
+    def create_key_share(self, file_id: str, h_hex: str) -> bool:
+        """
+        Insert a pending key share holding only the server half ``h_hex``.
+
+        The share is unbound (``v is None``) until the upload finishes.
+        Implementations MUST treat ``released_at`` as NULL and
+        ``attempts`` as 0 for a fresh share.
+
+        Returns:
+            True when the share was created, False when one already
+            exists for this file_id.
+        """
+
+    @abstractmethod
+    def bind_key_verifier(self, file_id: str, v_hex: str) -> bool:
+        """
+        Bind the password verifier to a pending share.
+
+        Sets ``v`` iff the share exists, is not yet bound
+        (``v IS NULL``), and has not been released.
+
+        Returns:
+            True when the verifier was bound, False otherwise.
+        """
+
+    @abstractmethod
+    def get_key_share(self, file_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Return the key-share record for a file_id, or None.
+
+        Dict shape: ``{file_id, h, v, attempts, released_at, created_at}``.
+        ``v is None`` marks a pending (unfinished) share.
+        """
+
+    @abstractmethod
+    def claim_key_release(self, file_id: str, v_hex: str) -> Optional[str]:
+        """
+        Atomically verify the verifier and release the server half H.
+
+        The verifier comparison MUST be constant-time
+        (``secrets.compare_digest``) and the release itself MUST be a
+        single conditional write
+        (``UPDATE ... SET released_at=... WHERE released_at IS NULL``)
+        so exactly one of any number of concurrent callers wins.
+
+        Returns:
+            The stored ``h`` when this call is the unique winner and the
+            verifier matches; None on a verifier miss, an already
+            released/unbound share, or a lost race.
+        """
+
+    @abstractmethod
+    def record_key_attempt(self, file_id: str) -> Optional[int]:
+        """
+        Atomically increment the failed-attempts counter.
+
+        Returns:
+            The new attempts value, or None when no live share exists.
+        """
+
+    @abstractmethod
+    def delete_key_share(self, file_id: str) -> bool:
+        """
+        Delete the key share (lockout burn or file cleanup).
+
+        Deleting the share destroys H — the ciphertext becomes
+        mathematically dead regardless of where copies survive.
+
+        Returns:
+            True when a row was removed.
+        """
+
     @abstractmethod
     def truncate(self) -> None:
         """Remove every record. Used by tests to isolate state."""

@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -203,6 +204,24 @@ def _guard_incompatible_columns(conn: sqlite3.Connection, table: str,
             'created by an incompatible version — back it up and remove '
             'it, or migrate the data manually.'
         )
+
+# Server-gated key release (docs/true-one-time.md §6): one row per
+# oracle-enabled share, keyed by the public file id. `v` NULL marks a
+# pending share (/upload/begin done, /upload/finish not yet); a row is
+# deleted outright to burn H on lockout. Kept off the files table because
+# the share must exist before the file record does (two-phase upload) —
+# and so existing databases need no ALTER TABLE, just CREATE TABLE.
+_FILE_KEYS_DDL = """
+CREATE TABLE IF NOT EXISTS file_keys (
+    doc_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_id TEXT UNIQUE,
+    h TEXT,
+    v TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    released_at TEXT,
+    created_at TEXT
+)
+"""
 
 
 def _serialize_value(column: str, value: Any,
@@ -433,6 +452,84 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
         )
         return cursor.rowcount > 0
 
+    # -- file_keys: server-gated key release --------------------------------
+
+    def create_key_share(self, file_id: str, h_hex: str) -> bool:
+        try:
+            self._conn().execute(
+                'INSERT INTO file_keys '
+                '(file_id, h, v, attempts, released_at, created_at) '
+                'VALUES (?, ?, NULL, 0, NULL, ?)',
+                (file_id, h_hex, datetime.now().isoformat()),
+            )
+            return True
+        except sqlite3.IntegrityError:
+            # file_id UNIQUE collision — a share already exists
+            return False
+
+    def bind_key_verifier(self, file_id: str, v_hex: str) -> bool:
+        cursor = self._conn().execute(
+            'UPDATE file_keys SET v = ? '
+            'WHERE file_id = ? AND v IS NULL AND released_at IS NULL',
+            (v_hex, file_id),
+        )
+        return cursor.rowcount > 0
+
+    def get_key_share(self, file_id: str) -> Optional[Dict[str, Any]]:
+        row = self._conn().execute(
+            'SELECT file_id, h, v, attempts, released_at, created_at '
+            'FROM file_keys WHERE file_id = ?',
+            (file_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def claim_key_release(self, file_id: str, v_hex: str) -> Optional[str]:
+        conn = self._conn()
+        row = conn.execute(
+            'SELECT h, v FROM file_keys '
+            'WHERE file_id = ? AND released_at IS NULL',
+            (file_id,),
+        ).fetchone()
+        if row is None or row['v'] is None:
+            return None
+        # Constant-time verifier check — the match decision must not leak
+        # timing. The release below is what serializes concurrent winners.
+        if not secrets.compare_digest(row['v'], v_hex):
+            return None
+        cursor = conn.execute(
+            'UPDATE file_keys SET released_at = ? '
+            'WHERE file_id = ? AND released_at IS NULL',
+            (datetime.now().isoformat(), file_id),
+        )
+        # A racing claimant that already committed makes rowcount 0 —
+        # exactly one caller ever takes H home.
+        return row['h'] if cursor.rowcount > 0 else None
+
+    def record_key_attempt(self, file_id: str) -> Optional[int]:
+        conn = self._conn()
+        cursor = conn.execute(
+            'UPDATE file_keys SET attempts = attempts + 1 '
+            'WHERE file_id = ? AND released_at IS NULL',
+            (file_id,),
+        )
+        if cursor.rowcount == 0:
+            return None
+        row = conn.execute(
+            'SELECT attempts FROM file_keys WHERE file_id = ?',
+            (file_id,),
+        ).fetchone()
+        return row['attempts'] if row else None
+
+    def delete_key_share(self, file_id: str) -> bool:
+        cursor = self._conn().execute(
+            'DELETE FROM file_keys WHERE file_id = ?', (file_id,)
+        )
+        return cursor.rowcount > 0
+
+    def truncate(self) -> None:
+        super().truncate()
+        self._conn().execute('DELETE FROM file_keys')
+
 
 class SQLiteTokenStore(_SQLiteStoreBase, TokenStore):
     """TokenStore backed by the `api_tokens` table."""
@@ -580,6 +677,7 @@ class SQLiteBackend(Backend):
         conn.execute(_FILES_DDL)
         conn.execute(_TOKENS_DDL)
         conn.execute(_TOKENS_HASH_INDEX)
+        conn.execute(_FILE_KEYS_DDL)
         # Additive migrations: CREATE TABLE IF NOT EXISTS won't touch an
         # existing table, so add any columns introduced since the user's
         # DB was created (nullable only — no constraints via ALTER).

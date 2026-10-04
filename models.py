@@ -4,9 +4,10 @@ Provides abstraction over database operations — the public facade stays
 stable while the actual storage lives behind the FileStore interface
 (see db/base.py).
 """
+import secrets
 import uuid
 from datetime import datetime
-from typing import Optional, List, Iterable
+from typing import Optional, List, Iterable, Tuple
 
 from db import FileStore
 
@@ -188,10 +189,56 @@ class FileRepository:
         """
         Delete file entry from database.
 
+        Also drops the oracle key share when present — a deleted share
+        must not leave its server half behind.
+
         Args:
             file_id: File UUID
         """
         self.store.delete(file_id)
+        self.store.delete_key_share(file_id)
+
+    # -- server-gated key release (oracle) ----------------------------------
+
+    def create_key_share(self) -> Tuple[str, str]:
+        """
+        Begin a two-phase oracle upload: mint a file_id plus the random
+        32-byte server share H, and persist the pending share.
+
+        Returns:
+            (file_id, h_hex) — H leaves the server exactly twice in its
+            lifetime: here to the uploader's browser (it holds the
+            plaintext anyway) and once via claim_key_release.
+        """
+        file_id = str(uuid.uuid4())
+        h_hex = secrets.token_hex(32)
+        self.store.create_key_share(file_id, h_hex)
+        return file_id, h_hex
+
+    def get_key_share(self, file_id: str) -> Optional[dict]:
+        """Return the key-share record for a file_id, or None."""
+        return self.store.get_key_share(file_id)
+
+    def bind_key_verifier(self, file_id: str, v_hex: str) -> bool:
+        """Bind the password verifier to a pending share."""
+        return self.store.bind_key_verifier(file_id, v_hex)
+
+    def claim_key_release(self, file_id: str, v_hex: str) -> Optional[str]:
+        """
+        Verify the verifier and release H — atomically, once.
+
+        Returns:
+            h_hex on a unique winning claim, None otherwise.
+        """
+        return self.store.claim_key_release(file_id, v_hex)
+
+    def record_key_attempt(self, file_id: str) -> Optional[int]:
+        """Count a failed release attempt; returns the new total."""
+        return self.store.record_key_attempt(file_id)
+
+    def burn_key_share(self, file_id: str) -> bool:
+        """Destroy the share (and with it H) on lockout burn."""
+        return self.store.delete_key_share(file_id)
 
     def mark_notification_sent(self, file_id: str):
         """Mark uploader notification as sent."""
