@@ -40,7 +40,7 @@ The key observation: the encrypted blob is **self-verifying**.
 The format is `salt ‖ iv ‖ AES-GCM(key, data)`. The GCM tag is checked
 on every decryption attempt — guess the password right and the tag
 verifies; guess wrong and you get an error. This means the ciphertext
-carries an **oracle** inside it: anyone holding it can test any password
+carries a **password checker** inside it: anyone holding it can test any password
 forever, without asking anyone's permission.
 
 This is the foundation of the entire problem. As long as all the
@@ -151,13 +151,12 @@ The only way to make "one-time" a fact rather than a hope:
 A piece of the key is held by the server and released once, under
 conditions the server itself enforces.
 
-> **Terminology.** We call this design *"the oracle"*: in cryptography an
-> oracle is a service that answers yes/no queries — here, "is this the
-> right password?" — and today the ciphertext itself plays that role for
-> free, infinitely often. The design moves the oracle to the server,
-> where questions are counted and limited. Unrelated to **Oracle** the
-> database vendor, which appears in this project only as a future
-> `DATABASE_URL` scheme (`oracle://`).
+> **Terminology.** This design is called *server-gated key release*; it
+> was developed under the codename *"the oracle"* (in cryptography, a
+> service answering yes/no queries — here, "is this the right password?" —
+> which the ciphertext itself used to play for free, infinitely often).
+> Unrelated to **Oracle** the database vendor, which appears in this
+> project only as a future `DATABASE_URL` scheme (`oracle://`).
 
 ### 6.1. Concepts (plainly, no jargon)
 
@@ -291,7 +290,7 @@ swap the code. No design fixes that.
 
 ### 6.6. What this changes — the same threat model after implementation
 
-| Actor | Today | With oracle |
+| Actor | Today | With key release |
 |---|---|---|
 | Link thief without password | blob → offline brute force | **dead blob** — no H; guessing only via `/release` under rate limit |
 | Theft of `uploads/` / public S3 | ciphertext → offline | **dead bytes** — no H and no password |
@@ -304,7 +303,7 @@ Two additional properties worth stressing:
 
 - **The blob stops being self-verifying.** A wrong password yields a
   wrong `Kp`, but without `H` the attacker can't even check whether
-  they guessed — the oracle moved to the server, where every question
+  they guessed — the password check moved to the server, where every question
   costs and is counted.
 - **"Typo = file lost" disappears.** Since the server counts attempts,
   we can allow 3–5 tries instead of instant death — closing the
@@ -372,10 +371,10 @@ whole value of the added complexity.
 | Passphrase entropy (600k PBKDF2, 77+ bits) | offline brute force on any ciphertext | anything else — it is the only universal barrier |
 | One-time deletion + atomic claim | races, re-download | offline cracking of the blob |
 | Crypto-shredding (DEK) | disk forensics, backups, S3 versioning | a thief with the ciphertext — rejected as redundant after the entropy fix |
-| **Oracle (server-held H + V)** | offline cracking of the blob at all; turns "one attempt" into server policy | db+uploads theft (V crackable), admin, analog hole |
+| **Server-gated key release (server-held H + V)** | offline cracking of the blob at all; turns "one attempt" into server policy | db+uploads theft (V crackable), admin, analog hole |
 | PAKE instead of V | even db+uploads theft | admin, analog hole — too expensive today |
 
-**Sentence for the auditor:** in the oracle model a downloaded blob
+**Sentence for the auditor:** in the key-release model a downloaded blob
 without server cooperation is mathematically dead bytes — password
 guessing requires asking `/release`, where a rate limit, lockout and
 optional key-burn apply. One-time semantics stop being a JavaScript
@@ -400,8 +399,8 @@ decryption.
 ### Implementation note
 
 The §6 design is implemented as the **only** share format —
-**breaking change: no backward compatibility with pre-oracle shares
-(acceptable per owner; pre-production wipe)**. `ORACLE_ENABLED`
+**breaking change: no backward compatibility with pre-key-release shares
+(acceptable per owner; pre-production wipe)**. `KEY_RELEASE_ENABLED`
 (default: on) gates the upload handshake; when off, `/upload/begin`
 returns 404 and uploads are refused.
 
@@ -413,7 +412,7 @@ returns 404 and uploads are refused.
   and `info` labels `enc`/`ver`/`file`. Only `BKV3` is read or written;
   the magic stays for future version bumps.
 - Upload (always two-phase): `POST /upload/begin` → `{file_id, h}`;
-  `POST /upload` requires `oracle_file_id` + `key_verifier` and
+  `POST /upload` requires `file_id` + `key_verifier` and
   atomically binds V to the pending share.
 - Download: `POST /release/<file_id> {v}` — constant-time verifier
   check plus a single conditional write
@@ -422,9 +421,14 @@ returns 404 and uploads are refused.
   released_at), not on `files`: the share must exist before the file
   record (two-phase upload), and existing databases need no column
   migrations — only `CREATE TABLE IF NOT EXISTS`.
-- Failure policy is configurable: `ORACLE_RELEASE_RATE_LIMIT`
-  (per file_id), `ORACLE_MAX_RELEASE_ATTEMPTS` (default 5), and
-  `ORACLE_BURN_ON_LOCKOUT` (default off — lockout only; when on, the
-  share row is deleted, destroying H).
+- Failure policy is configurable: `KEY_RELEASE_RATE_LIMIT`
+  (per file_id), `KEY_RELEASE_MAX_ATTEMPTS` (default 1 — a single
+  wrong password locks the share), and `KEY_RELEASE_BURN_ON_LOCKOUT`
+  (default off — lockout only; when on, the share row is deleted,
+  destroying H).
+- Post-release cleanup: the winning claim sets `h = NULL, v = NULL`
+  in the same atomic UPDATE — the row keeps only bookkeeping
+  (`released_at`, `attempts`), so a post-release DB theft yields no
+  crackable verifier or key material.
 - CLI parity: `cli/buzz` performs the same handshake and aborts when
   the server returns 404 on `/upload/begin`.

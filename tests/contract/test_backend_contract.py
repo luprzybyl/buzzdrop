@@ -203,7 +203,7 @@ def test_files_truncate(backend):
 
 
 # ---------------------------------------------------------------------------
-# FileStore contract — server-gated key release (oracle)
+# FileStore contract — server-gated key release
 # ---------------------------------------------------------------------------
 
 _H = 'aa' * 32
@@ -233,9 +233,12 @@ def test_key_share_lifecycle(backend):
     assert backend.files.claim_key_release('f1', 'dd' * 32) is None
     assert backend.files.get_key_share('f1')['released_at'] is None
 
-    # correct verifier releases H exactly once
+    # correct verifier releases H exactly once — and wipes h/v with the
+    # claim, so a post-release DB theft yields no crackable material
     assert backend.files.claim_key_release('f1', _V) == _H
-    assert backend.files.get_key_share('f1')['released_at'] is not None
+    released = backend.files.get_key_share('f1')
+    assert released['released_at'] is not None
+    assert released['h'] is None and released['v'] is None
     assert backend.files.claim_key_release('f1', _V) is None
 
 
@@ -254,7 +257,7 @@ def test_unbound_key_share_cannot_be_claimed(backend):
 
 
 def test_claim_key_release_concurrent_single_winner(backend):
-    """≥8 racing releases must produce exactly one H — the oracle guarantee."""
+    """≥8 racing releases must produce exactly one H — the key-release guarantee."""
     backend.files.create_key_share('f1', _H)
     backend.files.bind_key_verifier('f1', _V)
 

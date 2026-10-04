@@ -91,7 +91,7 @@ const cryptoService = new CryptoService();
     // to /release, which hands out the server share H once. Returns the
     // decrypted bytes, or null when the attempt failed in a recoverable
     // way (wrong password with attempts left).
-    async function decryptOracle(password) {
+    async function decryptKeyRelease(password) {
         const v = await cryptoService.deriveVerifier(password, salt);
 
         let res;
@@ -144,7 +144,7 @@ const cryptoService = new CryptoService();
         passInput.disabled = true;
 
         try {
-            const fileBytes = await decryptOracle(password);
+            const fileBytes = await decryptKeyRelease(password);
             if (fileBytes === null) {
                 // Wrong password, attempts remaining — let them retry.
                 decryptBtn.disabled = false;

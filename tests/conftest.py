@@ -139,9 +139,9 @@ def tokens_store(db_instance):
 
 
 @pytest.fixture
-def oracle_share(files_store):
+def key_share(files_store):
     """
-    Create a pending oracle key share directly in the store — the same
+    Create a pending key share directly in the store — the same
     state /upload/begin produces, without spending a rate-limited request.
 
     Returns a factory: _create(file_id=None) -> (file_id, h_hex).
@@ -155,9 +155,9 @@ def oracle_share(files_store):
 
 
 @pytest.fixture
-def oracle_upload(client, oracle_share):
+def key_release_upload(client, key_share):
     """
-    POST a complete two-phase oracle upload and return
+    POST a complete two-phase key-release upload and return
     (file_id, h_hex, response).
 
     ``data`` is merged into the multipart form; pass note fields for text
@@ -166,11 +166,11 @@ def oracle_upload(client, oracle_share):
     """
     def _upload(data=None, filename='test.txt', content=b'content',
                 headers=None, verifier='cc' * 32, xhr=True):
-        file_id, h_hex = oracle_share()
+        file_id, h_hex = key_share()
         form = dict(data or {})
         if 'file' not in form and 'note_text' not in form:
             form['file'] = (io.BytesIO(content), filename)
-        form['oracle_file_id'] = file_id
+        form['file_id'] = file_id
         form['key_verifier'] = verifier
         if headers is None:
             headers = {'X-Requested-With': 'XMLHttpRequest'} if xhr else {}

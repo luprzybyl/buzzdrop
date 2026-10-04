@@ -189,7 +189,7 @@ class FileRepository:
         """
         Delete file entry from database.
 
-        Also drops the oracle key share when present — a deleted share
+        Also drops the key-release share when present — a deleted share
         must not leave its server half behind.
 
         Args:
@@ -198,11 +198,11 @@ class FileRepository:
         self.store.delete(file_id)
         self.store.delete_key_share(file_id)
 
-    # -- server-gated key release (oracle) ----------------------------------
+    # -- server-gated key release ----------------------------------
 
     def create_key_share(self) -> Tuple[str, str]:
         """
-        Begin a two-phase oracle upload: mint a file_id plus the random
+        Begin a two-phase key-release upload: mint a file_id plus the random
         32-byte server share H, and persist the pending share.
 
         Returns:

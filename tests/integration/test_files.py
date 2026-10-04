@@ -19,7 +19,7 @@ def upload_file_for_user(client, app, files_store, filename, content, username_f
     files_store.create_key_share(file_id, secrets.token_hex(32))
     file_data = {
         'file': (io.BytesIO(content.encode()), filename),
-        'oracle_file_id': file_id,
+        'file_id': file_id,
         'key_verifier': 'cc' * 32,
     }
     client.post(url_for('upload_file'), data=file_data, content_type='multipart/form-data')
@@ -33,7 +33,7 @@ def test_upload_file_requires_login(client):
     assert url_for('login') in response.request.path
     assert b'Please log in to access this page' in response.data
 
-def test_upload_file_success(client, app, files_store, oracle_upload):
+def test_upload_file_success(client, app, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
     file_content = b"This is a test file."
@@ -42,7 +42,7 @@ def test_upload_file_success(client, app, files_store, oracle_upload):
 
     # Using follow_redirects=False. If successful, should render success.html directly with 200.
     # If it redirects, status would be 302.
-    file_id, _h, response = oracle_upload(data=data, xhr=False)
+    file_id, _h, response = key_release_upload(data=data, xhr=False)
 
     assert response.status_code == 200
     # Ensure content from success.html is present, not index.html
@@ -61,10 +61,10 @@ def test_upload_file_success(client, app, files_store, oracle_upload):
     with open(file_path_on_disk, 'rb') as f:
         assert f.read() == file_content
 
-def test_upload_file_stores_private_note(client, files_store, oracle_upload):
+def test_upload_file_stores_private_note(client, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
-    file_id, _h, response = oracle_upload(
+    file_id, _h, response = key_release_upload(
         data={
             'file': (io.BytesIO(b"test content"), "private_note.txt"),
             'private_note': 'Internal handoff note'
@@ -79,25 +79,25 @@ def test_upload_file_stores_private_note(client, files_store, oracle_upload):
     assert file_info is not None
     assert file_info['private_note'] == 'Internal handoff note'
 
-def test_upload_file_no_file_part(client, oracle_share):
+def test_upload_file_no_file_part(client, key_share):
     login_user(client, 'testuser', 'password')
-    file_id, _h = oracle_share()
+    file_id, _h = key_share()
     response = client.post(
         url_for('upload_file'),
-        data={'oracle_file_id': file_id, 'key_verifier': 'cc' * 32},
+        data={'file_id': file_id, 'key_verifier': 'cc' * 32},
         follow_redirects=True,
     )
     assert b'No file part' in response.data
     assert url_for('index') in response.request.path # Redirects to index
 
-def test_upload_file_no_selected_file(client, oracle_share):
+def test_upload_file_no_selected_file(client, key_share):
     login_user(client, 'testuser', 'password')
-    file_id, _h = oracle_share()
+    file_id, _h = key_share()
     response = client.post(
         url_for('upload_file'),
         data={
             'file': (io.BytesIO(b""), ""),
-            'oracle_file_id': file_id,
+            'file_id': file_id,
             'key_verifier': 'cc' * 32,
         },
         follow_redirects=True,
@@ -105,12 +105,12 @@ def test_upload_file_no_selected_file(client, oracle_share):
     assert b'No selected file' in response.data
     assert url_for('index') in response.request.path
 
-def test_upload_file_disallowed_extension(client, app, oracle_share):
+def test_upload_file_disallowed_extension(client, app, key_share):
     login_user(client, 'testuser', 'password')
-    file_id, _h = oracle_share()
+    file_id, _h = key_share()
     data = {
         'file': (io.BytesIO(b"some data"), "test.exe"),
-        'oracle_file_id': file_id,
+        'file_id': file_id,
         'key_verifier': 'cc' * 32,
     }
     response = client.post(url_for('upload_file'), data=data, content_type='multipart/form-data', follow_redirects=True)
@@ -130,12 +130,12 @@ def test_upload_file_too_large(client, app):
 
     app.config['MAX_CONTENT_LENGTH'] = original_max_length # Reset
 
-def test_download_file_success(client, app, files_store, oracle_upload):
+def test_download_file_success(client, app, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
     file_content = b"Downloadable content."
     file_name = "download_me.txt"
-    file_id, _h, _resp = oracle_upload(
+    file_id, _h, _resp = key_release_upload(
         data={'file': (io.BytesIO(file_content), file_name)})
 
     file_info = files_store.get_by_id(file_id)
@@ -162,12 +162,12 @@ def test_download_file_not_found(client):
     assert b'File not found' in response.data
     assert url_for('index') in response.request.path
 
-def test_download_file_already_downloaded(client, app, files_store, oracle_upload):
+def test_download_file_already_downloaded(client, app, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
     file_content = b"Already downloaded."
     file_name = "download_once.txt"
-    file_id, _h, _resp = oracle_upload(
+    file_id, _h, _resp = key_release_upload(
         data={'file': (io.BytesIO(file_content), file_name)})
     client.get(url_for('download_file', file_id=file_id))
 
@@ -175,11 +175,11 @@ def test_download_file_already_downloaded(client, app, files_store, oracle_uploa
     assert b'This file has already been downloaded' in response.data
     assert url_for('index') in response.request.path
 
-def test_view_file_success(client, app, files_store, oracle_upload):
+def test_view_file_success(client, app, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
     file_name = "view_me.txt"
-    file_id, _h, _resp = oracle_upload(
+    file_id, _h, _resp = key_release_upload(
         data={'file': (io.BytesIO(b"view content"), file_name)})
 
     response = client.get(url_for('view_file', file_id=file_id))
@@ -187,10 +187,10 @@ def test_view_file_success(client, app, files_store, oracle_upload):
     assert file_name.encode() in response.data
     assert file_id.encode() in response.data
 
-def test_public_views_do_not_show_private_note(client, files_store, csrf_form_data, oracle_upload):
+def test_public_views_do_not_show_private_note(client, files_store, csrf_form_data, key_release_upload):
     login_user(client, 'testuser', 'password')
 
-    file_id, _h, response = oracle_upload(
+    file_id, _h, response = key_release_upload(
         data={
             'file': (io.BytesIO(b"view content"), "private_view.txt"),
             'private_note': 'Only uploader should see this'
@@ -271,7 +271,7 @@ def test_delete_file_after_download(client, app, files_store, csrf_form_data):
     assert files_store.get_by_id(file_id) is None
 
 
-def test_view_file_expired(client, app, files_store, oracle_upload):
+def test_view_file_expired(client, app, files_store, key_release_upload):
     login_user(client, 'testuser', 'password')
 
     expiry = (datetime.now() - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M')
@@ -279,7 +279,7 @@ def test_view_file_expired(client, app, files_store, oracle_upload):
         'file': (io.BytesIO(b'expired'), 'exp.txt'),
         'expiry': expiry
     }
-    file_id, _h, _resp = oracle_upload(data=file_data)
+    file_id, _h, _resp = key_release_upload(data=file_data)
 
     response = client.get(url_for('view_file', file_id=file_id), follow_redirects=True)
     assert b'File has expired' in response.data
@@ -302,7 +302,7 @@ def test_report_decryption_success(client, app, files_store):
     assert info['decryption_success'] is True
 
 
-def test_upload_file_uses_verified_account_notification_email(client, app, files_store, monkeypatch, oracle_upload):
+def test_upload_file_uses_verified_account_notification_email(client, app, files_store, monkeypatch, key_release_upload):
     monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     get_users.cache_clear()
     login_user(client, 'testuser', 'password')
@@ -311,7 +311,7 @@ def test_upload_file_uses_verified_account_notification_email(client, app, files
         'SMTP_FROM_EMAIL': 'buzzdrop@example.com',
     })
 
-    file_id, _h, response = oracle_upload(
+    file_id, _h, response = key_release_upload(
         data={
             'file': (io.BytesIO(b"test content"), "notify_me.txt"),
             'notify_on_open': 'true',
@@ -326,7 +326,7 @@ def test_upload_file_uses_verified_account_notification_email(client, app, files
     assert info['notification_email'] == 'testuser@example.com'
 
 
-def test_report_decryption_sends_notification_once(client, app, files_store, monkeypatch, oracle_upload):
+def test_report_decryption_sends_notification_once(client, app, files_store, monkeypatch, key_release_upload):
     monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     get_users.cache_clear()
     login_user(client, 'testuser', 'password')
@@ -337,7 +337,7 @@ def test_report_decryption_sends_notification_once(client, app, files_store, mon
     })
     monkeypatch.setattr('app._send_email', lambda recipient, subject, body: sent_messages.append((recipient, subject, body)))
 
-    file_id, _h, response = oracle_upload(
+    file_id, _h, response = key_release_upload(
         data={
             'file': (io.BytesIO(b"content"), "notify_once.txt"),
             'notify_on_open': 'true',

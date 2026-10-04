@@ -40,7 +40,7 @@ test('encrypt produces a BKV3 envelope parsed as version 3', async () => {
 
 test('encrypt/decrypt round-trips through the server share', async () => {
     const h = crypto.getRandomValues(new Uint8Array(32));
-    const data = encoder.encode('oracle payload \x00\x01');
+    const data = encoder.encode('key-release payload \x00\x01');
     const { blob } = await service.encrypt(data, 'pw', h);
     const decrypted = await service.decrypt(blob, 'pw', h);
     assert.deepEqual(decrypted, data);

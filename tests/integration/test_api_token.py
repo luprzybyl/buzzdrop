@@ -209,17 +209,17 @@ def _make_fake_upload():
     return io.BytesIO(salt + iv + fake_ciphertext)
 
 
-def test_upload_with_valid_token(app, client, db_instance, oracle_share):
+def test_upload_with_valid_token(app, client, db_instance, key_share):
     with app.app_context():
         from tokens import generate_api_token
         token = generate_api_token('testuser')
 
-    file_id, _h = oracle_share()
+    file_id, _h = key_share()
     resp = client.post(
         '/upload',
         data={
             'file': (_make_fake_upload(), 'test.pdf'),
-            'oracle_file_id': file_id,
+            'file_id': file_id,
             'key_verifier': 'cc' * 32,
         },
         headers={
@@ -272,15 +272,15 @@ def test_upload_with_removed_token_user_is_rejected(app, client, monkeypatch, cl
     assert resp.get_json()['error'] == 'Invalid or expired token'
 
 
-def test_upload_with_session_still_works(user_client, db_instance, oracle_share):
+def test_upload_with_session_still_works(user_client, db_instance, key_share):
     """Existing web-UI session auth must remain functional."""
     import io, os
-    file_id, _h = oracle_share()
+    file_id, _h = key_share()
     resp = user_client.post(
         '/upload',
         data={
             'file': (io.BytesIO(os.urandom(44)), 'test.pdf'),
-            'oracle_file_id': file_id,
+            'file_id': file_id,
             'key_verifier': 'cc' * 32,
         },
         headers={'X-Requested-With': 'XMLHttpRequest'},
@@ -310,19 +310,19 @@ def test_upload_with_removed_session_user_redirects_to_login(user_client, monkey
         assert 'is_admin' not in sess
 
 
-def test_upload_token_sets_uploaded_by(app, client, db_instance, oracle_share):
+def test_upload_token_sets_uploaded_by(app, client, db_instance, key_share):
     """Files uploaded via token should be attributed to the token's owner."""
     with app.app_context():
         from tokens import generate_api_token
         token = generate_api_token('testuser')
 
     import io, os
-    file_id, _h = oracle_share()
+    file_id, _h = key_share()
     resp = client.post(
         '/upload',
         data={
             'file': (io.BytesIO(os.urandom(44)), 'myfile.txt'),
-            'oracle_file_id': file_id,
+            'file_id': file_id,
             'key_verifier': 'cc' * 32,
         },
         headers={

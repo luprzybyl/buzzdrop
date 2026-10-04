@@ -642,12 +642,12 @@ def _is_valid_key_material(value) -> bool:
 @api_auth_required
 def upload_begin():
     """
-    Phase 1 of an oracle upload (docs/true-one-time.md §6.3): mint a
+    Phase 1 of a key-release upload (docs/true-one-time.md §6.3): mint a
     file_id and the random server share H so the client can derive
     file_key = HKDF(Kp ‖ H) before encrypting. The pending share is
-    completed by /upload carrying ``oracle_file_id`` + ``key_verifier``.
+    completed by /upload carrying ``file_id`` + ``key_verifier``.
     """
-    if not current_app.config.get('ORACLE_ENABLED', False):
+    if not current_app.config.get('KEY_RELEASE_ENABLED', False):
         return {'error': 'Server-gated key release is disabled'}, 404
 
     file_id, h_hex = file_repo.create_key_share()
@@ -670,7 +670,7 @@ def upload_file():
 
     # Every upload is two-phase: the client must have run /upload/begin
     # and sends back the minted file_id plus the password verifier V.
-    oracle_file_id = (request.form.get('oracle_file_id') or '').strip() or None
+    file_id = (request.form.get('file_id') or '').strip() or None
     key_verifier = (request.form.get('key_verifier') or '').strip().lower() or None
 
     def _fail(message, status=400):
@@ -684,17 +684,17 @@ def upload_file():
     except NotificationPreferenceError as exc:
         return _fail(exc.message)
 
-    if not oracle_file_id or not _is_valid_key_material(key_verifier):
-        return _fail('Invalid oracle upload')
-    share = file_repo.get_key_share(oracle_file_id)
+    if not file_id or not _is_valid_key_material(key_verifier):
+        return _fail('Invalid key-release upload')
+    share = file_repo.get_key_share(file_id)
     if (
-        not current_app.config.get('ORACLE_ENABLED', False)
+        not current_app.config.get('KEY_RELEASE_ENABLED', False)
         or share is None
         or share.get('v') is not None
         or share.get('released_at') is not None
-        or file_repo.get_by_id(oracle_file_id) is not None
+        or file_repo.get_by_id(file_id) is not None
     ):
-        return _fail('Unknown or already finalized oracle upload', 409)
+        return _fail('Unknown or already finalized key-release upload', 409)
 
     if upload_type == 'text' and note_text:
         # Handle text note upload
@@ -711,12 +711,12 @@ def upload_file():
                 expiry_iso = None
 
         # The file_id was minted by /upload/begin
-        unique_id = oracle_file_id
+        unique_id = file_id
 
         # Binding V atomically claims the pending share — a racing second
         # finish loses here, before any blob or record is written.
         if not file_repo.bind_key_verifier(unique_id, key_verifier):
-            return _fail('Oracle upload was finalized elsewhere', 409)
+            return _fail('Key-release upload was finalized elsewhere', 409)
 
         # Save to storage
         file_path = storage.save(unique_id, text_bytes)
@@ -756,12 +756,12 @@ def upload_file():
         filename = secure_filename(file.filename)
 
         # The file_id was minted by /upload/begin
-        unique_id = oracle_file_id
+        unique_id = file_id
 
         # Binding V atomically claims the pending share — a racing second
         # finish loses here, before any blob or record is written.
         if not file_repo.bind_key_verifier(unique_id, key_verifier):
-            return _fail('Oracle upload was finalized elsewhere', 409)
+            return _fail('Key-release upload was finalized elsewhere', 409)
 
         file_path = storage.save(unique_id, file)
 
@@ -942,19 +942,19 @@ def _release_rate_limit_key() -> str:
 
 @app.route('/release/<file_id>', methods=['POST'])
 @limiter.limit(
-    lambda: current_app.config['ORACLE_RELEASE_RATE_LIMIT'],
+    lambda: current_app.config['KEY_RELEASE_RATE_LIMIT'],
     key_func=_release_rate_limit_key,
     methods=['POST'],
     error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
 )
 def release_key(file_id):
     """
-    Oracle key release (docs/true-one-time.md §6.4): the client proves
+    Server-gated key release (docs/true-one-time.md §6.4): the client proves
     password knowledge by presenting verifier V'; on a constant-time
     match the server releases its share H exactly once — the claim is a
     single conditional write raced by nobody. Misses are counted
-    per-file; ORACLE_MAX_RELEASE_ATTEMPTS triggers lockout (and burning
-    H when ORACLE_BURN_ON_LOCKOUT is set).
+    per-file; KEY_RELEASE_MAX_ATTEMPTS triggers lockout (and burning
+    H when KEY_RELEASE_BURN_ON_LOCKOUT is set).
     """
     data = request.get_json(silent=True) or {}
     v_hex = data.get('v')
@@ -971,20 +971,23 @@ def release_key(file_id):
 
     share = file_repo.get_key_share(file_id)
     # No share (e.g. after a lockout burn) or a pending one — nothing
-    # to release.
-    if share is None or share.get('v') is None:
+    # to release. released_at is checked before v: a released share has
+    # its v/h wiped, so ordering matters for the 410 vs 404 answer.
+    if share is None:
         return {'error': 'Not found'}, 404
     if share.get('released_at'):
         return {'error': 'Key already released'}, 410
+    if share.get('v') is None:
+        return {'error': 'Not found'}, 404
 
-    max_attempts = current_app.config.get('ORACLE_MAX_RELEASE_ATTEMPTS', 5)
+    max_attempts = current_app.config.get('KEY_RELEASE_MAX_ATTEMPTS', 1)
     client_ip = get_client_ip()
 
     def _maybe_burn() -> None:
-        if current_app.config.get('ORACLE_BURN_ON_LOCKOUT', False):
+        if current_app.config.get('KEY_RELEASE_BURN_ON_LOCKOUT', False):
             file_repo.burn_key_share(file_id)
             current_app.logger.warning(
-                'Oracle share %s burned on lockout (ip=%s)', file_id, client_ip)
+                'Key-release share %s burned on lockout (ip=%s)', file_id, client_ip)
 
     if share.get('attempts', 0) >= max_attempts:
         _maybe_burn()
@@ -993,7 +996,7 @@ def release_key(file_id):
     h_hex = file_repo.claim_key_release(file_id, v_hex)
     if h_hex is not None:
         current_app.logger.info(
-            'Oracle share %s released (ip=%s)', file_id, client_ip)
+            'Key-release share %s released (ip=%s)', file_id, client_ip)
         return {'h': h_hex}
 
     # Claim failed — either we lost the race to a winner with the same V,
@@ -1006,7 +1009,7 @@ def release_key(file_id):
 
     attempts = file_repo.record_key_attempt(file_id)
     current_app.logger.warning(
-        'Failed oracle release attempt on %s (attempts=%s, ip=%s)',
+        'Failed key-release attempt on %s (attempts=%s, ip=%s)',
         file_id, attempts, client_ip)
     if attempts is not None and attempts >= max_attempts:
         _maybe_burn()

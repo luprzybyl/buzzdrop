@@ -3,7 +3,7 @@ Unit tests for the CLI encryption/decryption functions.
 
 These tests verify that the Python encrypt_file() output can be correctly
 parsed (correct header offsets, correct binary layout) and that a
-round-trip encrypt→decrypt produces the original data for the oracle
+round-trip encrypt→decrypt produces the original data for the key-release
 (BKV3) payload format:
 
     'BKV3' (4B) + salt (16B) + iv (12B) + AES-GCM ciphertext
@@ -54,7 +54,7 @@ requires_cryptography = pytest.mark.skipif(
 # Deterministic fixtures (salt = 0x00..0x0f, iv = 0x10..0x1b, h = 0x20..0x3f).
 FIXTURE_PASSWORD = 'fixture-password-123'
 FIXTURE_DATA = b'fixture-data'
-# v3 blob: 'BKV3' + salt(16) + iv(12) + AES-GCM('BKP-FILE' + data), oracle KDF.
+# v3 blob: 'BKV3' + salt(16) + iv(12) + AES-GCM('BKP-FILE' + data), key-release KDF.
 V3_FIXTURE = bytes.fromhex(
     '424b5633'
     '000102030405060708090a0b0c0d0e0f'
@@ -99,7 +99,7 @@ def test_encrypt_rejects_bad_h_length():
 def test_encrypt_decrypt_roundtrip():
     """encrypt_file + decrypt_file(h) returns the original bytes."""
     buzz = _import_buzz()
-    original = b'oracle payload \x00\xff'
+    original = b'key-release payload \x00\xff'
     h = os.urandom(32)
     blob, _v = buzz.encrypt_file(original, 'pw', h)
     assert buzz.decrypt_file(blob, 'pw', h=h) == original
@@ -112,7 +112,7 @@ def test_v3_fixture_decrypts_and_verifier_matches():
     assert buzz.decrypt_file(V3_FIXTURE, FIXTURE_PASSWORD, h=V3_FIXTURE_H) == FIXTURE_DATA
     # The verifier the client binds is derivable from password + blob salt.
     salt = V3_FIXTURE[4:20]
-    _kp, v = buzz.derive_oracle_keys(FIXTURE_PASSWORD, salt)
+    _kp, v = buzz.derive_key_release_keys(FIXTURE_PASSWORD, salt)
     assert v.hex() == V3_FIXTURE_V
 
 
@@ -151,7 +151,7 @@ def test_hkdf_domain_separation():
     """Kp, V and file_key must be pairwise distinct for the same master."""
     buzz = _import_buzz()
     salt = bytes(range(16))
-    kp, v = buzz.derive_oracle_keys('pw', salt)
+    kp, v = buzz.derive_key_release_keys('pw', salt)
     fk = buzz._derive_file_key(kp, bytes(range(32, 64)), salt)
     assert kp != v != fk
 

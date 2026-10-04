@@ -1,8 +1,8 @@
 """
-Integration tests for server-gated key release (the "oracle" flow).
+Integration tests for server-gated key release .
 
 Covers the two-phase upload (/upload/begin + /upload carrying
-oracle_file_id/key_verifier) and the one-time /release endpoint:
+file_id/key_verifier) and the one-time /release endpoint:
 verifier checks, attempt counting, lockout/burn policy, and
 backward compatibility with self-contained v1/v2 shares.
 """
@@ -26,13 +26,13 @@ def login_user(client, username='testuser', password='password'):
 
 
 @pytest.fixture
-def oracle_settings(app):
-    """Mutate oracle-related config and restore it afterwards."""
+def key_release_settings(app):
+    """Mutate key-release config and restore it afterwards."""
     keys = (
-        'ORACLE_ENABLED',
-        'ORACLE_RELEASE_RATE_LIMIT',
-        'ORACLE_MAX_RELEASE_ATTEMPTS',
-        'ORACLE_BURN_ON_LOCKOUT',
+        'KEY_RELEASE_ENABLED',
+        'KEY_RELEASE_RATE_LIMIT',
+        'KEY_RELEASE_MAX_ATTEMPTS',
+        'KEY_RELEASE_BURN_ON_LOCKOUT',
     )
     original = {key: app.config.get(key) for key in keys}
     yield app.config
@@ -57,14 +57,14 @@ def _create_file_record(files_store, file_id='file-1', **overrides):
 
 
 def _bound_share(files_store, file_id='file-1', h='aa' * 32, v='bb' * 32):
-    """Persist a complete oracle share + file record, return (file_id, h, v)."""
+    """Persist a complete key share + file record, return (file_id, h, v)."""
     _create_file_record(files_store, file_id=file_id)
     files_store.create_key_share(file_id, h)
     files_store.bind_key_verifier(file_id, v)
     return file_id, h, v
 
 
-def _oracle_upload(client, filename='oracle.txt', content=b'encrypted blob'):
+def _key_release_upload(client, filename='key-release.txt', content=b'encrypted blob'):
     """Drive the full two-phase upload; returns (file_id, h, upload_response)."""
     begin = client.post(
         url_for('upload_begin'),
@@ -78,7 +78,7 @@ def _oracle_upload(client, filename='oracle.txt', content=b'encrypted blob'):
         url_for('upload_file'),
         data={
             'file': (io.BytesIO(content), filename),
-            'oracle_file_id': file_id,
+            'file_id': file_id,
             'key_verifier': 'cc' * 32,
         },
         content_type='multipart/form-data',
@@ -115,8 +115,8 @@ def test_upload_begin_returns_pending_share(client, files_store):
     assert files_store.get_by_id(body['file_id']) is None
 
 
-def test_upload_begin_disabled(client, oracle_settings):
-    oracle_settings['ORACLE_ENABLED'] = False
+def test_upload_begin_disabled(client, key_release_settings):
+    key_release_settings['KEY_RELEASE_ENABLED'] = False
     login_user(client)
     response = client.post(
         url_for('upload_begin'),
@@ -126,12 +126,12 @@ def test_upload_begin_disabled(client, oracle_settings):
 
 
 # ---------------------------------------------------------------------------
-# /upload finish (oracle fields)
+# /upload finish (key-release fields)
 # ---------------------------------------------------------------------------
 
-def test_oracle_upload_binds_verifier(client, files_store):
+def test_key_release_upload_binds_verifier(client, files_store):
     login_user(client)
-    file_id, _h, finish = _oracle_upload(client)
+    file_id, _h, finish = _key_release_upload(client)
     assert finish.status_code == 200
     assert finish.get_json()['file_id'] == file_id
 
@@ -142,13 +142,13 @@ def test_oracle_upload_binds_verifier(client, files_store):
     assert file_info['uploaded_by'] == 'testuser'
 
 
-def test_oracle_upload_rejects_unknown_share(client, files_store):
+def test_key_release_upload_rejects_unknown_share(client, files_store):
     login_user(client)
     response = client.post(
         url_for('upload_file'),
         data={
             'file': (io.BytesIO(b'blob'), 'x.txt'),
-            'oracle_file_id': 'does-not-exist',
+            'file_id': 'does-not-exist',
             'key_verifier': 'cc' * 32,
         },
         content_type='multipart/form-data',
@@ -157,16 +157,16 @@ def test_oracle_upload_rejects_unknown_share(client, files_store):
     assert response.status_code == 409
 
 
-def test_oracle_upload_rejects_finalized_share(client, files_store):
+def test_key_release_upload_rejects_finalized_share(client, files_store):
     login_user(client)
-    file_id, _h, finish = _oracle_upload(client)
+    file_id, _h, finish = _key_release_upload(client)
     assert finish.status_code == 200
 
     second = client.post(
         url_for('upload_file'),
         data={
             'file': (io.BytesIO(b'blob2'), 'y.txt'),
-            'oracle_file_id': file_id,
+            'file_id': file_id,
             'key_verifier': 'dd' * 32,
         },
         content_type='multipart/form-data',
@@ -175,13 +175,13 @@ def test_oracle_upload_rejects_finalized_share(client, files_store):
     assert second.status_code == 409
 
 
-def test_oracle_upload_rejects_partial_handshake(client):
+def test_key_release_upload_rejects_partial_handshake(client):
     login_user(client)
     for data in (
-        {'file': (io.BytesIO(b'b'), 'x.txt'), 'oracle_file_id': 'abc'},
+        {'file': (io.BytesIO(b'b'), 'x.txt'), 'file_id': 'abc'},
         {'file': (io.BytesIO(b'b'), 'x.txt'), 'key_verifier': 'cc' * 32},
         {'file': (io.BytesIO(b'b'), 'x.txt'),
-         'oracle_file_id': 'abc', 'key_verifier': 'not-hex'},
+         'file_id': 'abc', 'key_verifier': 'not-hex'},
     ):
         response = client.post(
             url_for('upload_file'),
@@ -192,7 +192,7 @@ def test_oracle_upload_rejects_partial_handshake(client):
         assert response.status_code == 400
 
 
-def test_oracle_upload_rejected_when_disabled(client, files_store, oracle_settings):
+def test_key_release_upload_rejected_when_disabled(client, files_store, key_release_settings):
     """A share created while enabled cannot be finished after opt-out."""
     login_user(client)
     begin = client.post(
@@ -201,12 +201,12 @@ def test_oracle_upload_rejected_when_disabled(client, files_store, oracle_settin
     )
     file_id = begin.get_json()['file_id']
 
-    oracle_settings['ORACLE_ENABLED'] = False
+    key_release_settings['KEY_RELEASE_ENABLED'] = False
     finish = client.post(
         url_for('upload_file'),
         data={
             'file': (io.BytesIO(b'blob'), 'x.txt'),
-            'oracle_file_id': file_id,
+            'file_id': file_id,
             'key_verifier': 'cc' * 32,
         },
         content_type='multipart/form-data',
@@ -215,7 +215,7 @@ def test_oracle_upload_rejected_when_disabled(client, files_store, oracle_settin
     assert finish.status_code == 409
 
 
-def test_upload_without_oracle_fields_rejected(client, files_store):
+def test_upload_without_key_release_fields_rejected(client, files_store):
     """Every upload is two-phase — a bare multipart POST is a 400."""
     login_user(client)
     response = client.post(
@@ -249,13 +249,13 @@ def test_release_wrong_verifier_counts_attempts(client, files_store):
     response = client.post(
         url_for('release_key', file_id=file_id), json={'v': 'dd' * 32})
     assert response.status_code == 403
-    assert response.get_json()['attempts_remaining'] == 4
+    assert response.get_json()['attempts_remaining'] == 0
     assert files_store.get_key_share(file_id)['attempts'] == 1
     assert files_store.get_key_share(file_id)['released_at'] is None
 
 
-def test_release_lockout_after_max_attempts(client, files_store, oracle_settings):
-    oracle_settings['ORACLE_MAX_RELEASE_ATTEMPTS'] = 2
+def test_release_lockout_after_max_attempts(client, files_store, key_release_settings):
+    key_release_settings['KEY_RELEASE_MAX_ATTEMPTS'] = 2
     file_id, _h, _v = _bound_share(files_store)
 
     for expected_status in (403, 429):
@@ -274,9 +274,9 @@ def test_release_lockout_after_max_attempts(client, files_store, oracle_settings
     assert files_store.get_key_share(file_id) is not None
 
 
-def test_release_burn_on_lockout(client, files_store, oracle_settings):
-    oracle_settings['ORACLE_MAX_RELEASE_ATTEMPTS'] = 1
-    oracle_settings['ORACLE_BURN_ON_LOCKOUT'] = True
+def test_release_burn_on_lockout(client, files_store, key_release_settings):
+    key_release_settings['KEY_RELEASE_MAX_ATTEMPTS'] = 1
+    key_release_settings['KEY_RELEASE_BURN_ON_LOCKOUT'] = True
     file_id, _h, _v = _bound_share(files_store)
 
     miss = client.post(
@@ -342,7 +342,7 @@ def test_release_expired_file_is_410(client, files_store):
 def test_release_works_after_blob_download(client, files_store, app):
     """The real order: blob first (claims download), then /release."""
     login_user(client)
-    file_id, h, finish = _oracle_upload(client, content=b'real blob')
+    file_id, h, finish = _key_release_upload(client, content=b'real blob')
     assert finish.status_code == 200
     v = 'cc' * 32
 
@@ -359,7 +359,7 @@ def test_release_works_after_blob_download(client, files_store, app):
 
 def test_delete_file_drops_key_share(client, files_store, csrf_form_data):
     login_user(client)
-    file_id, _h, finish = _oracle_upload(client)
+    file_id, _h, finish = _key_release_upload(client)
     assert finish.status_code == 200
 
     response = client.post(
@@ -397,10 +397,13 @@ except ImportError:
 
 
 @pytest.mark.skipif(not _crypto_available, reason='cryptography not installed')
-def test_oracle_end_to_end(client, files_store):
+def test_key_release_end_to_end(client, files_store, key_release_settings):
     """Full vertical slice: begin → v3 encrypt → finish → download →
     release → decrypt. Proves the CLI crypto and the server handshake
     agree byte-for-byte."""
+    # Allow one miss before the winning release — the production
+    # default of 1 would lock the share right after the wrong try.
+    key_release_settings['KEY_RELEASE_MAX_ATTEMPTS'] = 2
     buzz = _import_buzz()
     login_user(client)
 
@@ -421,7 +424,7 @@ def test_oracle_end_to_end(client, files_store):
         url_for('upload_file'),
         data={
             'file': (io.BytesIO(blob), 'e2e.txt'),
-            'oracle_file_id': file_id,
+            'file_id': file_id,
             'key_verifier': v_hex,
         },
         content_type='multipart/form-data',
@@ -431,7 +434,7 @@ def test_oracle_end_to_end(client, files_store):
 
     # Wrong password first: verifier miss, no H, attempt counted.
     salt = blob[4:20]
-    _kp, wrong_v = buzz.derive_oracle_keys('wrong-password', salt)
+    _kp, wrong_v = buzz.derive_key_release_keys('wrong-password', salt)
     miss = client.post(
         url_for('release_key', file_id=file_id),
         json={'v': wrong_v.hex()},

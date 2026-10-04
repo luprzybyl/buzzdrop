@@ -79,9 +79,9 @@ class FileStore(ABC):
     def delete(self, file_id: str) -> bool:
         """Delete the record; True when a row was removed."""
 
-    # -- server-gated key release (oracle) ----------------------------------
+    # -- server-gated key release ----------------------------------
     #
-    # The oracle design (docs/true-one-time.md §6) splits the file key in
+    # The server-gated key-release design (docs/true-one-time.md §6) splits the file key in
     # two: Kp is derived client-side from the password, H is a random
     # 32-byte share the server holds and releases exactly once. The server
     # stores {H, V, attempts, released_at} per file_id where V is a

@@ -8,7 +8,7 @@ def login_user(client, username, password):
     return client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
 
 def upload_note(client, files_store, data=None, headers=None, xhr=True):
-    """Upload a text note through the mandatory two-phase oracle flow."""
+    """Upload a text note through the mandatory two-phase key-release flow."""
     import secrets
     import uuid
     file_id = str(uuid.uuid4())
@@ -16,7 +16,7 @@ def upload_note(client, files_store, data=None, headers=None, xhr=True):
     form = {
         'note_text': base64.b64encode(b"Test note").decode('utf-8'),
         'type': 'text',
-        'oracle_file_id': file_id,
+        'file_id': file_id,
         'key_verifier': 'cc' * 32,
     }
     form.update(data or {})
@@ -158,7 +158,7 @@ def test_text_note_type_field_in_database(client, app, files_store):
         url_for('upload_file'),
         data={
             'file': (io.BytesIO(b"test content"), "test.txt"),
-            'oracle_file_id': file_id,
+            'file_id': file_id,
             'key_verifier': 'cc' * 32,
         },
         content_type='multipart/form-data',
@@ -223,16 +223,16 @@ def test_delete_text_note_before_view(client, app, files_store, csrf_form_data):
     note_info = files_store.get_by_id(note_id)
     assert note_info is None
 
-def test_text_note_empty_content(client, app, oracle_share):
+def test_text_note_empty_content(client, app, key_share):
     """Test that empty text note is rejected."""
     login_user(client, 'testuser', 'password')
 
     # Try to upload empty note
-    file_id, _h = oracle_share()
+    file_id, _h = key_share()
     data = {
         'note_text': '',
         'type': 'text',
-        'oracle_file_id': file_id,
+        'file_id': file_id,
         'key_verifier': 'cc' * 32,
     }
 

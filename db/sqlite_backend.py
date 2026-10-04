@@ -206,7 +206,7 @@ def _guard_incompatible_columns(conn: sqlite3.Connection, table: str,
         )
 
 # Server-gated key release (docs/true-one-time.md §6): one row per
-# oracle-enabled share, keyed by the public file id. `v` NULL marks a
+# key-release share, keyed by the public file id. `v` NULL marks a
 # pending share (/upload/begin done, /upload/finish not yet); a row is
 # deleted outright to burn H on lockout. Kept off the files table because
 # the share must exist before the file record does (two-phase upload) —
@@ -497,12 +497,14 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
         if not secrets.compare_digest(row['v'], v_hex):
             return None
         cursor = conn.execute(
-            'UPDATE file_keys SET released_at = ? '
+            'UPDATE file_keys SET released_at = ?, h = NULL, v = NULL '
             'WHERE file_id = ? AND released_at IS NULL',
             (datetime.now().isoformat(), file_id),
         )
         # A racing claimant that already committed makes rowcount 0 —
-        # exactly one caller ever takes H home.
+        # exactly one caller ever takes H home. H and V are wiped with
+        # the claim: post-release the row keeps only bookkeeping, so a
+        # later DB theft yields nothing crackable.
         return row['h'] if cursor.rowcount > 0 else None
 
     def record_key_attempt(self, file_id: str) -> Optional[int]:

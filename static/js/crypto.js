@@ -136,7 +136,7 @@ export class CryptoService {
      * @param {Uint8Array} salt - The blob's PBKDF2 salt
      * @returns {Promise<{kp: Uint8Array, v: Uint8Array}>}
      */
-    async deriveOracleKeys(password, salt) {
+    async deriveKeyReleaseKeys(password, salt) {
         const master = await this.deriveMaster(password, salt);
         const kp = await this.hkdf(master, salt, this.HKDF_INFO_ENC);
         const v = await this.hkdf(master, salt, this.HKDF_INFO_VER);
@@ -206,7 +206,7 @@ export class CryptoService {
     async encrypt(data, password, h) {
         const salt = this.generateSalt();
         const iv = this.generateIV();
-        const { kp, v } = await this.deriveOracleKeys(password, salt);
+        const { kp, v } = await this.deriveKeyReleaseKeys(password, salt);
         const fileKey = await this.deriveFileKey(kp, h, salt);
 
         const key = await window.crypto.subtle.importKey(
@@ -246,7 +246,7 @@ export class CryptoService {
     async decrypt(encryptedData, password, h) {
         const { salt, iv, ciphertext } = this.parseBlob(encryptedData);
 
-        const { kp } = await this.deriveOracleKeys(password, salt);
+        const { kp } = await this.deriveKeyReleaseKeys(password, salt);
         const fileKey = await this.deriveFileKey(kp, h, salt);
 
         const key = await window.crypto.subtle.importKey(

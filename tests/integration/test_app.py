@@ -19,7 +19,7 @@ def upload_file_for_user(client, app, files_store, filename, content, username_f
     files_store.create_key_share(file_id, secrets.token_hex(32))
     file_data = {
         'file': (io.BytesIO(content.encode()), filename),
-        'oracle_file_id': file_id,
+        'file_id': file_id,
         'key_verifier': 'cc' * 32,
     }
     # Make sure to use the logged-in client to POST
@@ -157,7 +157,7 @@ def test_index_logged_in_user_sees_own_private_note(client, app, files_store):
         data={
             'file': (io.BytesIO(b"Hello world"), "noted_document.txt"),
             'private_note': 'haslo do wordpressa',
-            'oracle_file_id': file_id,
+            'file_id': file_id,
             'key_verifier': 'cc' * 32,
         },
         content_type='multipart/form-data',

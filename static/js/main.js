@@ -173,13 +173,13 @@ function enforcePasswordStrength(password) {
 // --- Shared Upload Logic ---
 
 /**
- * Encrypt data for upload through the two-phase oracle handshake:
+ * Encrypt data for upload through the two-phase key-release handshake:
  * /upload/begin mints file_id + the server share H, the client derives
  * Kp/V from the password, encrypts under HKDF(Kp ‖ H), and returns the
  * blob plus the fields the finish POST needs.
  * @param {Uint8Array} data - Raw plaintext
  * @param {string} password
- * @returns {Promise<{blob: Uint8Array, oracleFileId: string, keyVerifier: string}>}
+ * @returns {Promise<{blob: Uint8Array, fileId: string, keyVerifier: string}>}
  * @throws {Error} When the server refuses the handshake
  */
 async function encryptForUpload(data, password) {
@@ -195,7 +195,7 @@ async function encryptForUpload(data, password) {
         data, password, hexToBytes(h));
     return {
         blob,
-        oracleFileId: file_id,
+        fileId: file_id,
         keyVerifier: bytesToHex(verifier),
     };
 }
@@ -374,7 +374,7 @@ if (fileUploadForm) {
         if (!file || !password) return;
         if (!enforcePasswordStrength(password)) return;
 
-        // Read and encrypt file data via the oracle handshake
+        // Read and encrypt file data via the key-release handshake
         const fileData = new Uint8Array(await file.arrayBuffer());
         let prepared;
         try {
@@ -388,7 +388,7 @@ if (fileUploadForm) {
         const encBlob = new Blob([prepared.blob], { type: 'application/octet-stream' });
         const formData = new FormData();
         formData.append('file', new File([encBlob], file.name));
-        formData.append('oracle_file_id', prepared.oracleFileId);
+        formData.append('file_id', prepared.fileId);
         formData.append('key_verifier', prepared.keyVerifier);
         const expiryInput = document.getElementById('shared-expiry');
         const privateNoteInput = document.getElementById('shared-private-note');
@@ -433,7 +433,7 @@ async function uploadNote() {
     }
     if (!enforcePasswordStrength(password)) return;
 
-    // Encrypt text data via the oracle handshake
+    // Encrypt text data via the key-release handshake
     const enc = new TextEncoder();
     const textData = enc.encode(noteText);
     let prepared;
@@ -449,7 +449,7 @@ async function uploadNote() {
     const formData = new FormData();
     formData.append('note_text', base64Encrypted);
     formData.append('type', 'text');
-    formData.append('oracle_file_id', prepared.oracleFileId);
+    formData.append('file_id', prepared.fileId);
     formData.append('key_verifier', prepared.keyVerifier);
     if (expiry) {
         formData.append('expiry', expiry);

@@ -1271,9 +1271,9 @@ def _hkdf(ikm: bytes, salt: bytes, info: bytes) -> bytes:
     ).derive(ikm)
 
 
-def derive_oracle_keys(password: str, salt: bytes) -> tuple[bytes, bytes]:
+def derive_key_release_keys(password: str, salt: bytes) -> tuple[bytes, bytes]:
     """
-    Derive (Kp, V) for an oracle share: Kp is the client half of the file
+    Derive (Kp, V) for a key-release share: Kp is the client half of the file
     key, V is the one-way verifier the server checks before releasing H.
     """
     master = _derive_master(password, salt)
@@ -1289,7 +1289,7 @@ def _derive_file_key(kp: bytes, h: bytes, salt: bytes) -> bytes:
 
 def encrypt_file(file_bytes: bytes, password: str, h: bytes) -> tuple[bytes, str]:
     """
-    Encrypt file_bytes for an oracle share (docs/true-one-time.md §6).
+    Encrypt file_bytes for a key-release share (docs/true-one-time.md §6).
 
     Args:
         h: the 32-byte server share returned by POST /upload/begin.
@@ -1305,7 +1305,7 @@ def encrypt_file(file_bytes: bytes, password: str, h: bytes) -> tuple[bytes, str
 
     salt = os.urandom(_SALT_LEN)
     iv = os.urandom(_IV_LEN)
-    kp, v = derive_oracle_keys(password, salt)
+    kp, v = derive_key_release_keys(password, salt)
     file_key = _derive_file_key(kp, h, salt)
 
     plaintext = PLAINTEXT_MAGIC + file_bytes
@@ -1336,7 +1336,7 @@ def decrypt_file(encrypted: bytes, password: str, h: bytes) -> bytes:
     salt = encrypted[offset:offset + _SALT_LEN]
     iv = encrypted[offset + _SALT_LEN:offset + _SALT_LEN + _IV_LEN]
     ciphertext = encrypted[offset + _SALT_LEN + _IV_LEN:]
-    kp, _v = derive_oracle_keys(password, salt)
+    kp, _v = derive_key_release_keys(password, salt)
     key = _derive_file_key(kp, h, salt)
     plaintext = AESGCM(key).decrypt(iv, ciphertext, None)
 
@@ -1347,10 +1347,10 @@ def decrypt_file(encrypted: bytes, password: str, h: bytes) -> bytes:
 
 def upload_begin(server: str, token: str) -> dict | None:
     """
-    Phase 1 of an oracle upload: ask the server for file_id + H.
+    Phase 1 of a key-release upload: ask the server for file_id + H.
 
     Returns the JSON body on success, or None when the server does not
-    offer server-gated key release (ORACLE_ENABLED off / older server) —
+    offer server-gated key release (KEY_RELEASE_ENABLED off / older server) —
     every upload is two-phase, so the caller must abort in that case.
     """
     requests = _requests()
@@ -1395,11 +1395,11 @@ def upload_begin(server: str, token: str) -> dict | None:
 
 
 def upload(server: str, token: str, filename: str, encrypted: bytes,
-           oracle_file_id: str, key_verifier: str, expiry: str = None) -> dict:
+           file_id: str, key_verifier: str, expiry: str = None) -> dict:
     """
     POST the encrypted blob to /upload and return the JSON response.
 
-    ``oracle_file_id`` + ``key_verifier`` complete the two-phase oracle
+    ``file_id`` + ``key_verifier`` complete the two-phase key-release
     handshake started by upload_begin() (docs/true-one-time.md §6.3).
 
     The body is streamed in 64 KB chunks so that a live progress bar can be
@@ -1411,7 +1411,7 @@ def upload(server: str, token: str, filename: str, encrypted: bytes,
         'file': (os.path.basename(filename), BytesIO(encrypted), 'application/octet-stream'),
     }
     data = {
-        'oracle_file_id': oracle_file_id,
+        'file_id': file_id,
         'key_verifier': key_verifier,
     }
     if expiry:
@@ -1549,12 +1549,12 @@ def main():
             sys.exit(1)
         upload_name = args.file
 
-    # Oracle handshake first: the file key needs the server share H
+    # Key-release handshake first: the file key needs the server share H
     # before we can encrypt.
     begin = upload_begin(server, token)
     if begin is None:
         print(
-            "Error: this server does not accept oracle uploads "
+            "Error: this server does not accept key-release uploads "
             "(server-gated key release disabled).",
             file=sys.stderr,
         )
@@ -1573,7 +1573,7 @@ def main():
     result = upload(
         server, token, upload_name, encrypted,
         expiry=args.expiry,
-        oracle_file_id=begin['file_id'],
+        file_id=begin['file_id'],
         key_verifier=key_verifier,
     )
 
