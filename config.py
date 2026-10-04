@@ -60,7 +60,23 @@ class Config:
     API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '10 per hour')
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '30 per hour')
     PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '60 per hour')
-    
+
+    # Server-gated key release ("oracle", docs/true-one-time.md §6).
+    # When enabled, new uploads split the file key: the server holds a
+    # random 32-byte share H and releases it exactly once, after the
+    # recipient proves the password via a one-way verifier V. Disabling
+    # only affects NEW uploads — already-created v3 shares can still
+    # release their key share.
+    ORACLE_ENABLED = _env_bool('ORACLE_ENABLED', True)
+    # Per-file_id rate limit on /release (rotating IPs don't help).
+    ORACLE_RELEASE_RATE_LIMIT = os.getenv('ORACLE_RELEASE_RATE_LIMIT', '10 per minute')
+    # Total failed verifier attempts a share tolerates before lockout.
+    ORACLE_MAX_RELEASE_ATTEMPTS = int(os.getenv('ORACLE_MAX_RELEASE_ATTEMPTS', '5'))
+    # What lockout does to the share: burn destroys H (the ciphertext is
+    # mathematically dead — confidentiality over availability); the
+    # default False keeps H but refuses all further releases.
+    ORACLE_BURN_ON_LOCKOUT = _env_bool('ORACLE_BURN_ON_LOCKOUT', False)
+
     @classmethod
     def validate(cls):
         """
@@ -92,6 +108,9 @@ class Config:
 
         if cls.SMTP_USE_TLS and cls.SMTP_USE_SSL:
             raise ValueError("SMTP_USE_TLS and SMTP_USE_SSL cannot both be enabled")
+
+        if cls.ORACLE_MAX_RELEASE_ATTEMPTS < 1:
+            raise ValueError("ORACLE_MAX_RELEASE_ATTEMPTS must be at least 1")
 
     @classmethod
     def get_database_url(cls) -> str:
@@ -147,6 +166,7 @@ class Config:
             's3_configured': bool(cls.S3_BUCKET) if cls.STORAGE_BACKEND == 's3' else False,
             's3_region': cls.S3_REGION if cls.STORAGE_BACKEND == 's3' else 'N/A',
             'email_notifications_configured': bool(cls.SMTP_HOST and cls.SMTP_FROM_EMAIL),
+            'oracle_enabled': cls.ORACLE_ENABLED,
         }
 
 
@@ -169,6 +189,7 @@ class TestingConfig(Config):
     API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '1000 per hour')
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '1000 per hour')
     PUBLIC_FILE_RATE_LIMIT = os.getenv('PUBLIC_FILE_RATE_LIMIT', '1000 per hour')
+    ORACLE_RELEASE_RATE_LIMIT = os.getenv('ORACLE_RELEASE_RATE_LIMIT', '1000 per hour')
 
 
 class ProductionConfig(Config):

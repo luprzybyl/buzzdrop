@@ -625,6 +625,36 @@ def revoke_api_token_route(token_id):
     return redirect(url_for('manage_users' if current_user.get('is_admin', False) else 'index'))
 
 
+def _is_valid_key_material(value) -> bool:
+    """Key material (H, V) travels as 64 lowercase hex chars (32 bytes)."""
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(c in '0123456789abcdef' for c in value)
+    )
+
+
+@app.route('/upload/begin', methods=['POST'])
+@limiter.limit(
+    lambda: current_app.config['UPLOAD_RATE_LIMIT'],
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
+@api_auth_required
+def upload_begin():
+    """
+    Phase 1 of an oracle upload (docs/true-one-time.md §6.3): mint a
+    file_id and the random server share H so the client can derive
+    file_key = HKDF(Kp ‖ H) before encrypting. The pending share is
+    completed by /upload carrying ``oracle_file_id`` + ``key_verifier``.
+    """
+    if not current_app.config.get('ORACLE_ENABLED', False):
+        return {'error': 'Server-gated key release is disabled'}, 404
+
+    file_id, h_hex = file_repo.create_key_share()
+    return {'file_id': file_id, 'h': h_hex}
+
+
 @app.route('/upload', methods=['POST'])
 @limiter.limit(
     lambda: current_app.config['UPLOAD_RATE_LIMIT'],
@@ -639,13 +669,34 @@ def upload_file():
     private_note = (request.form.get('private_note') or '').strip() or None
     wants_json = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
+    # Oracle fields: set when the client ran the /upload/begin handshake.
+    oracle_file_id = (request.form.get('oracle_file_id') or '').strip() or None
+    key_verifier = (request.form.get('key_verifier') or '').strip().lower() or None
+
+    def _fail(message, status=400):
+        if wants_json:
+            return {'error': message}, status
+        flash(message)
+        return redirect(url_for('index'))
+
     try:
         notify_on_open, notification_email = _get_notification_preferences(g.username)
     except NotificationPreferenceError as exc:
-        if wants_json:
-            return {'error': exc.message}, 400
-        flash(exc.message)
-        return redirect(url_for('index'))
+        return _fail(exc.message)
+
+    if oracle_file_id or key_verifier:
+        # Both fields travel together — half a handshake is an error.
+        if not oracle_file_id or not _is_valid_key_material(key_verifier):
+            return _fail('Invalid oracle upload')
+        share = file_repo.get_key_share(oracle_file_id)
+        if (
+            not current_app.config.get('ORACLE_ENABLED', False)
+            or share is None
+            or share.get('v') is not None
+            or share.get('released_at') is not None
+            or file_repo.get_by_id(oracle_file_id) is not None
+        ):
+            return _fail('Unknown or already finalized oracle upload', 409)
 
     if upload_type == 'text' and note_text:
         # Handle text note upload
@@ -661,9 +712,14 @@ def upload_file():
             except ValueError:
                 expiry_iso = None
 
-        # Generate unique ID
-        unique_id = str(uuid.uuid4())
-        
+        # Oracle uploads reuse the file_id minted by /upload/begin
+        unique_id = oracle_file_id or str(uuid.uuid4())
+
+        # Binding V atomically claims the pending share — a racing second
+        # finish loses here, before any blob or record is written.
+        if key_verifier and not file_repo.bind_key_verifier(unique_id, key_verifier):
+            return _fail('Oracle upload was finalized elsewhere', 409)
+
         # Save to storage
         file_path = storage.save(unique_id, text_bytes)
 
@@ -678,7 +734,7 @@ def upload_file():
             'notify_on_open': notify_on_open,
             'notification_email': notification_email,
         }, file_id=unique_id)
-        
+
         share_link = url_for('view_file', file_id=unique_id, _external=True)
         if wants_json:
             return {
@@ -700,11 +756,17 @@ def upload_file():
     
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        
-        # Generate unique ID and save to storage
-        unique_id = str(uuid.uuid4())
+
+        # Oracle uploads reuse the file_id minted by /upload/begin
+        unique_id = oracle_file_id or str(uuid.uuid4())
+
+        # Binding V atomically claims the pending share — a racing second
+        # finish loses here, before any blob or record is written.
+        if key_verifier and not file_repo.bind_key_verifier(unique_id, key_verifier):
+            return _fail('Oracle upload was finalized elsewhere', 409)
+
         file_path = storage.save(unique_id, file)
-        
+
         # Parse expiry date
         expiry_raw = request.form.get('expiry')
         expiry_iso = None
@@ -725,7 +787,7 @@ def upload_file():
             'notify_on_open': notify_on_open,
             'notification_email': notification_email,
         }, file_id=unique_id)
-        
+
         share_link = url_for('view_file', file_id=unique_id, _external=True)
         if wants_json:
             return {
@@ -873,6 +935,87 @@ def confirm_view_file(file_id):
         return redirect(url_for('view_file', file_id=file_id))
     file_type = file_info.get('type', 'file')
     return render_template('view.html', file_id=file_id, original_name=file_info['original_name'], file_type=file_type)
+
+
+def _release_rate_limit_key() -> str:
+    """Rate-limit /release per file_id — rotating IPs must not reset it."""
+    return f"release:{request.view_args.get('file_id') or get_client_ip()}"
+
+
+@app.route('/release/<file_id>', methods=['POST'])
+@limiter.limit(
+    lambda: current_app.config['ORACLE_RELEASE_RATE_LIMIT'],
+    key_func=_release_rate_limit_key,
+    methods=['POST'],
+    error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
+)
+def release_key(file_id):
+    """
+    Oracle key release (docs/true-one-time.md §6.4): the client proves
+    password knowledge by presenting verifier V'; on a constant-time
+    match the server releases its share H exactly once — the claim is a
+    single conditional write raced by nobody. Misses are counted
+    per-file; ORACLE_MAX_RELEASE_ATTEMPTS triggers lockout (and burning
+    H when ORACLE_BURN_ON_LOCKOUT is set).
+    """
+    data = request.get_json(silent=True) or {}
+    v_hex = data.get('v')
+    if isinstance(v_hex, str):
+        v_hex = v_hex.strip().lower()
+    if not _is_valid_key_material(v_hex):
+        return {'error': 'Invalid request'}, 400
+
+    file_info = file_repo.get_by_id(file_id)
+    if not file_info:
+        return {'error': 'Not found'}, 404
+    if check_and_handle_expiry(file_info):
+        return {'error': 'File has expired'}, 410
+
+    share = file_repo.get_key_share(file_id)
+    # No share (v1/v2 legacy blob) or a pending one — nothing to release.
+    if share is None or share.get('v') is None:
+        return {'error': 'Not found'}, 404
+    if share.get('released_at'):
+        return {'error': 'Key already released'}, 410
+
+    max_attempts = current_app.config.get('ORACLE_MAX_RELEASE_ATTEMPTS', 5)
+    client_ip = get_client_ip()
+
+    def _maybe_burn() -> None:
+        if current_app.config.get('ORACLE_BURN_ON_LOCKOUT', False):
+            file_repo.burn_key_share(file_id)
+            current_app.logger.warning(
+                'Oracle share %s burned on lockout (ip=%s)', file_id, client_ip)
+
+    if share.get('attempts', 0) >= max_attempts:
+        _maybe_burn()
+        return {'error': 'Too many attempts'}, 429
+
+    h_hex = file_repo.claim_key_release(file_id, v_hex)
+    if h_hex is not None:
+        current_app.logger.info(
+            'Oracle share %s released (ip=%s)', file_id, client_ip)
+        return {'h': h_hex}
+
+    # Claim failed — either we lost the race to a winner with the same V,
+    # or V' simply didn't match.
+    latest = file_repo.get_key_share(file_id)
+    if latest is None:
+        return {'error': 'Not found'}, 404
+    if latest.get('released_at'):
+        return {'error': 'Key already released'}, 410
+
+    attempts = file_repo.record_key_attempt(file_id)
+    current_app.logger.warning(
+        'Failed oracle release attempt on %s (attempts=%s, ip=%s)',
+        file_id, attempts, client_ip)
+    if attempts is not None and attempts >= max_attempts:
+        _maybe_burn()
+        return {'error': 'Too many attempts'}, 429
+    return {
+        'error': 'Incorrect password',
+        'attempts_remaining': max(0, max_attempts - (attempts or 0)),
+    }, 403
 
 
 @app.route('/report_decryption/<file_id>', methods=['POST'])
