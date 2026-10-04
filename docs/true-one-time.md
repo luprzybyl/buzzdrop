@@ -388,3 +388,29 @@ decryption.
 - Requires as foundation: #129, #130, #133, #135.
 - If demand returns (e.g. a client requirement for "provable
   one-time"), this document is the implementation spec.
+
+### Implementation note
+
+The §6 design is implemented and gated by `ORACLE_ENABLED`
+(default: on for new uploads; disabling only affects *new* uploads —
+shares already created still release H):
+
+- Wire format: `BKV3 ‖ salt(16) ‖ iv(12) ‖ AES-GCM`, inner `BKP-FILE`
+  header kept. `Kp`/`V`/`file_key` use HKDF-SHA256 with the blob salt
+  and `info` labels `enc`/`ver`/`file`. v1/v2 blobs still decrypt
+  entirely client-side, untouched.
+- Upload: `POST /upload/begin` → `{file_id, h}`; `POST /upload` with
+  `oracle_file_id` + `key_verifier` binds V and stores the blob.
+- Download: `POST /release/<file_id> {v}` — constant-time verifier
+  check plus a single conditional write
+  (`UPDATE ... WHERE released_at IS NULL`) → exactly one winner gets H.
+- Key material lives in a `file_keys` table (H, V, attempts,
+  released_at), not on `files`: the share must exist before the file
+  record (two-phase upload), and existing databases need no column
+  migrations — only `CREATE TABLE IF NOT EXISTS`.
+- Failure policy is configurable: `ORACLE_RELEASE_RATE_LIMIT`
+  (per file_id), `ORACLE_MAX_RELEASE_ATTEMPTS` (default 5), and
+  `ORACLE_BURN_ON_LOCKOUT` (default off — lockout only; when on, the
+  share row is deleted, destroying H).
+- CLI parity: `cli/buzz` performs the same handshake and falls back to
+  v2 when the server returns 404 on `/upload/begin`.
