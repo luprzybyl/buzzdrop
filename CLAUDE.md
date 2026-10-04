@@ -74,7 +74,6 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 - `decryption_success` (bool, written once via `record_decryption_result` — NULL-guarded so the first receipt-backed report wins)
 - `receipt_hash` (SHA-256 of the in-plaintext decryption receipt — `/report_decryption` must present a matching receipt)
 - `type` (`'file'` or `'text'` for text notes)
-- `show_filename` (bool, lives in the `extra` JSON overflow — opt-in; recipients see the real `original_name` only when set, otherwise a generic "a file"/"a note" label on `/view` and in the `Content-Disposition` header)
 
 `api_tokens` table tracks:
 - `token_hash` (PBKDF2-HMAC-SHA256 fingerprint of the raw token — raw token is never stored)
@@ -179,7 +178,7 @@ Key variables in `.env`:
 - Secrets: `TOKEN_HASH_SECRET` is required in `FLASK_ENV=production` and must differ from `FLASK_SECRET_KEY` (dev falls back to `FLASK_SECRET_KEY`)
 - Database: `DATABASE_URL` (`DATABASE_PATH` deprecated → sqlite:/// fallback)
 - Key release: `KEY_RELEASE_RATE_LIMIT` (default `10 per minute`, per file_id), `KEY_RELEASE_MAX_ATTEMPTS` (default 1), `KEY_RELEASE_BURN_ON_LOCKOUT` (default on — lockout deletes the `file_keys` row, H+V destroyed; off keeps the row but permanently refuses releases — currently no unlock path), `KEY_SHARE_PENDING_TTL_SECONDS` (default 3600 — TTL for begun-but-never-finished shares)
-- Metadata: `REPORT_DECRYPTION_RATE_LIMIT` (default `10 per minute`, per file_id); filename shown to recipients only when the uploader sets `show_filename` on `/upload` (form checkbox "Show filename to the recipient" / `buzz --show-filename`) — default leaks nothing, and notification email subjects never carry the name
+- Metadata: `REPORT_DECRYPTION_RATE_LIMIT` (default `10 per minute`, per file_id); notification email subjects never carry the filename
 
 ### Deployment
 

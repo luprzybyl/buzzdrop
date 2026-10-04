@@ -127,7 +127,7 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 - **Proof of decryption, not just a flag**: The ciphertext embeds a random 32-byte receipt; `/report_decryption` only accepts reports carrying it (the server stores `SHA-256(receipt)`), and the first valid report wins. Expiring a file destroys its key share in the same transaction — H never outlives the data.
 - **Zero-Knowledge-ish, honestly**: The server never sees your plaintext or password — it holds `V` (a verifier it can't decrypt with) and `H` (a key half that's useless without the password). The honest caveat: a malicious admin could run an offline dictionary attack against `V`, so weak passwords are still weak. Use a strong passphrase and the math does the rest.
 - **One format, no archaeology**: Only `BKV3` shares exist — `BKV3 ‖ salt(16) ‖ iv(12) ‖ AES-GCM`, plaintext `BKP-FILE ‖ receipt ‖ payload`. This is a deliberate breaking change from legacy drops (pre-production wipe accepted); old links won't decrypt, by design.
-- **Filename hidden by default**: The original filename is server-side metadata — unauthenticated recipients see a generic label ("a file"/"a note") unless the sender opts in with "Show filename to the recipient" at upload time. Notification email subjects never include it either (subjects are not private).
+- **Filenames stay out of email subjects**: Recipients see the real filename on the download page, but notification email subjects never carry it — subjects are not private.
 - **Unique UUIDs**: Every file has a cryptographically random identifier (no guesswork).
 - **S3 Support**: Files never exposed directly—always routed through Buzzdrop's secure backend.
 
