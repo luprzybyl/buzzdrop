@@ -119,6 +119,28 @@ _WORDS = [
 
 TOKEN_FILE = os.path.expanduser('~/.buzz_token')
 
+# ---------------------------------------------------------------------------
+# Crypto wire format (shared with static/js/crypto.js).
+#
+#   v2: MAGIC_V2 (4 bytes) + salt (16) + iv (12) + AES-GCM ciphertext
+#       PBKDF2-SHA256, 600,000 iterations
+#   v1 (legacy): salt (16) + iv (12) + AES-GCM ciphertext
+#       PBKDF2-SHA256, 100,000 iterations
+#
+# The version marker sits outside the encrypted data so the iteration count
+# is known before key derivation. v1 blobs are detected by the ABSENCE of the
+# magic; a v1 salt colliding with b'BKV2' has probability 2^-32 per blob —
+# negligible, and the worst case is a failed GCM auth tag (wrong password).
+# Plaintext always starts with b'BKP-FILE' (inside the ciphertext) for
+# integrity validation.
+# ---------------------------------------------------------------------------
+MAGIC_V2 = b'BKV2'
+PLAINTEXT_MAGIC = b'BKP-FILE'
+ITERATIONS_V1 = 100_000
+ITERATIONS_V2 = 600_000
+_SALT_LEN = 16
+_IV_LEN = 12
+
 
 # ---------------------------------------------------------------------------
 # Helpers: human-readable sizes, progress bar, zip.
@@ -311,20 +333,13 @@ def read_token_file(server_override: str = None) -> tuple[str, str]:
     return token, server.rstrip('/')
 
 
-def encrypt_file(file_bytes: bytes, password: str) -> bytes:
-    """
-    Encrypt file_bytes with password using AES-GCM + PBKDF2-SHA256.
-
-    Output format (same as the Buzzdrop browser client):
-        salt (16 bytes) + iv (12 bytes) + AES-GCM ciphertext (with 16-byte tag)
-
-    The plaintext has the magic header b'BKP-FILE' prepended before encryption
-    so the browser can detect a wrong password.
-    """
+def _crypto_imports():
+    """Import crypto primitives, exiting with a helpful message if missing."""
     try:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
         from cryptography.hazmat.primitives import hashes
+        return AESGCM, PBKDF2HMAC, hashes
     except ImportError:
         print(
             "Error: the 'cryptography' package is required.\n"
@@ -333,20 +348,67 @@ def encrypt_file(file_bytes: bytes, password: str) -> bytes:
         )
         sys.exit(1)
 
-    salt = os.urandom(16)
-    iv = os.urandom(12)
 
+def _derive_key(password: str, salt: bytes, iterations: int) -> bytes:
+    """Derive a 32-byte AES key via PBKDF2-SHA256."""
+    _AESGCM, PBKDF2HMAC, hashes = _crypto_imports()
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=salt,
-        iterations=100_000,
+        iterations=iterations,
     )
-    key = kdf.derive(password.encode('utf-8'))
+    return kdf.derive(password.encode('utf-8'))
 
-    plaintext = b'BKP-FILE' + file_bytes
+
+def encrypt_file(file_bytes: bytes, password: str) -> bytes:
+    """
+    Encrypt file_bytes with password using AES-GCM + PBKDF2-SHA256.
+
+    Always produces a v2 payload (same format as the browser client):
+        MAGIC_V2 (4 bytes) + salt (16 bytes) + iv (12 bytes)
+        + AES-GCM ciphertext (with 16-byte tag)
+
+    The plaintext has the magic header b'BKP-FILE' prepended before encryption
+    so the client can detect a wrong password.
+    """
+    AESGCM, _PBKDF2HMAC, _hashes = _crypto_imports()
+
+    salt = os.urandom(_SALT_LEN)
+    iv = os.urandom(_IV_LEN)
+    key = _derive_key(password, salt, ITERATIONS_V2)
+
+    plaintext = PLAINTEXT_MAGIC + file_bytes
     ciphertext = AESGCM(key).encrypt(iv, plaintext, None)
-    return salt + iv + ciphertext
+    return MAGIC_V2 + salt + iv + ciphertext
+
+
+def decrypt_file(encrypted: bytes, password: str) -> bytes:
+    """
+    Decrypt a Buzzdrop payload produced by encrypt_file() or the web UI.
+
+    Auto-detects the format version:
+        v2: starts with MAGIC_V2 -> 600,000 PBKDF2 iterations
+        v1 (legacy): no magic    -> 100,000 PBKDF2 iterations
+
+    Returns the original file bytes (inner 'BKP-FILE' header stripped and
+    validated). Raises InvalidTag/ValueError on wrong password or corruption.
+    """
+    AESGCM, _PBKDF2HMAC, _hashes = _crypto_imports()
+
+    offset = len(MAGIC_V2) if encrypted[:len(MAGIC_V2)] == MAGIC_V2 else 0
+    iterations = ITERATIONS_V2 if offset else ITERATIONS_V1
+
+    salt = encrypted[offset:offset + _SALT_LEN]
+    iv = encrypted[offset + _SALT_LEN:offset + _SALT_LEN + _IV_LEN]
+    ciphertext = encrypted[offset + _SALT_LEN + _IV_LEN:]
+
+    key = _derive_key(password, salt, iterations)
+    plaintext = AESGCM(key).decrypt(iv, ciphertext, None)
+
+    if not plaintext.startswith(PLAINTEXT_MAGIC):
+        raise ValueError('Invalid password or corrupted data')
+    return plaintext[len(PLAINTEXT_MAGIC):]
 
 
 def upload(server: str, token: str, filename: str, encrypted: bytes, expiry: str = None) -> dict:
