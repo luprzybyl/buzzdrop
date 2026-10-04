@@ -1,6 +1,7 @@
 // Import CryptoService for encryption
 import { CryptoService } from './crypto.js';
 import { buildSharedFilesUrl, getSharedFilesPage } from './shared-files.mjs';
+import { assessPassword, generatePassphrase } from './passphrase.mjs';
 
 const cryptoService = new CryptoService();
 let activeShareMode = 'file';
@@ -90,6 +91,83 @@ if (shareTabRail) {
         e.preventDefault();
         selectShareMode(shareModeOrder[next], { focusTab: true });
     });
+}
+
+// --- Password Generation & Strength Gate ---
+// The server never sees the password (encryption is client-side), so this
+// check is the only place a weak key can be refused — and it must refuse.
+const passwordInput = document.getElementById('shared-password');
+const generatePasswordBtn = document.getElementById('generate-password-btn');
+const strengthRegion = document.getElementById('password-strength');
+const strengthBar = document.getElementById('password-strength-bar');
+const strengthText = document.getElementById('password-strength-text');
+const passwordError = document.getElementById('password-error');
+
+const STRENGTH_FILL = {
+    weak: 'pw-fill-weak',
+    fair: 'pw-fill-fair',
+    strong: 'pw-fill-strong',
+};
+const STRENGTH_TEXT = {
+    weak: 'pw-text-weak',
+    fair: 'pw-text-fair',
+    strong: 'pw-text-strong',
+};
+
+// Same always-present-region pattern as #file-error: only the text swaps.
+function setPasswordError(message) {
+    if (passwordError) passwordError.textContent = message;
+}
+
+function updatePasswordStrength() {
+    if (!passwordInput || !strengthRegion || !strengthBar || !strengthText) {
+        return;
+    }
+    const result = assessPassword(passwordInput.value);
+    if (result.level === 'empty') {
+        strengthRegion.classList.add('hidden');
+        return;
+    }
+    strengthRegion.classList.remove('hidden');
+    strengthBar.className = `pw-fill ${STRENGTH_FILL[result.level]}`;
+    // Scale ~90 bits to a full bar so "fair" doesn't read as nearly done.
+    strengthBar.style.width = `${Math.min(100, Math.round((result.bits / 90) * 100))}%`;
+    strengthText.className = `field-help ${STRENGTH_TEXT[result.level]}`;
+    strengthText.textContent = result.message;
+}
+
+if (passwordInput) {
+    passwordInput.addEventListener('input', () => {
+        updatePasswordStrength();
+        // Re-typing clears a stale refusal so the user sees progress.
+        setPasswordError('');
+    });
+}
+
+if (generatePasswordBtn && passwordInput) {
+    generatePasswordBtn.addEventListener('click', () => {
+        passwordInput.value = generatePassphrase();
+        // Show the phrase so the sender can read it back on another channel;
+        // the success page reveals it again anyway via sessionStorage.
+        passwordInput.type = 'text';
+        setPasswordError('');
+        updatePasswordStrength();
+        passwordInput.focus();
+    });
+}
+
+// The actual gate: refuse to encrypt/upload a weak password. Called from
+// both upload paths (file form submit and text note) so every drop shares
+// the same floor.
+function enforcePasswordStrength(password) {
+    const result = assessPassword(password);
+    if (result.blocked) {
+        updatePasswordStrength();
+        setPasswordError(`Password rejected: ${result.message}`);
+        if (passwordInput) passwordInput.focus();
+        return false;
+    }
+    return true;
 }
 
 // --- Shared Upload Logic ---
@@ -265,6 +343,7 @@ if (fileUploadForm) {
         const file = fileInput.files[0];
         const password = passInput.value;
         if (!file || !password) return;
+        if (!enforcePasswordStrength(password)) return;
 
         // Read and encrypt file data
         const fileData = new Uint8Array(await file.arrayBuffer());
@@ -315,6 +394,7 @@ async function uploadNote() {
         alert('Please enter both text and password');
         return;
     }
+    if (!enforcePasswordStrength(password)) return;
 
     // Encrypt text data
     const enc = new TextEncoder();

@@ -296,6 +296,38 @@
     @apply mt-3 inline-flex items-center gap-2 rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-300;
   }
 
+  /* --------------------------------------------------- Strength gate */
+
+  /* Fill for the password strength meter in the composer. The bar swaps
+     one of the three modifier classes below depending on the estimate. */
+  .pw-fill {
+    @apply h-full rounded-full transition-[width] duration-300 ease-out;
+  }
+
+  .pw-fill-weak {
+    background: linear-gradient(90deg, #e11d48, #fb7185);
+  }
+
+  .pw-fill-fair {
+    background: linear-gradient(90deg, #f59e0b, #ffb627);
+  }
+
+  .pw-fill-strong {
+    background: linear-gradient(90deg, #059669, #34d399);
+  }
+
+  .pw-text-weak {
+    @apply text-rose-300;
+  }
+
+  .pw-text-fair {
+    @apply text-honey-300;
+  }
+
+  .pw-text-strong {
+    @apply text-emerald-300;
+  }
+
   .copy-flash {
     @apply shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-emerald-300;
   }

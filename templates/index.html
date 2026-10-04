@@ -72,8 +72,23 @@
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
                     <label for="shared-password" class="field-label">Password</label>
-                    <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" required>
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                        <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" required autocomplete="new-password">
+                        <button id="generate-password-btn" type="button" class="btn-secondary shrink-0 whitespace-nowrap px-4 py-3 text-xs sm:w-auto" title="Generate a 6-word passphrase (about 77 bits of entropy)">
+                            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.451a.75.75 0 0 0 0-1.5H4.5a.75.75 0 0 0-.75.75v3.75a.75.75 0 0 0 1.5 0v-2.033l.364.363a7 7 0 0 0 11.712-3.15.75.75 0 0 0-1.449-.388 5.51 5.51 0 0 1-.435 1.063ZM8.858 8.576a5.5 5.5 0 0 1 9.201-2.466l.312.311H15.92a.75.75 0 0 0 0 1.5h3.75a.75.75 0 0 0 .75-.75V3.421a.75.75 0 0 0-1.5 0v2.033l-.364-.363A7 7 0 0 0 6.894 8.24a.75.75 0 0 0 1.449.388c.14-.021.28-.042.415-.052Z" clip-rule="evenodd"/>
+                            </svg>
+                            Generate
+                        </button>
+                    </div>
+                    <div id="password-strength" class="mt-2 hidden" aria-live="polite">
+                        <div class="honey-track">
+                            <div id="password-strength-bar" class="pw-fill" style="width: 0%"></div>
+                        </div>
+                        <p id="password-strength-text" class="field-help"></p>
+                    </div>
                     <p class="field-help">Share it through a different channel than the link.</p>
+                    <p id="password-error" class="file-error" role="alert"></p>
                 </div>
                 <div>
                     <label for="shared-expiry" class="field-label">Expiry date <span class="text-slate-600">(optional)</span></label>

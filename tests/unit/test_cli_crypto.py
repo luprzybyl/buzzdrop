@@ -211,10 +211,55 @@ def test_unicode_password():
 def test_generate_passphrase_format():
     buzz = _import_buzz()
     phrase = buzz.generate_passphrase()
-    parts = phrase.split('-')
-    assert len(parts) == 4
+    # Four EFF words contain a hyphen ('yo-yo', 't-shirt', ...), so a
+    # naive split('-') overcounts. Re-merge fragments when the joined
+    # form is a real word, then check the word count.
+    raw = phrase.split('-')
+    parts = []
+    i = 0
+    while i < len(raw):
+        if i + 1 < len(raw) and f"{raw[i]}-{raw[i + 1]}" in buzz._WORDS:
+            parts.append(f"{raw[i]}-{raw[i + 1]}")
+            i += 2
+        else:
+            parts.append(raw[i])
+            i += 1
+    assert len(parts) == 6
     for part in parts:
         assert part in buzz._WORDS
+
+
+def test_wordlist_is_eff_large_wordlist():
+    """The bundled list must be the full EFF large wordlist.
+
+    Regression protection: an earlier list claimed ~400 words but had
+    duplicates and only 691 entries — the whole point of a passphrase
+    generator is entropy, so guard the list size and uniqueness.
+    """
+    buzz = _import_buzz()
+    assert len(buzz._WORDS) == 7776
+    assert len(set(buzz._WORDS)) == 7776
+
+
+def test_js_wordlist_matches_cli():
+    """static/js/eff-wordlist.mjs must be the same list as cli/buzz's."""
+    import re
+    buzz = _import_buzz()
+    js_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', '..',
+                     'static', 'js', 'eff-wordlist.mjs')
+    )
+    with open(js_path) as fh:
+        js_words = re.findall(r"'([a-z-]+)'", fh.read())
+    assert js_words == buzz._WORDS
+
+
+def test_generate_passphrase_entropy():
+    """Default passphrases should carry ~77.5 bits of entropy."""
+    import math
+    buzz = _import_buzz()
+    bits_per_word = math.log2(len(buzz._WORDS))
+    assert 6 * bits_per_word >= 75
 
 
 def test_generate_passphrase_is_random():
