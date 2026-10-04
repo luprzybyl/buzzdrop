@@ -51,13 +51,25 @@
         <div class="mt-5 space-y-4">
             {% for username, user in users.items() %}
             {% set user_tokens = tokens_by_user.get(username, []) %}
-            <div class="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+            <div class="token-card overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
                 <div class="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
                     <div>
                         <h3 class="text-sm font-semibold text-white">{{ username }}</h3>
                         <p class="text-xs text-slate-500">{{ 'Admin' if user.is_admin else 'User' }}</p>
                     </div>
-                    <span class="status-badge status-badge-slate">{{ user_tokens|length }} token{{ '' if user_tokens|length == 1 else 's' }}</span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="btn-secondary generate-token-btn px-3 py-1.5 text-xs" data-username="{{ username }}">Generate token</button>
+                        <span class="status-badge status-badge-slate">{{ user_tokens|length }} token{{ '' if user_tokens|length == 1 else 's' }}</span>
+                    </div>
+                </div>
+                <div class="token-result border-b border-white/[0.06] px-4 py-4" hidden>
+                    <p class="text-xs text-slate-400">New token for <span class="font-semibold text-white">{{ username }}</span> — shown once. Store it now.</p>
+                    <div class="copy-field mt-3">
+                        <input type="text" readonly aria-label="New API token" class="generated-token-input field-input flex-1 border-transparent bg-transparent font-mono shadow-none">
+                        <button type="button" class="btn-secondary copy-token-btn shrink-0 px-4 py-2.5"><span class="copy-label">Copy</span></button>
+                    </div>
+                    <p class="token-expires mt-2 text-xs text-slate-500"></p>
+                    <p class="token-error mt-2 text-xs text-red-400" hidden></p>
                 </div>
                 {% if user_tokens %}
                 <div class="overflow-x-auto">
@@ -95,4 +107,5 @@
         </div>
     </section>
 </div>
+<script src="{{ url_for('static', filename='js/users.js') }}" integrity="{{ sri_hash('js/users.js') }}" crossorigin="anonymous"></script>
 {% endblock %}
