@@ -24,7 +24,7 @@ from flask import (
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 from flask_limiter import Limiter
-from tinydb import TinyDB, Query
+from db import Database, Query
 from dotenv import load_dotenv
 import base64
 import hashlib
@@ -277,10 +277,9 @@ def sri_hash_processor():
 if app.config['STORAGE_BACKEND'] == 'local':
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Initialize TinyDB
-db = TinyDB(app.config['DATABASE_PATH'])
+# Initialize the SQLite document database
+db = Database(app.config['DATABASE_PATH'])
 app.db = db
-File = Query()
 
 # Initialize storage backend
 storage = get_storage_backend(app.config)
@@ -291,35 +290,32 @@ file_repo = FileRepository()
 
 def get_db():
     """
-    Return a TinyDB instance, reopening it if necessary.
-    
-    This function handles the complexity of TinyDB connections across Flask app contexts.
-    It checks if the database handle is still open and reconnects if needed. This is
-    particularly important for:
-    - Test scenarios where the database file may be recreated between tests
-    - Long-running applications where file handles may become stale
-    - Multiple app contexts accessing the same database
-    
+    Return the Database instance for the current app context.
+
+    A new Database is created when the app's cached instance is missing or
+    was opened against a different DATABASE_PATH (e.g. test scenarios that
+    point the app at a temporary database file).
+
     Returns:
-        TinyDB: Active database instance for the current app context
+        Database: Active database instance for the current app context
     """
     if has_app_context():
         database = getattr(current_app, 'db', None)
         path = current_app.config.get('DATABASE_PATH', app.config['DATABASE_PATH'])
-        if database is None or getattr(database._storage, '_handle', None) is None or database._storage._handle.closed:
-            database = TinyDB(path)
+        if database is None or database.path != path:
+            database = Database(path)
             current_app.db = database
     else:
         database = getattr(app, 'db', None)
         path = app.config['DATABASE_PATH']
-        if database is None or getattr(database._storage, '_handle', None) is None or database._storage._handle.closed:
-            database = TinyDB(path)
+        if database is None or database.path != path:
+            database = Database(path)
             app.db = database
     return database
 
 
 def get_files_table():
-    """Return the TinyDB table respecting the current app configuration."""
+    """Return the files table respecting the current app configuration."""
     database = get_db()
     return database.table('files')
 
@@ -744,9 +740,11 @@ def download_file(file_id):
     # Get client IP address
     client_ip = get_client_ip()
 
-    # Mark file as downloaded
-    file_repo.mark_downloaded(file_id, client_ip)
-    
+    # Atomically claim the file — exactly one concurrent requester wins.
+    if not file_repo.mark_downloaded(file_id, client_ip):
+        flash('This file has already been downloaded')
+        return redirect(url_for('index'))
+
     # Stream file from storage
     def generate():
         for chunk in storage.retrieve(file_info['path']):

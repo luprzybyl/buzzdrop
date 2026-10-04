@@ -252,7 +252,7 @@ Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; t
 The application is built with:
 - **Flask** (Python web framework)
 - **Werkzeug** (secure password hashing and file handling)
-- **TinyDB** (lightweight JSON database)
+- **SQLite** (stdlib `sqlite3` document store in `db.py`)
 - **Flask-Limiter** (rate limiting middleware)
 - **Boto3** (AWS S3 integration)
 - **Tailwind CSS** (modern responsive styling)

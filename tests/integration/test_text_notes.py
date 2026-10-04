@@ -1,6 +1,6 @@
 import base64
 from flask import url_for
-from tinydb import Query
+from db import Query
 from unittest import mock
 
 def login_user(client, username, password):

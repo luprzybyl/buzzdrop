@@ -63,7 +63,7 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 
 ### Database
 
-**TinyDB** (JSON-based): Lightweight NoSQL database stored in `db.json`. Two tables:
+**SQLite** (stdlib `sqlite3` via `db.py`): Schemaless document store — each row is a JSON document — held in `buzzdrop.db`. `db.py` exposes a TinyDB-compatible `Database`/`Table`/`Query` API on top of real SQLite locking (WAL mode), so conditional updates run as single atomic statements. Two tables:
 
 `files` table tracks:
 - `id` (UUID), `original_name`, `path` (local or S3 key)
@@ -78,7 +78,7 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 - `username`, `created_at`, `last_used_at`, `expires_at`
 
 **Database Helper Functions**:
-- `get_db()`: Returns TinyDB instance, handles reopening if closed (important for tests)
+- `get_db()`: Returns the `Database` instance, recreating it when DATABASE_PATH changed (important for tests)
 - `get_files_table()`: Returns files table using current app context
 
 ### Authentication
@@ -167,4 +167,4 @@ Key variables in `.env`:
 
 **Passenger WSGI**: `passenger_wsgi.py` provides WSGI entry point with PATH_INFO encoding fixes for production deployment.
 
-**Docker**: Single-service compose with volume mounts for `uploads/` and `db.json` persistence.
+**Docker**: Single-service compose with volume mounts for `uploads/` and `buzzdrop.db` persistence.

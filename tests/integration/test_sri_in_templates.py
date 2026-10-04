@@ -49,7 +49,7 @@ def test_view_page_has_sri_for_view_js(client, db_instance, files_table, csrf_fo
     }, content_type='multipart/form-data')
     
     # Get file_id from database
-    from tinydb import Query
+    from db import Query
     File = Query()
     file_info = files_table.get(File.original_name == 'test.txt')
     assert file_info is not None
@@ -87,7 +87,7 @@ def test_success_page_has_sri_for_success_js(client, db_instance, files_table):
     }, content_type='multipart/form-data')
     
     # Get file_id from database
-    from tinydb import Query
+    from db import Query
     File = Query()
     file_info = files_table.get(File.original_name == 'success_test.txt')
     assert file_info is not None

@@ -3,7 +3,7 @@ import os
 import shutil # For file operations in cleanup test setup
 from app import get_files_table
 from utils import cleanup_orphaned_files
-from tinydb import Query
+from db import Query
 from unittest import mock
 # Fixtures 'app', 'db_instance', 'files_table' will be injected from conftest.py
 
@@ -135,6 +135,51 @@ def test_cleanup_orphaned_files_empty_uploads_dir(app, files_table):
     with mock.patch('os.remove') as mock_remove:
         cleanup_orphaned_files(upload_dir, tracked_files)
         mock_remove.assert_not_called()
+
+def test_mark_downloaded_second_claim_fails(app, db_instance):
+    """A sequential re-claim must be rejected once a file is downloaded."""
+    from models import FileRepository
+    repo = FileRepository()
+    with app.app_context():
+        file_id = repo.create({
+            'original_name': 'claimed.txt',
+            'path': '/fake/claimed',
+            'uploaded_by': 'testuser',
+        })
+        assert repo.mark_downloaded(file_id, '1.2.3.4') is True
+        assert repo.mark_downloaded(file_id, '5.6.7.8') is False
+
+        info = repo.get_by_id(file_id)
+        assert info['downloaded_at'] is not None
+        assert info['downloaded_by_ip'] == '1.2.3.4'
+
+
+def test_mark_downloaded_concurrent_claims_single_winner(app, db_instance):
+    """Concurrent mark_downloaded calls must produce exactly one winner."""
+    from concurrent.futures import ThreadPoolExecutor
+    from models import FileRepository
+
+    repo = FileRepository()
+    with app.app_context():
+        file_id = repo.create({
+            'original_name': 'race.txt',
+            'path': '/fake/race',
+            'uploaded_by': 'testuser',
+        })
+
+    workers = 8
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = list(pool.map(
+            lambda index: repo.mark_downloaded(file_id, f'10.0.0.{index}'),
+            range(workers),
+        ))
+
+    assert results.count(True) == 1
+
+    info = repo.get_by_id(file_id)
+    assert info['downloaded_at'] is not None
+    assert info['downloaded_by_ip'] in {f'10.0.0.{i}' for i in range(workers)}
+
 
 def test_cleanup_orphaned_files_uploads_dir_does_not_exist(app, files_table):
     # This test needs to temporarily remove the upload directory.

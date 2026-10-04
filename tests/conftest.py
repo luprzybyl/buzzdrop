@@ -25,8 +25,8 @@ def app():
     # Create a temporary folder for uploads, isolated for this test session
     temp_upload_folder = tempfile.mkdtemp()
 
-    # Create a temporary file for the TinyDB database
-    db_fd, db_path = tempfile.mkstemp(suffix='.json')
+    # Create a temporary file for the SQLite database
+    db_fd, db_path = tempfile.mkstemp(suffix='.db')
 
     flask_app.config.update({
         'TESTING': True,
@@ -51,15 +51,24 @@ def app():
     with flask_app.app_context():
         # Re-initialize db with the test path
         flask_app.db = get_db() # This will use the updated DATABASE_PATH
-        # Optionally, clear out tables if necessary, though TinyDB will use the new file
+        # Optionally, clear out tables if necessary; the new file starts empty
         files_table = get_files_table()
         files_table.truncate() # Clear the files table for a clean state
 
     yield flask_app
 
     # Teardown: clean up the temporary database and upload folder
+    with flask_app.app_context():
+        database = getattr(flask_app, 'db', None)
+        if database is not None:
+            database.close()
     os.close(db_fd)
     os.unlink(db_path)
+    # WAL sidecars, if any
+    for suffix in ('-wal', '-shm'):
+        sidecar = db_path + suffix
+        if os.path.exists(sidecar):
+            os.unlink(sidecar)
     # Clean up the temporary upload folder and its contents
     for root, dirs, files in os.walk(temp_upload_folder, topdown=False):
         for name in files:

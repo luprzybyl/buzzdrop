@@ -5,7 +5,7 @@ Provides abstraction over database operations.
 import uuid
 from datetime import datetime
 from typing import Optional, List
-from tinydb import Query
+from db import Query
 
 
 class FileRepository:
@@ -14,9 +14,9 @@ class FileRepository:
     def __init__(self, files_table=None):
         """
         Initialize file repository.
-        
+
         Args:
-            files_table: TinyDB table instance (optional, will use get_files_table if not provided)
+            files_table: files table instance (optional, will use get_files_table if not provided)
         """
         self._table = files_table
         self.query = Query()
@@ -124,18 +124,29 @@ class FileRepository:
         """
         return self.table.all()
     
-    def mark_downloaded(self, file_id: str, ip_address: str):
+    def mark_downloaded(self, file_id: str, ip_address: str) -> bool:
         """
-        Mark file as downloaded with timestamp and IP address.
-        
+        Atomically claim the file as downloaded.
+
+        Runs as a single conditional UPDATE (``WHERE id = ? AND
+        downloaded_at IS NULL``), so only the first of any concurrent
+        requests wins the claim.
+
         Args:
             file_id: File UUID
             ip_address: IP address of downloader
+
+        Returns:
+            True when this call won the download claim, False otherwise
         """
-        self.table.update({
+        updated_ids = self.table.update({
             'downloaded_at': datetime.now().isoformat(),
             'downloaded_by_ip': ip_address
-        }, self.query.id == file_id)
+        }, (
+            (self.query.id == file_id)
+            & (self.query.downloaded_at == None)
+        ))
+        return bool(updated_ids)
     
     def mark_expired(self, file_id: str):
         """

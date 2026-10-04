@@ -1,7 +1,7 @@
 import pytest
 import os
 from flask import url_for, session, current_app
-from tinydb import Query
+from db import Query
 import io # For creating dummy file content for uploads
 from datetime import datetime, timedelta
 from auth import get_users

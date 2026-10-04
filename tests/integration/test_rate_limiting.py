@@ -2,7 +2,7 @@ import io
 
 import pytest
 from flask import url_for
-from tinydb import Query
+from db import Query
 
 
 def login_user(client, username, password):

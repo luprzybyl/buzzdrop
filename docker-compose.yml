@@ -6,7 +6,7 @@ services:
       - "5000:5000"
     volumes:
       - ./uploads:/app/uploads
-      - ./db.json:/app/db.json
+      - ./buzzdrop.db:/app/buzzdrop.db
     env_file:
       - .env
     restart: unless-stopped

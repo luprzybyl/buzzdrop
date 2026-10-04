@@ -18,8 +18,8 @@ class Config:
     SECRET_KEY = os.getenv('FLASK_SECRET_KEY')
     TOKEN_HASH_SECRET = os.getenv('TOKEN_HASH_SECRET')
     
-    # Database
-    DATABASE_PATH = os.getenv('DATABASE_PATH', 'db.json')
+    # Database (SQLite document store)
+    DATABASE_PATH = os.getenv('DATABASE_PATH', 'buzzdrop.db')
     
     # Upload settings
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')

@@ -1,7 +1,7 @@
 import pytest
 import os
 from flask import url_for, session
-from tinydb import Query
+from db import Query
 import io
 # Fixtures: 'app', 'client', 'db_instance', 'files_table' from conftest.py
 # Test users from conftest.py: 'testuser:password:false', 'adminuser:adminpass:true'

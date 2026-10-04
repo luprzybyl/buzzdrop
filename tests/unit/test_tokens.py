@@ -60,7 +60,7 @@ def test_validate_api_token_rejects_removed_user(app, monkeypatch, clear_user_ca
     with app.app_context():
         from app import get_db
         from auth import get_users
-        from tinydb import Query
+        from db import Query
         from tokens import _hash_token, generate_api_token, validate_api_token
 
         token = generate_api_token('testuser')
@@ -127,7 +127,7 @@ def test_validate_api_token_rejects_legacy_hash(app, db_instance):
 def test_validate_api_token_sets_missing_hash_version(app, db_instance):
     with app.app_context():
         from app import get_db
-        from tinydb import Query
+        from db import Query
         from tokens import TOKEN_HASH_VERSION, _hash_token, validate_api_token
 
         token = 'b' * 64
@@ -149,7 +149,7 @@ def test_validate_api_token_sets_missing_hash_version(app, db_instance):
 def test_validate_updates_last_used_at(app, db_instance):
     with app.app_context():
         from app import get_db
-        from tinydb import Query
+        from db import Query
         from tokens import _hash_token, generate_api_token, validate_api_token
 
         token = generate_api_token('testuser')
@@ -176,7 +176,7 @@ def test_revoke_api_token(app):
 def test_revoke_api_token_does_not_remove_legacy_hash(app, db_instance):
     with app.app_context():
         from app import get_db
-        from tinydb import Query
+        from db import Query
         from tokens import revoke_api_token
 
         token = 'a' * 64

@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from flask import current_app, has_app_context
-from tinydb import Query
+from db import Query
 
 DEFAULT_TOKEN_EXPIRY_DAYS = 30
 TOKEN_HASH_ITERATIONS = 310_000
@@ -177,7 +177,7 @@ def list_api_tokens(username: Optional[str] = None) -> List[Dict[str, Any]]:
 
 
 def get_api_token(token_id: int) -> Optional[Dict[str, Any]]:
-    """Return active token metadata by TinyDB document ID."""
+    """Return active token metadata by document ID."""
     table = _get_tokens_table()
     entry = table.get(doc_id=token_id)
     if not entry:
@@ -189,7 +189,7 @@ def get_api_token(token_id: int) -> Optional[Dict[str, Any]]:
 
 
 def revoke_api_token_by_id(token_id: int) -> bool:
-    """Revoke a token by TinyDB document ID."""
+    """Revoke a token by document ID."""
     table = _get_tokens_table()
     removed = table.remove(doc_ids=[token_id])
     return bool(removed)
