@@ -16,6 +16,11 @@
             null, '', window.location.pathname + window.location.search);
     }
     if (fragmentPassword) {
+        var hint = document.getElementById('password-hint');
+        if (hint) {
+            hint.textContent =
+                'This link already carries the key — continue and the drop goes BZZT.';
+        }
         document.getElementById('confirm-form').addEventListener('submit', function () {
             this.action = this.action.split('#')[0]
                 + '#' + encodeURIComponent(fragmentPassword);

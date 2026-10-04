@@ -132,7 +132,7 @@ def test_view_text_note_shows_correct_template(client, app, files_store):
     assert b'Ready to view?' in response.data
     assert b'Continuing deletes this note from the server immediately.' in response.data
     assert b'If the sender shared the password separately' in response.data
-    assert b'One-click links already include it.' in response.data
+    assert b'id="password-hint"' in response.data
 
 def test_confirm_view_text_note(client, app, files_store, csrf_form_data):
     """Test the confirm view page for text notes."""
