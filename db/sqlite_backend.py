@@ -49,7 +49,7 @@ FILE_TEXT_COLUMNS = frozenset({
     'id', 'original_name', 'path', 'created_at', 'downloaded_at',
     'downloaded_by_ip', 'expiry_at', 'uploaded_by', 'status', 'type',
     'private_note', 'notification_email', 'notification_sent_at',
-    'notification_claimed_at',
+    'notification_claimed_at', 'receipt_hash',
 })
 FILE_COLUMNS = FILE_BOOL_COLUMNS | FILE_JSON_COLUMNS | FILE_TEXT_COLUMNS
 
@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS files (
     notification_email TEXT,
     notification_sent_at TEXT,
     notification_claimed_at TEXT,
+    receipt_hash TEXT,
     extra TEXT
 )
 """
@@ -207,10 +208,12 @@ def _guard_incompatible_columns(conn: sqlite3.Connection, table: str,
 
 # Server-gated key release (docs/true-one-time.md §6): one row per
 # key-release share, keyed by the public file id. `v` NULL marks a
-# pending share (/upload/begin done, /upload/finish not yet); a row is
-# deleted outright to burn H on lockout. Kept off the files table because
-# the share must exist before the file record does (two-phase upload) —
-# and so existing databases need no ALTER TABLE, just CREATE TABLE.
+# pending share (/upload/begin done, /upload not yet finished); a row is
+# deleted outright to burn H on lockout, expiry or manual deletion.
+# Kept off the files table because the share must exist before the file
+# record does (two-phase upload). `created_by` binds the pending share
+# to the account that minted it. Columns added post-release are covered
+# by _MIGRATABLE_COLUMNS below.
 _FILE_KEYS_DDL = """
 CREATE TABLE IF NOT EXISTS file_keys (
     doc_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -219,9 +222,18 @@ CREATE TABLE IF NOT EXISTS file_keys (
     v TEXT,
     attempts INTEGER NOT NULL DEFAULT 0,
     released_at TEXT,
-    created_at TEXT
+    created_at TEXT,
+    created_by TEXT
 )
 """
+
+# Columns added after a table first shipped land here: _ensure_schema
+# back-fills them via ALTER TABLE on databases created before they
+# existed, so upgrading in place needs no migration script.
+_MIGRATABLE_COLUMNS = (
+    ('files', 'receipt_hash', 'TEXT'),
+    ('file_keys', 'created_by', 'TEXT'),
+)
 
 
 def _serialize_value(column: str, value: Any,
@@ -454,13 +466,17 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
 
     # -- file_keys: server-gated key release --------------------------------
 
-    def create_key_share(self, file_id: str, h_hex: str) -> bool:
+    def create_key_share(self, file_id: str, h_hex: str,
+                         created_by: Optional[str] = None,
+                         created_at: Optional[str] = None) -> bool:
         try:
             self._conn().execute(
                 'INSERT INTO file_keys '
-                '(file_id, h, v, attempts, released_at, created_at) '
-                'VALUES (?, ?, NULL, 0, NULL, ?)',
-                (file_id, h_hex, datetime.now().isoformat()),
+                '(file_id, h, v, attempts, released_at, created_at, '
+                ' created_by) '
+                'VALUES (?, ?, NULL, 0, NULL, ?, ?)',
+                (file_id, h_hex,
+                 created_at or datetime.now().isoformat(), created_by),
             )
             return True
         except sqlite3.IntegrityError:
@@ -477,56 +493,160 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
 
     def get_key_share(self, file_id: str) -> Optional[Dict[str, Any]]:
         row = self._conn().execute(
-            'SELECT file_id, h, v, attempts, released_at, created_at '
-            'FROM file_keys WHERE file_id = ?',
+            'SELECT file_id, h, v, attempts, released_at, created_at, '
+            'created_by FROM file_keys WHERE file_id = ?',
             (file_id,),
         ).fetchone()
         return dict(row) if row else None
 
-    def claim_key_release(self, file_id: str, v_hex: str) -> Optional[str]:
-        conn = self._conn()
-        row = conn.execute(
-            'SELECT h, v FROM file_keys '
-            'WHERE file_id = ? AND released_at IS NULL',
-            (file_id,),
-        ).fetchone()
-        if row is None or row['v'] is None:
-            return None
-        # Constant-time verifier check — the match decision must not leak
-        # timing. The release below is what serializes concurrent winners.
-        if not secrets.compare_digest(row['v'], v_hex):
-            return None
-        cursor = conn.execute(
-            'UPDATE file_keys SET released_at = ?, h = NULL, v = NULL '
-            'WHERE file_id = ? AND released_at IS NULL',
-            (datetime.now().isoformat(), file_id),
-        )
-        # A racing claimant that already committed makes rowcount 0 —
-        # exactly one caller ever takes H home. H and V are wiped with
-        # the claim: post-release the row keeps only bookkeeping, so a
-        # later DB theft yields nothing crackable.
-        return row['h'] if cursor.rowcount > 0 else None
+    def attempt_key_release(self, file_id: str, v_hex: str,
+                            max_attempts: int,
+                            burn_on_lockout: bool) -> Dict[str, Any]:
+        """
+        One full release attempt — read, decide, and write inside a single
+        BEGIN IMMEDIATE transaction, so concurrent requests serialize on
+        the write lock instead of all passing a shared read gate.
 
-    def record_key_attempt(self, file_id: str) -> Optional[int]:
+        Returns a dict with ``status``:
+          'missing_file'  — no files row for file_id
+          'missing_share' — file exists, no file_keys row
+          'pending'       — share exists but V was never bound
+          'released'      — released_at already set
+          'locked'        — attempts exhausted (row deleted when burning)
+          'expired'       — file past expiry_at (share deleted, row
+                            marked expired; caller deletes the blob via
+                            the returned ``path``)
+          'ok'            — verifier matched; ``h`` released once and
+                            h/v wiped from the row
+          'denied'        — verifier miss; ``attempts``/``attempts_remaining``
+                            describe the counted failure
+        """
         conn = self._conn()
-        cursor = conn.execute(
-            'UPDATE file_keys SET attempts = attempts + 1 '
-            'WHERE file_id = ? AND released_at IS NULL',
-            (file_id,),
+        destroyed = False  # a row holding H was deleted → checkpoint WAL
+        conn.execute('BEGIN IMMEDIATE')
+        try:
+            row = conn.execute(
+                'SELECT f.status AS file_status, f.expiry_at, f.path, '
+                '       k.h, k.v, k.attempts, k.released_at '
+                'FROM files f LEFT JOIN file_keys k ON k.file_id = f.id '
+                'WHERE f.id = ?',
+                (file_id,),
+            ).fetchone()
+
+            if row is None:
+                result: Dict[str, Any] = {'status': 'missing_file'}
+            elif row['released_at'] is not None:
+                result = {'status': 'released'}
+            elif row['h'] is None and row['v'] is None \
+                    and row['attempts'] is None:
+                result = {'status': 'missing_share'}
+            elif row['v'] is None:
+                result = {'status': 'pending'}
+            elif row['attempts'] >= max_attempts:
+                if burn_on_lockout:
+                    conn.execute(
+                        'DELETE FROM file_keys WHERE file_id = ?',
+                        (file_id,))
+                    destroyed = True
+                result = {'status': 'locked'}
+            elif self._share_file_expired(row):
+                # Expired = share gone: flip the record and destroy H in
+                # the same transaction.
+                if row['file_status'] != 'expired':
+                    conn.execute(
+                        "UPDATE files SET status = 'expired' WHERE id = ?",
+                        (file_id,))
+                conn.execute(
+                    'DELETE FROM file_keys WHERE file_id = ?', (file_id,))
+                destroyed = True
+                result = {'status': 'expired', 'path': row['path']}
+            # Constant-time verifier check — the match decision must not
+            # leak timing. Everything above and below runs under the write
+            # lock, so only this attempt observes this share state.
+            elif secrets.compare_digest(row['v'], v_hex):
+                conn.execute(
+                    'UPDATE file_keys SET released_at = ?, '
+                    'h = NULL, v = NULL WHERE file_id = ?',
+                    (datetime.now().isoformat(), file_id),
+                )
+                # H and V are wiped with the claim: post-release the row
+                # keeps only bookkeeping, so a later DB theft yields
+                # nothing crackable.
+                result = {'status': 'ok', 'h': row['h']}
+            else:
+                conn.execute(
+                    'UPDATE file_keys SET attempts = attempts + 1 '
+                    'WHERE file_id = ?',
+                    (file_id,))
+                attempts = row['attempts'] + 1
+                if attempts >= max_attempts:
+                    if burn_on_lockout:
+                        conn.execute(
+                            'DELETE FROM file_keys WHERE file_id = ?',
+                            (file_id,))
+                        destroyed = True
+                    result = {'status': 'locked'}
+                else:
+                    result = {
+                        'status': 'denied',
+                        'attempts': attempts,
+                        'attempts_remaining': max_attempts - attempts,
+                    }
+            conn.execute('COMMIT')
+        except Exception:
+            conn.execute('ROLLBACK')
+            raise
+        if destroyed:
+            self._backend.checkpoint_wal()
+        return result
+
+    @staticmethod
+    def _share_file_expired(joined_row) -> bool:
+        """True when the joined files row is expired/expiring now."""
+        if joined_row['file_status'] == 'expired':
+            return True
+        expiry_at = joined_row['expiry_at']
+        if not expiry_at:
+            return False
+        try:
+            return datetime.now() >= datetime.fromisoformat(expiry_at)
+        except ValueError:
+            return False
+
+    def record_decryption_result(self, file_id: str, success: bool) -> bool:
+        cursor = self._conn().execute(
+            'UPDATE files SET decryption_success = ? '
+            'WHERE id = ? AND decryption_success IS NULL',
+            (1 if success else 0, file_id),
         )
-        if cursor.rowcount == 0:
-            return None
-        row = conn.execute(
-            'SELECT attempts FROM file_keys WHERE file_id = ?',
-            (file_id,),
-        ).fetchone()
-        return row['attempts'] if row else None
+        return cursor.rowcount > 0
+
+    def purge_stale_key_shares(self, older_than_seconds: int) -> int:
+        cutoff = (
+            datetime.now().timestamp() - older_than_seconds
+        )
+        cutoff_iso = datetime.fromtimestamp(cutoff).isoformat()
+        # A pending share that never finished is dead weight: its H can
+        # never be legitimately bound again, so failing closed is correct.
+        cursor = self._conn().execute(
+            'DELETE FROM file_keys WHERE v IS NULL AND released_at IS NULL '
+            'AND (created_at < ? OR NOT is_iso_timestamp(created_at))',
+            (cutoff_iso,),
+        )
+        return cursor.rowcount
 
     def delete_key_share(self, file_id: str) -> bool:
         cursor = self._conn().execute(
             'DELETE FROM file_keys WHERE file_id = ?', (file_id,)
         )
         return cursor.rowcount > 0
+
+    def burn_key_share(self, file_id: str) -> bool:
+        """delete_key_share + WAL checkpoint — used when H is destroyed."""
+        removed = self.delete_key_share(file_id)
+        if removed:
+            self._backend.checkpoint_wal()
+        return removed
 
     def truncate(self) -> None:
         super().truncate()
@@ -656,6 +776,9 @@ class SQLiteBackend(Backend):
             conn.row_factory = sqlite3.Row
             conn.execute('PRAGMA journal_mode=WAL')
             conn.execute('PRAGMA busy_timeout=10000')
+            # Overwrite deleted pages — reduces (but does not eliminate,
+            # see docs/true-one-time.md §10) H residue in the db file.
+            conn.execute('PRAGMA secure_delete=ON')
             conn.create_function('is_iso_timestamp', 1, _is_iso_timestamp)
             self._local.conn = conn
             with self._lock:
@@ -687,6 +810,30 @@ class SQLiteBackend(Backend):
         _add_missing_columns(conn, 'api_tokens', _TOKEN_MIGRATABLE_COLUMNS)
         _guard_incompatible_columns(conn, 'files', FILE_COLUMNS)
         _guard_incompatible_columns(conn, 'api_tokens', TOKEN_COLUMNS)
+        for table, column, decl in _MIGRATABLE_COLUMNS:
+            self._ensure_column(conn, table, column, decl)
+
+    @staticmethod
+    def _ensure_column(conn, table: str, column: str, decl: str) -> None:
+        """ALTER TABLE ADD COLUMN when an existing DB predates the column."""
+        existing = {row['name'] for row in conn.execute(
+            f'PRAGMA table_info("{table}")')}
+        if column not in existing:
+            conn.execute(f'ALTER TABLE "{table}" ADD COLUMN {column} {decl}')
+
+    def checkpoint_wal(self) -> None:
+        """
+        Truncate the WAL after a destructive write that dropped H.
+
+        secure_delete=ON overwrites pages in the main db file, but WAL
+        frames keep stale copies until a checkpoint — truncate it so the
+        released/burned share stops lingering in the sidecar file.
+        """
+        try:
+            self._connection().execute('PRAGMA wal_checkpoint(TRUNCATE)')
+        except sqlite3.Error:
+            logging.getLogger(__name__).warning(
+                'wal_checkpoint after key-share burn failed', exc_info=True)
 
     @contextmanager
     def transaction(self):

@@ -221,6 +221,7 @@ def test_upload_with_valid_token(app, client, db_instance, key_share):
             'file': (_make_fake_upload(), 'test.pdf'),
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
         },
         headers={
             'Authorization': f'Bearer {token}',
@@ -282,6 +283,7 @@ def test_upload_with_session_still_works(user_client, db_instance, key_share):
             'file': (io.BytesIO(os.urandom(44)), 'test.pdf'),
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
         },
         headers={'X-Requested-With': 'XMLHttpRequest'},
         content_type='multipart/form-data',
@@ -324,6 +326,7 @@ def test_upload_token_sets_uploaded_by(app, client, db_instance, key_share):
             'file': (io.BytesIO(os.urandom(44)), 'myfile.txt'),
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
         },
         headers={
             'Authorization': f'Bearer {token}',

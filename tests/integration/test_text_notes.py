@@ -8,26 +8,35 @@ def login_user(client, username, password):
     return client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
 
 def upload_note(client, files_store, data=None, headers=None, xhr=True):
-    """Upload a text note through the mandatory two-phase key-release flow."""
+    """Upload a text note through the mandatory two-phase key-release flow.
+
+    The response gets a ``.receipt`` attribute — the hex receipt matching
+    the uploaded ``receipt_hash`` — for /report_decryption tests.
+    """
+    import hashlib
     import secrets
     import uuid
     file_id = str(uuid.uuid4())
-    files_store.create_key_share(file_id, secrets.token_hex(32))
+    receipt = secrets.token_bytes(32)
+    files_store.create_key_share(file_id, secrets.token_hex(32), created_by='testuser')
     form = {
         'note_text': base64.b64encode(b"Test note").decode('utf-8'),
         'type': 'text',
         'file_id': file_id,
         'key_verifier': 'cc' * 32,
+        'receipt_hash': hashlib.sha256(receipt).hexdigest(),
     }
     form.update(data or {})
     if headers is None:
         headers = {'X-Requested-With': 'XMLHttpRequest'} if xhr else {}
-    return client.post(
+    response = client.post(
         url_for('upload_file'),
         data=form,
         follow_redirects=False,
         headers=headers,
     )
+    response.receipt = receipt.hex()
+    return response
 
 def test_upload_text_note_requires_login(client):
     """Test that uploading a text note requires authentication."""
@@ -153,13 +162,14 @@ def test_text_note_type_field_in_database(client, app, files_store):
     import secrets
     import uuid
     file_id = str(uuid.uuid4())
-    files_store.create_key_share(file_id, secrets.token_hex(32))
+    files_store.create_key_share(file_id, secrets.token_hex(32), created_by='testuser')
     file_response = client.post(
         url_for('upload_file'),
         data={
             'file': (io.BytesIO(b"test content"), "test.txt"),
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
         },
         content_type='multipart/form-data',
         follow_redirects=False
@@ -234,6 +244,7 @@ def test_text_note_empty_content(client, app, key_share):
         'type': 'text',
         'file_id': file_id,
         'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
     }
 
     response = client.post(
@@ -254,11 +265,12 @@ def test_report_decryption_for_text_note(client, app, files_store):
     # Upload text note
     response = upload_note(client, files_store)
     note_id = response.get_json()['file_id']
+    receipt = response.receipt
 
-    # Report decryption success
+    # Report decryption success — the receipt proves the decrypt happened
     response = client.post(
         url_for('report_decryption', file_id=note_id),
-        json={'success': True}
+        json={'success': True, 'receipt': receipt}
     )
     assert response.status_code == 200
 
@@ -283,12 +295,13 @@ def test_report_decryption_for_text_note_sends_failed_notification(client, app, 
 
     response = upload_note(client, files_store, data={'notify_on_open': 'true'})
     note_id = response.get_json()['file_id']
+    receipt = response.receipt
 
     client.get(url_for('download_file', file_id=note_id))
 
     response = client.post(
         url_for('report_decryption', file_id=note_id),
-        json={'success': False}
+        json={'success': False, 'receipt': receipt}
     )
     assert response.status_code == 200
 
@@ -317,7 +330,7 @@ def test_text_note_notifications_can_use_verified_account_email(client, app, fil
     client.get(url_for('download_file', file_id=note_id))
     response = client.post(
         url_for('report_decryption', file_id=note_id),
-        json={'success': True}
+        json={'success': True, 'receipt': response.receipt}
     )
 
     assert response.status_code == 200

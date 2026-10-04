@@ -14,8 +14,8 @@ round-trip encrypt→decrypt produces the original data for the key-release
 The V3_FIXTURE hex blob below is shared verbatim with
 tests/js/crypto.test.mjs so both implementations are pinned to identical
 bytes: salt = bytes(range(16)), iv = bytes(range(16, 28)),
-h = bytes(range(32, 64)), password = 'fixture-password-123',
-plaintext payload = b'fixture-data'.
+h = bytes(range(32, 64)), receipt = bytes(range(64, 96)),
+password = 'fixture-password-123', plaintext payload = b'fixture-data'.
 """
 import os
 import sys
@@ -51,15 +51,19 @@ requires_cryptography = pytest.mark.skipif(
     reason='cryptography package not installed',
 )
 
-# Deterministic fixtures (salt = 0x00..0x0f, iv = 0x10..0x1b, h = 0x20..0x3f).
+# Deterministic fixtures (salt = 0x00..0x0f, iv = 0x10..0x1b,
+# h = 0x20..0x3f, receipt = 0x40..0x5f).
 FIXTURE_PASSWORD = 'fixture-password-123'
 FIXTURE_DATA = b'fixture-data'
-# v3 blob: 'BKV3' + salt(16) + iv(12) + AES-GCM('BKP-FILE' + data), key-release KDF.
+# v3 blob: 'BKV3' + salt(16) + iv(12) + AES-GCM('BKP-FILE' + receipt + data),
+# key-release KDF.
 V3_FIXTURE = bytes.fromhex(
     '424b5633'
     '000102030405060708090a0b0c0d0e0f'
     '101112131415161718191a1b'
-    '9d9e3a85dc0667cf0bbb1518c026c1077fae042f4b6eb1a5a413d9fc50b9b4d6cbdf69ba'
+    '9d9e3a85dc0667cf2d932f2ff111e26d53863a05b353260ca7f44e971372b9'
+    '1bc0238a04ef05c5b1e79f2b61b3a603b53c45ea318ba552f5d223fffcaa'
+    'e506cbea569cd3'
 )
 V3_FIXTURE_H = bytes.fromhex(
     '202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f'
@@ -67,23 +71,40 @@ V3_FIXTURE_H = bytes.fromhex(
 V3_FIXTURE_V = (
     '0ec3a6fe37dd4e652583c3dcde17bad20e019cbbf47d8f281bbf3f028ab482db'
 )
+V3_FIXTURE_RECEIPT = bytes.fromhex(
+    '404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f'
+)
 
 
 @requires_cryptography
 def test_encrypt_output_length():
     buzz = _import_buzz()
     data = b'hello world'
-    blob, _v = buzz.encrypt_file(data, 'test-password', h=os.urandom(32))
-    # magic(4) + salt(16) + iv(12) + AES-GCM(tag=16 + plaintext with 8-byte header)
-    expected_min = 4 + 16 + 12 + 16 + 8 + len(data)
+    blob, _v, receipt_hash = buzz.encrypt_file(
+        data, 'test-password', h=os.urandom(32))
+    # magic(4) + salt(16) + iv(12) + AES-GCM(tag=16 + plaintext with
+    # 8-byte header + 32-byte receipt)
+    expected_min = 4 + 16 + 12 + 16 + 8 + 32 + len(data)
     assert len(blob) == expected_min
+    assert len(receipt_hash) == 64
+
+
+@requires_cryptography
+def test_encrypt_receipt_hash_matches_payload():
+    """The stored receipt_hash is SHA-256 of the in-plaintext receipt."""
+    import hashlib
+    buzz = _import_buzz()
+    h = os.urandom(32)
+    blob, _v, receipt_hash = buzz.encrypt_file(b'data', 'pw', h)
+    _data, receipt = buzz.decrypt_file(blob, 'pw', h)
+    assert hashlib.sha256(receipt).hexdigest() == receipt_hash
 
 
 @requires_cryptography
 def test_encrypt_produces_v3_envelope():
     """encrypt_file() must emit the BKV3 envelope magic at offset 0."""
     buzz = _import_buzz()
-    blob, v_hex = buzz.encrypt_file(b'data', 'pw', h=os.urandom(32))
+    blob, v_hex, _rh = buzz.encrypt_file(b'data', 'pw', h=os.urandom(32))
     assert blob[:4] == buzz.MAGIC_V3 == b'BKV3'
     assert len(v_hex) == 64
 
@@ -101,15 +122,20 @@ def test_encrypt_decrypt_roundtrip():
     buzz = _import_buzz()
     original = b'key-release payload \x00\xff'
     h = os.urandom(32)
-    blob, _v = buzz.encrypt_file(original, 'pw', h)
-    assert buzz.decrypt_file(blob, 'pw', h=h) == original
+    blob, _v, _rh = buzz.encrypt_file(original, 'pw', h)
+    data, receipt = buzz.decrypt_file(blob, 'pw', h=h)
+    assert data == original
+    assert len(receipt) == 32
 
 
 @requires_cryptography
 def test_v3_fixture_decrypts_and_verifier_matches():
     """Pinned v3 fixture: same bytes in JS test (crypto.test.mjs)."""
     buzz = _import_buzz()
-    assert buzz.decrypt_file(V3_FIXTURE, FIXTURE_PASSWORD, h=V3_FIXTURE_H) == FIXTURE_DATA
+    data, receipt = buzz.decrypt_file(
+        V3_FIXTURE, FIXTURE_PASSWORD, h=V3_FIXTURE_H)
+    assert data == FIXTURE_DATA
+    assert receipt == V3_FIXTURE_RECEIPT
     # The verifier the client binds is derivable from password + blob salt.
     salt = V3_FIXTURE[4:20]
     _kp, v = buzz.derive_key_release_keys(FIXTURE_PASSWORD, salt)
@@ -161,8 +187,8 @@ def test_encrypt_is_non_deterministic():
     """Each call should produce different ciphertext (random salt+iv)."""
     buzz = _import_buzz()
     h = os.urandom(32)
-    blob1, _v1 = buzz.encrypt_file(b'same data', 'same-password', h)
-    blob2, _v2 = buzz.encrypt_file(b'same data', 'same-password', h)
+    blob1, _v1, _r1 = buzz.encrypt_file(b'same data', 'same-password', h)
+    blob2, _v2, _r2 = buzz.encrypt_file(b'same data', 'same-password', h)
     assert blob1 != blob2
 
 
@@ -174,8 +200,9 @@ def test_unicode_password():
     password = 'pässwörd-日本語'
     h = os.urandom(32)
 
-    blob, _v = buzz.encrypt_file(original, password, h)
-    assert buzz.decrypt_file(blob, password, h=h) == original
+    blob, _v, _rh = buzz.encrypt_file(original, password, h)
+    data, _receipt = buzz.decrypt_file(blob, password, h=h)
+    assert data == original
 
 
 def test_generate_passphrase_format():

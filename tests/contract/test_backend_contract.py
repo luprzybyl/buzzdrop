@@ -210,8 +210,16 @@ _H = 'aa' * 32
 _V = 'bb' * 32
 
 
+def _bound_share(backend, file_id='f1', h=_H, v=_V, **doc_overrides):
+    """A share bound to a real files row — the post-finish state."""
+    backend.files.insert(_file_doc(file_id, **doc_overrides))
+    backend.files.create_key_share(file_id, h, created_by='testuser')
+    backend.files.bind_key_verifier(file_id, v)
+
+
 def test_key_share_lifecycle(backend):
-    assert backend.files.create_key_share('f1', _H) is True
+    assert backend.files.create_key_share(
+        'f1', _H, created_by='testuser') is True
     # duplicate share for the same file_id is refused
     assert backend.files.create_key_share('f1', _H) is False
 
@@ -223,93 +231,193 @@ def test_key_share_lifecycle(backend):
     assert share['attempts'] == 0
     assert share['released_at'] is None
     assert share['created_at'] is not None
+    assert share['created_by'] == 'testuser'
 
     assert backend.files.bind_key_verifier('f1', _V) is True
     # second bind is refused — the verifier is set at upload finish, once
     assert backend.files.bind_key_verifier('f1', 'cc' * 32) is False
     assert backend.files.get_key_share('f1')['v'] == _V
 
-    # verifier miss releases nothing and burns no release
-    assert backend.files.claim_key_release('f1', 'dd' * 32) is None
-    assert backend.files.get_key_share('f1')['released_at'] is None
-
-    # correct verifier releases H exactly once — and wipes h/v with the
-    # claim, so a post-release DB theft yields no crackable material
-    assert backend.files.claim_key_release('f1', _V) == _H
-    released = backend.files.get_key_share('f1')
-    assert released['released_at'] is not None
-    assert released['h'] is None and released['v'] is None
-    assert backend.files.claim_key_release('f1', _V) is None
-
 
 def test_key_share_get_missing(backend):
     assert backend.files.get_key_share('nope') is None
-    assert backend.files.claim_key_release('nope', _V) is None
-    assert backend.files.record_key_attempt('nope') is None
     assert backend.files.delete_key_share('nope') is False
+    assert backend.files.burn_key_share('nope') is False
 
 
-def test_unbound_key_share_cannot_be_claimed(backend):
-    """A pending share (finish not called) releases nothing."""
+def test_attempt_key_release_statuses(backend):
+    """Each attempt runs as one transaction and answers a status."""
+    _bound_share(backend)
+
+    # verifier miss → denied, attempts counted inside the attempt
+    result = backend.files.attempt_key_release('f1', 'dd' * 32, 3, False)
+    assert result['status'] == 'denied'
+    assert result['attempts'] == 1
+    assert result['attempts_remaining'] == 2
+    assert backend.files.get_key_share('f1')['attempts'] == 1
+
+    # correct verifier releases H exactly once — and wipes h/v with the
+    # claim, so a post-release DB theft yields no crackable material
+    result = backend.files.attempt_key_release('f1', _V, 3, False)
+    assert result['status'] == 'ok'
+    assert result['h'] == _H
+    released = backend.files.get_key_share('f1')
+    assert released['released_at'] is not None
+    assert released['h'] is None and released['v'] is None
+
+    # post-release attempts are refused — even with the right V
+    result = backend.files.attempt_key_release('f1', _V, 3, False)
+    assert result['status'] == 'released'
+    result = backend.files.attempt_key_release('f1', 'dd' * 32, 3, False)
+    assert result['status'] == 'released'
+
+
+def test_attempt_key_release_pending_and_missing(backend):
+    backend.files.insert(_file_doc('f1'))
     backend.files.create_key_share('f1', _H)
-    assert backend.files.claim_key_release('f1', _V) is None
-    assert backend.files.claim_key_release('f1', _H) is None
+    result = backend.files.attempt_key_release('f1', _V, 3, False)
+    assert result['status'] == 'pending'
+    # attempts are NOT counted against a pending share
+    assert backend.files.get_key_share('f1')['attempts'] == 0
+
+    # file exists but the share is gone (burned/deleted)
+    backend.files.delete_key_share('f1')
+    result = backend.files.attempt_key_release('f1', _V, 3, False)
+    assert result['status'] == 'missing_share'
+
+    # no file at all
+    result = backend.files.attempt_key_release('ghost', _V, 3, False)
+    assert result['status'] == 'missing_file'
 
 
-def test_claim_key_release_concurrent_single_winner(backend):
+def test_attempt_key_release_lockout(backend):
+    """Exhausting attempts locks the share; burn optionally deletes it."""
+    _bound_share(backend)
+    # max=1: the first miss is already the lockout event
+    result = backend.files.attempt_key_release('f1', 'dd' * 32, 1, False)
+    assert result['status'] == 'locked'
+    # lockout without burn keeps H — availability lost, not the share row
+    assert backend.files.get_key_share('f1')['attempts'] == 1
+    # even the correct verifier is refused after lockout
+    result = backend.files.attempt_key_release('f1', _V, 1, False)
+    assert result['status'] == 'locked'
+    assert backend.files.get_key_share('f1') is not None
+
+
+def test_attempt_key_release_burn_on_lockout(backend):
+    _bound_share(backend)
+    result = backend.files.attempt_key_release('f1', 'dd' * 32, 1, True)
+    assert result['status'] == 'locked'
+    # burned: H is gone for good, the ciphertext is mathematically dead
+    assert backend.files.get_key_share('f1') is None
+    result = backend.files.attempt_key_release('f1', _V, 1, True)
+    assert result['status'] == 'missing_share'
+
+
+def test_attempt_key_release_expired(backend):
+    """Expiry is decided inside the same transaction — and destroys H."""
+    past = (datetime.now() - timedelta(minutes=5)).isoformat()
+    _bound_share(backend, expiry_at=past)
+
+    result = backend.files.attempt_key_release('f1', _V, 3, False)
+    assert result['status'] == 'expired'
+    assert result['path'] == 'uploads/f1'
+    assert backend.files.get_by_id('f1')['status'] == 'expired'
+    # an expired share is dead — the row (and H) is gone
+    assert backend.files.get_key_share('f1') is None
+
+
+def test_attempt_key_release_concurrent_single_winner(backend):
     """≥8 racing releases must produce exactly one H — the key-release guarantee."""
-    backend.files.create_key_share('f1', _H)
-    backend.files.bind_key_verifier('f1', _V)
+    _bound_share(backend)
 
     workers = 8
     with ThreadPoolExecutor(max_workers=workers) as pool:
         results = list(pool.map(
-            lambda _i: backend.files.claim_key_release('f1', _V),
+            lambda _i: backend.files.attempt_key_release('f1', _V, 8, False),
             range(workers),
         ))
 
-    assert results.count(_H) == 1
-    assert results.count(None) == workers - 1
+    assert [r['status'] for r in results].count('ok') == 1
+    assert [r['status'] for r in results].count('released') == workers - 1
     assert backend.files.get_key_share('f1')['released_at'] is not None
 
 
-def test_claim_key_release_concurrent_mixed_verifiers(backend):
-    """Racing releases where only some hold the right V still yield one win."""
-    backend.files.create_key_share('f1', _H)
-    backend.files.bind_key_verifier('f1', _V)
+def test_attempt_key_release_mixed_race(backend):
+    """
+    The atomic-attempt regression: racing requests must NOT all pass a
+    shared read gate. One correct V among misses still yields exactly
+    one 'ok', and the attempts counter equals the denied count —
+    never inflated by losers racing the winner.
+    """
+    _bound_share(backend)
 
     verifiers = [_V] * 4 + ['ee' * 32] * 4
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(
-            lambda v: backend.files.claim_key_release('f1', v),
+            lambda v: backend.files.attempt_key_release('f1', v, 8, False),
             verifiers,
         ))
 
-    assert results.count(_H) == 1
+    statuses = [r['status'] for r in results]
+    assert statuses.count('ok') == 1
+    # whatever didn't win either got counted as a miss or saw the release
+    assert set(statuses) <= {'ok', 'denied', 'released'}
+    denied = statuses.count('denied')
+    assert backend.files.get_key_share('f1')['attempts'] == denied
 
 
-def test_record_key_attempt_counts(backend):
-    backend.files.create_key_share('f1', _H)
-    assert backend.files.record_key_attempt('f1') == 1
-    assert backend.files.record_key_attempt('f1') == 2
-    assert backend.files.get_key_share('f1')['attempts'] == 2
+def test_attempt_key_release_race_never_exceeds_max(backend):
+    """max=1 + 8 concurrent misses: the counter stops at 1, all locked."""
+    _bound_share(backend)
+
+    workers = 8
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = list(pool.map(
+            lambda _i: backend.files.attempt_key_release(
+                'f1', 'ee' * 32, 1, False),
+            range(workers),
+        ))
+
+    assert [r['status'] for r in results] == ['locked'] * workers
+    assert backend.files.get_key_share('f1')['attempts'] == 1
 
 
-def test_record_key_attempt_stops_after_release(backend):
-    backend.files.create_key_share('f1', _H)
-    backend.files.bind_key_verifier('f1', _V)
-    backend.files.claim_key_release('f1', _V)
-    assert backend.files.record_key_attempt('f1') is None
-    assert backend.files.get_key_share('f1')['attempts'] == 0
+def test_purge_stale_key_shares(backend):
+    """Pending shares past the TTL are swept; bound shares are not."""
+    old = (datetime.now() - timedelta(hours=2)).isoformat()
+    backend.files.create_key_share('old-pending', _H, created_at=old)
+    backend.files.create_key_share('fresh-pending', 'cc' * 32)
+    # A bound share is not pending even if its row is old.
+    backend.files.insert(_file_doc('bound'))
+    backend.files.create_key_share('bound', 'dd' * 32, created_at=old)
+    backend.files.bind_key_verifier('bound', _V)
+    # Malformed created_at counts as stale — fail closed.
+    backend.files.create_key_share('broken', 'ee' * 32, created_at='junk')
+
+    removed = backend.files.purge_stale_key_shares(3600)
+    assert removed == 2
+    assert backend.files.get_key_share('old-pending') is None
+    assert backend.files.get_key_share('broken') is None
+    assert backend.files.get_key_share('fresh-pending') is not None
+    assert backend.files.get_key_share('bound') is not None
+
+
+def test_record_decryption_result_first_write_wins(backend):
+    """The NULL-guarded conditional write — racing reports resolve to one."""
+    backend.files.insert(_file_doc())
+    assert backend.files.record_decryption_result('file-1', True) is True
+    assert backend.files.record_decryption_result('file-1', False) is False
+    assert backend.files.get_by_id('file-1')['decryption_success'] is True
+    assert backend.files.record_decryption_result('nope', True) is False
 
 
 def test_delete_key_share(backend):
     backend.files.create_key_share('f1', _H)
     assert backend.files.delete_key_share('f1') is True
     assert backend.files.get_key_share('f1') is None
-    # burned share is gone for good — no claim can resurrect H
+    # burned share is gone for good — no bind can resurrect H
     assert backend.files.bind_key_verifier('f1', _V) is False
-    assert backend.files.claim_key_release('f1', _V) is None
 
 
 def test_truncate_clears_key_shares(backend):

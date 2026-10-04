@@ -179,7 +179,7 @@ function enforcePasswordStrength(password) {
  * blob plus the fields the finish POST needs.
  * @param {Uint8Array} data - Raw plaintext
  * @param {string} password
- * @returns {Promise<{blob: Uint8Array, fileId: string, keyVerifier: string}>}
+ * @returns {Promise<{blob: Uint8Array, fileId: string, keyVerifier: string, receiptHash: string}>}
  * @throws {Error} When the server refuses the handshake
  */
 async function encryptForUpload(data, password) {
@@ -191,12 +191,16 @@ async function encryptForUpload(data, password) {
         throw new Error('The server refused the upload handshake.');
     }
     const { file_id, h } = await res.json();
-    const { blob, verifier } = await cryptoService.encrypt(
+    const { blob, verifier, receipt } = await cryptoService.encrypt(
         data, password, hexToBytes(h));
     return {
         blob,
         fileId: file_id,
         keyVerifier: bytesToHex(verifier),
+        // SHA-256 of the in-ciphertext receipt — the server stores the
+        // hash so /report_decryption can prove the client really
+        // decrypted the payload.
+        receiptHash: await cryptoService.receiptHash(receipt),
     };
 }
 
@@ -390,6 +394,7 @@ if (fileUploadForm) {
         formData.append('file', new File([encBlob], file.name));
         formData.append('file_id', prepared.fileId);
         formData.append('key_verifier', prepared.keyVerifier);
+        formData.append('receipt_hash', prepared.receiptHash);
         const expiryInput = document.getElementById('shared-expiry');
         const privateNoteInput = document.getElementById('shared-private-note');
         const notifyOnOpenInput = document.getElementById('notify-on-open');
@@ -451,6 +456,7 @@ async function uploadNote() {
     formData.append('type', 'text');
     formData.append('file_id', prepared.fileId);
     formData.append('key_verifier', prepared.keyVerifier);
+    formData.append('receipt_hash', prepared.receiptHash);
     if (expiry) {
         formData.append('expiry', expiry);
     }

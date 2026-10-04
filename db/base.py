@@ -84,7 +84,8 @@ class FileStore(ABC):
     # The server-gated key-release design (docs/true-one-time.md §6) splits the file key in
     # two: Kp is derived client-side from the password, H is a random
     # 32-byte share the server holds and releases exactly once. The server
-    # stores {H, V, attempts, released_at} per file_id where V is a
+    # stores {H, V, attempts, released_at, created_by} per file_id where
+    # V is a
     # one-way password verifier (HKDF domain-separated from Kp — the
     # server can check the password without ever seeing it or the key).
     # Rows are created by /upload/begin (H only, V unbound) and completed
@@ -92,13 +93,18 @@ class FileStore(ABC):
     # the share was burned on lockout or never finished uploading.
 
     @abstractmethod
-    def create_key_share(self, file_id: str, h_hex: str) -> bool:
+    def create_key_share(self, file_id: str, h_hex: str,
+                         created_by: Optional[str] = None,
+                         created_at: Optional[str] = None) -> bool:
         """
         Insert a pending key share holding only the server half ``h_hex``.
 
         The share is unbound (``v is None``) until the upload finishes.
         Implementations MUST treat ``released_at`` as NULL and
-        ``attempts`` as 0 for a fresh share.
+        ``attempts`` as 0 for a fresh share, MUST record ``created_by``
+        (the uploader's username — binding is refused for anyone else),
+        and MUST honour an explicit ``created_at`` when given (tests and
+        migrations; default is now).
 
         Returns:
             True when the share was created, False when one already
@@ -122,34 +128,70 @@ class FileStore(ABC):
         """
         Return the key-share record for a file_id, or None.
 
-        Dict shape: ``{file_id, h, v, attempts, released_at, created_at}``.
-        ``v is None`` marks a pending (unfinished) share.
+        Dict shape: ``{file_id, h, v, attempts, released_at, created_at,
+        created_by}``. ``v is None`` marks a pending (unfinished) share.
         """
 
     @abstractmethod
-    def claim_key_release(self, file_id: str, v_hex: str) -> Optional[str]:
+    def attempt_key_release(self, file_id: str, v_hex: str,
+                            max_attempts: int,
+                            burn_on_lockout: bool) -> Dict[str, Any]:
         """
-        Atomically verify the verifier and release the server half H.
+        Execute one full release attempt as a single atomic unit.
+
+        Read-share-state → decide → write MUST happen inside one
+        transaction that serializes against other attempts (e.g.
+        ``BEGIN IMMEDIATE``), covering the share row AND the joined
+        files row (expiry gate). Concurrent calls must not all pass a
+        read gate and then race the write — that is the bug this method
+        exists to close.
 
         The verifier comparison MUST be constant-time
-        (``secrets.compare_digest``) and the release itself MUST be a
-        single conditional write
-        (``UPDATE ... SET released_at=... WHERE released_at IS NULL``)
-        so exactly one of any number of concurrent callers wins.
+        (``secrets.compare_digest``). On a match the implementation sets
+        ``released_at`` AND wipes ``h``/``v`` in the same write, returning
+        H exactly once across all callers.
+
+        Args:
+            file_id: Public file id.
+            v_hex: Candidate verifier (hex) from the client.
+            max_attempts: Lockout threshold for counted misses.
+            burn_on_lockout: When True, delete the share row (destroying
+                H) once the threshold is reached.
 
         Returns:
-            The stored ``h`` when this call is the unique winner and the
-            verifier matches; None on a verifier miss, an already
-            released/unbound share, or a lost race.
+            A dict with ``status`` one of:
+            ``'missing_file'`` (no files row), ``'missing_share'``,
+            ``'pending'`` (v unbound), ``'released'``,
+            ``'locked'``, ``'expired'`` (share row deleted, files row
+            marked expired, ``path`` included for blob cleanup),
+            ``'ok'`` (with ``h``), or ``'denied'`` (with ``attempts``
+            and ``attempts_remaining``).
         """
 
     @abstractmethod
-    def record_key_attempt(self, file_id: str) -> Optional[int]:
+    def record_decryption_result(self, file_id: str, success: bool) -> bool:
         """
-        Atomically increment the failed-attempts counter.
+        Atomically record the client-reported decryption outcome.
+
+        MUST be a single conditional write (``UPDATE ... SET
+        decryption_success=? WHERE id=? AND decryption_success IS NULL``)
+        so the first of any number of racing reports wins.
 
         Returns:
-            The new attempts value, or None when no live share exists.
+            True when this call set the outcome, False otherwise.
+        """
+
+    @abstractmethod
+    def purge_stale_key_shares(self, older_than_seconds: int) -> int:
+        """
+        Delete pending shares (``v IS NULL``) older than the given age.
+
+        A share that never finished upload is dead weight — its H can
+        never be legitimately bound again. Purging is fail-closed:
+        malformed/unclearable timestamps count as stale.
+
+        Returns:
+            Number of share rows removed.
         """
 
     @abstractmethod
@@ -159,6 +201,20 @@ class FileStore(ABC):
 
         Deleting the share destroys H — the ciphertext becomes
         mathematically dead regardless of where copies survive.
+
+        Returns:
+            True when a row was removed.
+        """
+
+    @abstractmethod
+    def burn_key_share(self, file_id: str) -> bool:
+        """
+        Delete the key share and flush destruction to stable storage.
+
+        Same semantics as delete_key_share plus whatever backend-specific
+        work makes H's removal durable (e.g. WAL checkpoint). Use this
+        for security deletions (lockout burn, expiry); plain
+        delete_key_share is fine for bookkeeping cleanup.
 
         Returns:
             True when a row was removed.

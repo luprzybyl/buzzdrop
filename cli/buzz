@@ -17,12 +17,14 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import secrets
 import sys
 import zipfile
 from io import BytesIO
+from urllib.parse import urlparse
 
 # ---------------------------------------------------------------------------
 # EFF large wordlist (public domain) — 7776 unique words.
@@ -1026,6 +1028,10 @@ TOKEN_FILE = os.path.expanduser('~/.buzz_token')
 # ---------------------------------------------------------------------------
 MAGIC_V3 = b'BKV3'
 PLAINTEXT_MAGIC = b'BKP-FILE'
+# Random receipt encrypted inside the payload: 'BKP-FILE' ‖ receipt(32B)
+# ‖ data. The server stores only SHA-256(receipt) and /report_decryption
+# requires the receipt — proof the reporter actually decrypted.
+_RECEIPT_LEN = 32
 ITERATIONS = 600_000
 _SALT_LEN = 16
 _IV_LEN = 12
@@ -1124,6 +1130,7 @@ def setup_token(server_override: str = None) -> tuple[str, str]:
     if not server:
         print("Error: server URL is required.", file=sys.stderr)
         sys.exit(1)
+    server = require_https(server, insecure=insecure)
 
     username = input("Username: ").strip()
     if not username:
@@ -1199,7 +1206,40 @@ def setup_token(server_override: str = None) -> tuple[str, str]:
     return token, server
 
 
-def read_token_file(server_override: str = None) -> tuple[str, str]:
+def require_https(server: str, insecure: bool = False) -> str:
+    """
+    Refuse plaintext-HTTP servers unless explicitly opted out.
+
+    A share's verifier V and the released H travel to/from the server in
+    plaintext HTTP otherwise — the whole point of the key-release design
+    is moot if the wire leaks them. localhost/127.0.0.1/::1 is allowed
+    (dev installs); everything else needs ``--insecure``.
+    """
+    parsed = urlparse(server)
+    host = (parsed.hostname or '').lower()
+    if parsed.scheme == 'https':
+        return server
+    if host in {'localhost', '127.0.0.1', '::1'}:
+        return server
+    if insecure:
+        print(
+            f"Warning: using plaintext HTTP to {server} — the released "
+            "key share and verifier travel unencrypted.",
+            file=sys.stderr,
+        )
+        return server
+    print(
+        f"Error: refusing non-HTTPS server URL {server!r}.\n"
+        "The released key share travels unprotected over plain HTTP. "
+        "Use https://, a localhost address for development, or pass "
+        "--insecure to opt out.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
+def read_token_file(server_override: str = None,
+                    insecure: bool = False) -> tuple[str, str]:
     """
     Read ~/.buzz_token and return (token, server_url).
 
@@ -1208,7 +1248,7 @@ def read_token_file(server_override: str = None) -> tuple[str, str]:
     """
     if not os.path.exists(TOKEN_FILE):
         print(f"No token found at {TOKEN_FILE} — let's get one now.\n")
-        setup_token(server_override=server_override)
+        setup_token(server_override=server_override, insecure=insecure)
         print("All set! Now repeat your command.")
         sys.exit(0)
 
@@ -1228,7 +1268,7 @@ def read_token_file(server_override: str = None) -> tuple[str, str]:
         )
         sys.exit(1)
 
-    return token, server.rstrip('/')
+    return token, require_https(server.rstrip('/'), insecure=insecure)
 
 
 def _crypto_imports():
@@ -1287,7 +1327,8 @@ def _derive_file_key(kp: bytes, h: bytes, salt: bytes) -> bytes:
     return _hkdf(kp + h, salt, _HKDF_INFO_FILE)
 
 
-def encrypt_file(file_bytes: bytes, password: str, h: bytes) -> tuple[bytes, str]:
+def encrypt_file(file_bytes: bytes, password: str, h: bytes
+                 ) -> tuple[bytes, str, str]:
     """
     Encrypt file_bytes for a key-release share (docs/true-one-time.md §6).
 
@@ -1295,8 +1336,11 @@ def encrypt_file(file_bytes: bytes, password: str, h: bytes) -> tuple[bytes, str
         h: the 32-byte server share returned by POST /upload/begin.
 
     Returns:
-        (blob, v_hex) — blob = MAGIC_V3 + salt + iv + AES-GCM ciphertext;
-        v_hex is the verifier to bind via /upload's key_verifier field.
+        (blob, v_hex, receipt_hash) — blob = MAGIC_V3 + salt + iv +
+        AES-GCM ciphertext; v_hex is the verifier to bind via /upload's
+        key_verifier field; receipt_hash is hex SHA-256 of the random
+        32-byte receipt embedded in the plaintext (sent as /upload's
+        receipt_hash field, later proved via /report_decryption).
     """
     if len(h) != _H_LEN:
         raise ValueError(f'server share H must be {_H_LEN} bytes')
@@ -1305,15 +1349,21 @@ def encrypt_file(file_bytes: bytes, password: str, h: bytes) -> tuple[bytes, str
 
     salt = os.urandom(_SALT_LEN)
     iv = os.urandom(_IV_LEN)
+    receipt = os.urandom(_RECEIPT_LEN)
     kp, v = derive_key_release_keys(password, salt)
     file_key = _derive_file_key(kp, h, salt)
 
-    plaintext = PLAINTEXT_MAGIC + file_bytes
+    plaintext = PLAINTEXT_MAGIC + receipt + file_bytes
     ciphertext = AESGCM(file_key).encrypt(iv, plaintext, None)
-    return MAGIC_V3 + salt + iv + ciphertext, v.hex()
+    return (
+        MAGIC_V3 + salt + iv + ciphertext,
+        v.hex(),
+        hashlib.sha256(receipt).hexdigest(),
+    )
 
 
-def decrypt_file(encrypted: bytes, password: str, h: bytes) -> bytes:
+def decrypt_file(encrypted: bytes, password: str, h: bytes
+                 ) -> tuple[bytes, bytes]:
     """
     Decrypt a Buzzdrop payload produced by encrypt_file() or the web UI.
 
@@ -1321,9 +1371,11 @@ def decrypt_file(encrypted: bytes, password: str, h: bytes) -> bytes:
     share released by /release; Kp is derived from the password and
     file_key = HKDF(Kp ‖ h).
 
-    Returns the original file bytes (inner 'BKP-FILE' header stripped and
-    validated). Raises InvalidTag/ValueError on wrong password, wrong/missing
-    H, or corruption.
+    Returns:
+        (data, receipt) — the original file bytes (inner 'BKP-FILE'
+        header and receipt stripped) plus the 32-byte decryption receipt.
+        Raises InvalidTag/ValueError on wrong password, wrong/missing
+        H, or corruption.
     """
     AESGCM, _PBKDF2HMAC, _HKDF, _hashes = _crypto_imports()
 
@@ -1342,7 +1394,11 @@ def decrypt_file(encrypted: bytes, password: str, h: bytes) -> bytes:
 
     if not plaintext.startswith(PLAINTEXT_MAGIC):
         raise ValueError('Invalid password or corrupted data')
-    return plaintext[len(PLAINTEXT_MAGIC):]
+    head_len = len(PLAINTEXT_MAGIC) + _RECEIPT_LEN
+    if len(plaintext) < head_len:
+        raise ValueError('Invalid password or corrupted data')
+    receipt = plaintext[len(PLAINTEXT_MAGIC):head_len]
+    return plaintext[head_len:], receipt
 
 
 def upload_begin(server: str, token: str) -> dict | None:
@@ -1395,12 +1451,15 @@ def upload_begin(server: str, token: str) -> dict | None:
 
 
 def upload(server: str, token: str, filename: str, encrypted: bytes,
-           file_id: str, key_verifier: str, expiry: str = None) -> dict:
+           file_id: str, key_verifier: str, receipt_hash: str,
+           expiry: str = None) -> dict:
     """
     POST the encrypted blob to /upload and return the JSON response.
 
     ``file_id`` + ``key_verifier`` complete the two-phase key-release
-    handshake started by upload_begin() (docs/true-one-time.md §6.3).
+    handshake started by upload_begin() (docs/true-one-time.md §6.3);
+    ``receipt_hash`` is the SHA-256 of the in-ciphertext decryption
+    receipt.
 
     The body is streamed in 64 KB chunks so that a live progress bar can be
     rendered while data travels over the network.
@@ -1413,6 +1472,7 @@ def upload(server: str, token: str, filename: str, encrypted: bytes,
     data = {
         'file_id': file_id,
         'key_verifier': key_verifier,
+        'receipt_hash': receipt_hash,
     }
     if expiry:
         data['expiry'] = expiry
@@ -1508,9 +1568,17 @@ def main():
         metavar='URL',
         help='Override server URL from ~/.buzz_token',
     )
+    parser.add_argument(
+        '--insecure',
+        action='store_true',
+        help='Allow a plain-http:// server URL (the released key share '
+             'travels unencrypted — only for dev setups that are not '
+             'localhost)',
+    )
     args = parser.parse_args()
 
-    token, server = read_token_file(server_override=args.server)
+    token, server = read_token_file(
+        server_override=args.server, insecure=args.insecure)
 
     if not os.path.exists(args.file):
         print(f"Error: file or directory not found: {args.file}", file=sys.stderr)
@@ -1566,7 +1634,8 @@ def main():
         f"  ({_format_size(len(file_bytes))})...",
         end=' ', flush=True,
     )
-    encrypted, key_verifier = encrypt_file(file_bytes, password, begin['h'])
+    encrypted, key_verifier, receipt_hash = encrypt_file(
+        file_bytes, password, begin['h'])
     print(f"done  ({_format_size(len(encrypted))} on wire)")
 
     # Upload with live progress bar
@@ -1575,6 +1644,7 @@ def main():
         expiry=args.expiry,
         file_id=begin['file_id'],
         key_verifier=key_verifier,
+        receipt_hash=receipt_hash,
     )
 
     share_link = result.get('share_link') or f"{server}/view/{result['file_id']}"

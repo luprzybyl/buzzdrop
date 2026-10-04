@@ -2,9 +2,9 @@
 Integration tests for server-gated key release .
 
 Covers the two-phase upload (/upload/begin + /upload carrying
-file_id/key_verifier) and the one-time /release endpoint:
-verifier checks, attempt counting, lockout/burn policy, and
-backward compatibility with self-contained v1/v2 shares.
+file_id/key_verifier/receipt_hash) and the one-time /release endpoint:
+verifier checks, atomic attempt counting, lockout/burn policy, owner
+binding, and expiry destroying the share.
 """
 import io
 import os
@@ -65,7 +65,9 @@ def _bound_share(files_store, file_id='file-1', h='aa' * 32, v='bb' * 32):
 
 
 def _key_release_upload(client, filename='key-release.txt', content=b'encrypted blob'):
-    """Drive the full two-phase upload; returns (file_id, h, upload_response)."""
+    """Drive the full two-phase upload; returns (file_id, h, receipt_hex, upload_response)."""
+    import hashlib
+    import secrets
     begin = client.post(
         url_for('upload_begin'),
         headers={'X-Requested-With': 'XMLHttpRequest'},
@@ -73,6 +75,7 @@ def _key_release_upload(client, filename='key-release.txt', content=b'encrypted 
     assert begin.status_code == 200
     file_id = begin.get_json()['file_id']
     h = begin.get_json()['h']
+    receipt = secrets.token_bytes(32)
 
     finish = client.post(
         url_for('upload_file'),
@@ -80,11 +83,12 @@ def _key_release_upload(client, filename='key-release.txt', content=b'encrypted 
             'file': (io.BytesIO(content), filename),
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
+            'receipt_hash': hashlib.sha256(receipt).hexdigest(),
         },
         content_type='multipart/form-data',
         headers={'X-Requested-With': 'XMLHttpRequest'},
     )
-    return file_id, h, finish
+    return file_id, h, receipt.hex(), finish
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +135,7 @@ def test_upload_begin_disabled(client, key_release_settings):
 
 def test_key_release_upload_binds_verifier(client, files_store):
     login_user(client)
-    file_id, _h, finish = _key_release_upload(client)
+    file_id, _h, _rcpt, finish = _key_release_upload(client)
     assert finish.status_code == 200
     assert finish.get_json()['file_id'] == file_id
 
@@ -150,6 +154,7 @@ def test_key_release_upload_rejects_unknown_share(client, files_store):
             'file': (io.BytesIO(b'blob'), 'x.txt'),
             'file_id': 'does-not-exist',
             'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
         },
         content_type='multipart/form-data',
         headers={'X-Requested-With': 'XMLHttpRequest'},
@@ -159,7 +164,7 @@ def test_key_release_upload_rejects_unknown_share(client, files_store):
 
 def test_key_release_upload_rejects_finalized_share(client, files_store):
     login_user(client)
-    file_id, _h, finish = _key_release_upload(client)
+    file_id, _h, _rcpt, finish = _key_release_upload(client)
     assert finish.status_code == 200
 
     second = client.post(
@@ -168,6 +173,7 @@ def test_key_release_upload_rejects_finalized_share(client, files_store):
             'file': (io.BytesIO(b'blob2'), 'y.txt'),
             'file_id': file_id,
             'key_verifier': 'dd' * 32,
+            'receipt_hash': 'aa' * 32,
         },
         content_type='multipart/form-data',
         headers={'X-Requested-With': 'XMLHttpRequest'},
@@ -208,6 +214,7 @@ def test_key_release_upload_rejected_when_disabled(client, files_store, key_rele
             'file': (io.BytesIO(b'blob'), 'x.txt'),
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
         },
         content_type='multipart/form-data',
         headers={'X-Requested-With': 'XMLHttpRequest'},
@@ -226,6 +233,52 @@ def test_upload_without_key_release_fields_rejected(client, files_store):
     )
     assert response.status_code == 400
     assert files_store.get_by(original_name='legacy.txt') is None
+
+
+def test_key_release_upload_rejects_other_users_share(client, files_store):
+    """Owner binding: only the account that ran begin may finish it."""
+    login_user(client)  # testuser mints the pending share
+    begin = client.post(
+        url_for('upload_begin'),
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    file_id = begin.get_json()['file_id']
+    assert files_store.get_key_share(file_id)['created_by'] == 'testuser'
+
+    login_user(client, 'adminuser', 'adminpass')  # different account finishes
+    finish = client.post(
+        url_for('upload_file'),
+        data={
+            'file': (io.BytesIO(b'blob'), 'x.txt'),
+            'file_id': file_id,
+            'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
+        },
+        content_type='multipart/form-data',
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    assert finish.status_code == 403
+    # the share was NOT bound — still pending, still testuser's
+    share = files_store.get_key_share(file_id)
+    assert share['v'] is None
+    assert share['created_by'] == 'testuser'
+
+
+def test_upload_missing_receipt_hash_rejected(client, key_share):
+    """receipt_hash is required — it backs the decryption report proof."""
+    login_user(client)
+    file_id, _h = key_share()
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'file': (io.BytesIO(b'blob'), 'x.txt'),
+            'file_id': file_id,
+            'key_verifier': 'cc' * 32,
+        },
+        content_type='multipart/form-data',
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    assert response.status_code == 400
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +375,8 @@ def test_release_missing_file_is_404(client):
     {'v': 'zz' * 32},
     {'v': 123},
     {'v': None},
+    ['not', 'a', 'dict'],
+    'just-a-string',
 ])
 def test_release_requires_valid_verifier(client, files_store, body):
     _bound_share(files_store, file_id='fmt-1')
@@ -341,12 +396,14 @@ def test_release_expired_file_is_410(client, files_store):
         url_for('release_key', file_id='exp-1'), json={'v': 'bb' * 32})
     assert response.status_code == 410
     assert files_store.get_by_id('exp-1')['status'] == 'expired'
+    # expiry destroys the share inside the same transaction — H is gone
+    assert files_store.get_key_share('exp-1') is None
 
 
 def test_release_works_after_blob_download(client, files_store, app):
     """The real order: blob first (claims download), then /release."""
     login_user(client)
-    file_id, h, finish = _key_release_upload(client, content=b'real blob')
+    file_id, h, _rcpt, finish = _key_release_upload(client, content=b'real blob')
     assert finish.status_code == 200
     v = 'cc' * 32
 
@@ -363,7 +420,7 @@ def test_release_works_after_blob_download(client, files_store, app):
 
 def test_delete_file_drops_key_share(client, files_store, csrf_form_data):
     login_user(client)
-    file_id, _h, finish = _key_release_upload(client)
+    file_id, _h, _rcpt, finish = _key_release_upload(client)
     assert finish.status_code == 200
 
     response = client.post(
@@ -421,7 +478,7 @@ def test_key_release_end_to_end(client, files_store, key_release_settings):
     file_id = begin.get_json()['file_id']
     h = bytes.fromhex(begin.get_json()['h'])
 
-    blob, v_hex = buzz.encrypt_file(plaintext, password, h)
+    blob, v_hex, receipt_hash = buzz.encrypt_file(plaintext, password, h)
     assert blob.startswith(b'BKV3')
 
     finish = client.post(
@@ -430,6 +487,7 @@ def test_key_release_end_to_end(client, files_store, key_release_settings):
             'file': (io.BytesIO(blob), 'e2e.txt'),
             'file_id': file_id,
             'key_verifier': v_hex,
+            'receipt_hash': receipt_hash,
         },
         content_type='multipart/form-data',
         headers={'X-Requested-With': 'XMLHttpRequest'},
@@ -455,7 +513,15 @@ def test_key_release_end_to_end(client, files_store, key_release_settings):
     released_h = bytes.fromhex(release.get_json()['h'])
     assert released_h == h
 
-    assert buzz.decrypt_file(served, password, h=released_h) == plaintext
+    data, receipt = buzz.decrypt_file(served, password, h=released_h)
+    assert data == plaintext
+
+    # The receipt proves decryption — /report_decryption accepts it.
+    report = client.post(
+        url_for('report_decryption', file_id=file_id),
+        json={'success': True, 'receipt': receipt.hex()})
+    assert report.status_code == 200
+    assert files_store.get_by_id(file_id)['decryption_success'] is True
 
     # H is single-use: the share is burned after release.
     again = client.post(

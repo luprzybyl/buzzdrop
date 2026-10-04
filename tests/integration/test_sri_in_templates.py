@@ -49,6 +49,7 @@ def test_view_page_has_sri_for_view_js(client, db_instance, files_store, csrf_fo
         'expiry': '',
         'file_id': file_id,
         'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
     }, content_type='multipart/form-data')
 
     file_info = files_store.get_by(original_name='test.txt')
@@ -87,6 +88,7 @@ def test_success_page_has_sri_for_success_js(client, db_instance, files_store, k
         'expiry': '',
         'file_id': file_id,
         'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
     }, content_type='multipart/form-data')
 
     # Get file_id from database

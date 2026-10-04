@@ -78,6 +78,10 @@ class Config:
     # mathematically dead — confidentiality over availability); the
     # default False keeps H but refuses all further releases.
     KEY_RELEASE_BURN_ON_LOCKOUT = _env_bool('KEY_RELEASE_BURN_ON_LOCKOUT', False)
+    # TTL for pending shares (/upload/begin done, /upload never finished).
+    # Older unbound shares are purged at startup and on each begin call.
+    KEY_SHARE_PENDING_TTL_SECONDS = int(
+        os.getenv('KEY_SHARE_PENDING_TTL_SECONDS', '3600'))
 
     @classmethod
     def validate(cls):

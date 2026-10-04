@@ -116,9 +116,10 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 
 ### Encryption & Storage:
 - **Client-Side Encryption**: AES-GCM with a key derived from your password (PBKDF2-HMAC-SHA256, 600k iterations) **and** a random 32-byte share `H` the server holds in its `file_keys` table — `file_key = HKDF(Kp ‖ H)`. Neither half decrypts alone.
-- **Server-Gated Release**: Uploads are a two-phase handshake (`POST /upload/begin` mints `H`, then `/upload` binds a password verifier `V`). On download, the client proves password knowledge via `POST /release/<id>` and gets `H` back **exactly once** — the claim is atomic, failed guesses are counted and locked out.
+- **Server-Gated Release**: Uploads are a two-phase handshake (`POST /upload/begin` mints `H`, then `/upload` binds a password verifier `V` — only the account that began the share may finish it). On download, the client proves password knowledge via `POST /release/<id>` and gets `H` back **exactly once** — the entire read-check-count-release cycle runs in a single transaction, so racing attackers can't multiply guesses.
+- **Proof of decryption, not just a flag**: The ciphertext embeds a random 32-byte receipt; `/report_decryption` only accepts reports carrying it (the server stores `SHA-256(receipt)`), and the first valid report wins. Expiring a file destroys its key share in the same transaction — H never outlives the data.
 - **Zero-Knowledge-ish, honestly**: The server never sees your plaintext or password — it holds `V` (a verifier it can't decrypt with) and `H` (a key half that's useless without the password). The honest caveat: a malicious admin could run an offline dictionary attack against `V`, so weak passwords are still weak. Use a strong passphrase and the math does the rest.
-- **One format, no archaeology**: Only `BKV3` shares exist — `BKV3 ‖ salt(16) ‖ iv(12) ‖ AES-GCM`. This is a deliberate breaking change from legacy drops (pre-production wipe accepted); old links won't decrypt, by design.
+- **One format, no archaeology**: Only `BKV3` shares exist — `BKV3 ‖ salt(16) ‖ iv(12) ‖ AES-GCM`, plaintext `BKP-FILE ‖ receipt ‖ payload`. This is a deliberate breaking change from legacy drops (pre-production wipe accepted); old links won't decrypt, by design.
 - **Unique UUIDs**: Every file has a cryptographically random identifier (no guesswork).
 - **S3 Support**: Files never exposed directly—always routed through Buzzdrop's secure backend.
 
@@ -146,7 +147,7 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 - **Sanitized Logging**: No sensitive data (bucket names, file paths) exposed in logs.
 
 ### Rate Limiting:
-- **Implemented with Flask-Limiter**: configurable per-route limits protect `/login`, `/api/token`, `/upload` + `/upload/begin`, and public file access (`/view/<id>`, `/view/<id>/confirm`, `/download/<id>`). `/release/<id>` is rate-limited **per file_id** (not per IP, so rotating addresses doesn't reset it) and failed verifier attempts are counted per share—lockout after `KEY_RELEASE_MAX_ATTEMPTS` (default 1 — one wrong password locks the share), with optional burn-on-lockout.
+- **Implemented with Flask-Limiter**: configurable per-route limits protect `/login`, `/api/token`, `/upload` + `/upload/begin`, and public file access (`/view/<id>`, `/view/<id>/confirm`, `/download/<id>`). `/release/<id>` is rate-limited **per file_id** (not per IP, so rotating addresses doesn't reset it) and failed verifier attempts are counted per share—lockout after `KEY_RELEASE_MAX_ATTEMPTS` (default 1 — one wrong password locks the share), with optional burn-on-lockout. Pending key shares that were begun but never finished are swept after `KEY_SHARE_PENDING_TTL_SECONDS` (default 3600).
 - **Environment configurable**: tune `LOGIN_RATE_LIMIT`, `API_TOKEN_RATE_LIMIT`, `UPLOAD_RATE_LIMIT`, `PUBLIC_FILE_RATE_LIMIT`, `KEY_RELEASE_RATE_LIMIT`, `RATE_LIMIT_ENABLED`, and `RATE_LIMIT_STORAGE_URI` in `.env`.
 - **Proxy safety by default**: Buzzdrop intentionally ignores `X-Forwarded-For` for rate-limit enforcement and uses the direct peer address (`request.remote_addr`) instead, so a direct client cannot spoof a new IP on every request to bypass limits.
 - **Reverse proxy caveat**: if you deploy behind nginx, Cloudflare, an ingress, or another proxy without explicit trusted-proxy handling in your stack, `request.remote_addr` may be the proxy address and multiple users behind that proxy may share one rate-limit bucket. Configure your proxy/deployment to pass and trust client IPs correctly rather than enabling blind trust in `X-Forwarded-For`.
@@ -241,7 +242,7 @@ Password:       tiger-ocean-lamp-drift
 One-click link: https://your-buzzdrop.example.com/view/abc123#tiger-ocean-lamp-drift
 ```
 
-The recipient opens the share link, enters the password (or uses the one-click link), and the file decrypts in their browser — exactly the same as a web upload. Under the hood `buzz` speaks the same `BKV3` protocol: it runs `POST /upload/begin` to fetch the server's key share, encrypts with the split key, and binds the verifier on `/upload`. It requires a server that answers `/upload/begin` — against an older server without key release it aborts rather than silently downgrading.
+The recipient opens the share link, enters the password (or uses the one-click link), and the file decrypts in their browser — exactly the same as a web upload. Under the hood `buzz` speaks the same `BKV3` protocol: it runs `POST /upload/begin` to fetch the server's key share, encrypts with the split key (receipt included), and binds the verifier plus `receipt_hash` on `/upload`. It requires a server that answers `/upload/begin` — against an older server without key release it aborts rather than silently downgrading. It also refuses plain-`http://` servers outside localhost unless you pass `--insecure`, because a released key share over cleartext HTTP is a self-own.
 
 ---
 

@@ -43,11 +43,13 @@ const cryptoService = new CryptoService();
         decryptBtn.focus();
     }
 
-    function reportDecryption(success) {
+    function reportDecryption(success, receiptHex) {
         fetch(window.reportDecryptionUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ success })
+            // The receipt lives inside the ciphertext — only a successful
+            // decryption can produce it; the server stores its SHA-256.
+            body: JSON.stringify({ success, receipt: receiptHex || null })
         }).catch(() => {});
     }
 
@@ -133,7 +135,9 @@ const cryptoService = new CryptoService();
         }
 
         const h = hexToBytes(body.h);
-        return cryptoService.decrypt(encryptedData, password, h);
+        const { data, receipt } = await cryptoService.decrypt(
+            encryptedData, password, h);
+        return { data, receipt };
     }
 
     // When user clicks 'Decrypt', attempt to decrypt the file
@@ -144,8 +148,8 @@ const cryptoService = new CryptoService();
         passInput.disabled = true;
 
         try {
-            const fileBytes = await decryptKeyRelease(password);
-            if (fileBytes === null) {
+            const result = await decryptKeyRelease(password);
+            if (result === null) {
                 // Wrong password, attempts remaining — let them retry.
                 decryptBtn.disabled = false;
                 passInput.disabled = false;
@@ -153,10 +157,11 @@ const cryptoService = new CryptoService();
                 return;
             }
 
-            showPlaintext(fileBytes);
+            showPlaintext(result.data);
 
-            // Notify server that decryption was successful
-            reportDecryption(true);
+            // Notify server that decryption was successful — the receipt
+            // proves it (it's only reachable inside the plaintext).
+            reportDecryption(true, bytesToHex(result.receipt));
         } catch (err) {
             document.getElementById('status').textContent =
                 err && err.message

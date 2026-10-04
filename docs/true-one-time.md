@@ -407,28 +407,53 @@ returns 404 and uploads are refused.
 - Rate-limit accounting: `/upload/begin` and `/upload` share the
   `UPLOAD_RATE_LIMIT` bucket — a complete upload costs 2 hits
   (effective 15 files/h at the default `30 per hour`).
-- Wire format: `BKV3 ‖ salt(16) ‖ iv(12) ‖ AES-GCM`, inner `BKP-FILE`
-  header kept. `Kp`/`V`/`file_key` use HKDF-SHA256 with the blob salt
-  and `info` labels `enc`/`ver`/`file`. Only `BKV3` is read or written;
-  the magic stays for future version bumps.
-- Upload (always two-phase): `POST /upload/begin` → `{file_id, h}`;
-  `POST /upload` requires `file_id` + `key_verifier` and
-  atomically binds V to the pending share.
-- Download: `POST /release/<file_id> {v}` — constant-time verifier
-  check plus a single conditional write
-  (`UPDATE ... WHERE released_at IS NULL`) → exactly one winner gets H.
+- Wire format: `BKV3 ‖ salt(16) ‖ iv(12) ‖ AES-GCM`, inner plaintext
+  `BKP-FILE ‖ receipt(32B random) ‖ payload`. `Kp`/`V`/`file_key` use
+  HKDF-SHA256 with the blob salt and `info` labels `enc`/`ver`/`file`.
+  Only `BKV3` is read or written; the magic stays for future version
+  bumps.
+- Upload (always two-phase): `POST /upload/begin` → `{file_id, h}`
+  (share is owner-bound via `created_by`); `POST /upload` requires
+  `file_id` + `key_verifier` + `receipt_hash`, refuses to finish another
+  account's pending share (403), binds V atomically, and stores
+  `receipt_hash = SHA-256(receipt)` on the file record.
+- Download: `POST /release/<file_id> {v}` runs **one transaction**
+  (`FileStore.attempt_key_release`): read → expiry check → verifier
+  compare → attempt count → release-or-deny, all inside a single write
+  transaction. Exactly one racing request can ever receive H — no
+  separate read-then-claim window exists. A released share answers 410;
+  a wrong verifier 403; lockout 429; missing, pending or burned shares
+  all answer a uniform 404.
+- Decryption proof: the receipt is only reachable inside the
+  ciphertext, so `POST /report_decryption {success, receipt}` cannot be
+  forged with the file_id alone — the server compares
+  `SHA-256(receipt)` against the stored hash (constant-time) and the
+  `decryption_success` write is NULL-guarded: first valid report wins,
+  later reports return 200 but change nothing.
 - Key material lives in a `file_keys` table (H, V, attempts,
-  released_at), not on `files`: the share must exist before the file
-  record (two-phase upload), and existing databases need no column
-  migrations — only `CREATE TABLE IF NOT EXISTS`.
+  released_at, created_by), not on `files`: the share must exist before
+  the file record (two-phase upload), and burning the share is a row
+  delete, not a flag.
 - Failure policy is configurable: `KEY_RELEASE_RATE_LIMIT`
   (per file_id), `KEY_RELEASE_MAX_ATTEMPTS` (default 1 — a single
   wrong password locks the share), and `KEY_RELEASE_BURN_ON_LOCKOUT`
   (default off — lockout only; when on, the share row is deleted,
   destroying H).
-- Post-release cleanup: the winning claim sets `h = NULL, v = NULL`
-  in the same atomic UPDATE — the row keeps only bookkeeping
+- Post-release cleanup: the winning attempt sets `h = NULL, v = NULL`
+  inside the release transaction — the row keeps only bookkeeping
   (`released_at`, `attempts`), so a post-release DB theft yields no
   crackable verifier or key material.
-- CLI parity: `cli/buzz` performs the same handshake and aborts when
-  the server returns 404 on `/upload/begin`.
+- Destructive key hygiene: expiry flips the file to `expired` **and**
+  burns the share inside the same transaction; `PRAGMA secure_delete=ON`
+  plus `wal_checkpoint(TRUNCATE)` after burns keeps `H`/`V` bytes out of
+  freelist/WAL remnants on the SQLite backend.
+- Pending-share hygiene: shares begun but never finished are swept at
+  startup and on each `/upload/begin` after
+  `KEY_SHARE_PENDING_TTL_SECONDS` (default 3600); shares with malformed
+  `created_at` are purged too (fail closed).
+- No-store: `/upload/begin` and `/release` responses carry
+  `Cache-Control: no-store` — H must not land in shared caches.
+- CLI parity: `cli/buzz` performs the same handshake, embeds the same
+  receipt, refuses plain-`http://` server URLs outside localhost without
+  `--insecure`, and aborts when the server returns 404 on
+  `/upload/begin`.
