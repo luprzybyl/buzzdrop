@@ -88,7 +88,8 @@ class FileStore(ABC):
     # one-way password verifier (HKDF domain-separated from Kp — the
     # server can check the password without ever seeing it or the key).
     # Rows are created by /upload/begin (H only, V unbound) and completed
-    # by /upload/finish. Legacy v1/v2 shares simply have no key-share row.
+    # by /upload. Every share has a key-share row; a missing row means
+    # the share was burned on lockout or never finished uploading.
 
     @abstractmethod
     def create_key_share(self, file_id: str, h_hex: str) -> bool:

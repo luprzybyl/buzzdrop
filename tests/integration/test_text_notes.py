@@ -7,6 +7,28 @@ def login_user(client, username, password):
     """Helper function to log in a user."""
     return client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
 
+def upload_note(client, files_store, data=None, headers=None, xhr=True):
+    """Upload a text note through the mandatory two-phase oracle flow."""
+    import secrets
+    import uuid
+    file_id = str(uuid.uuid4())
+    files_store.create_key_share(file_id, secrets.token_hex(32))
+    form = {
+        'note_text': base64.b64encode(b"Test note").decode('utf-8'),
+        'type': 'text',
+        'oracle_file_id': file_id,
+        'key_verifier': 'cc' * 32,
+    }
+    form.update(data or {})
+    if headers is None:
+        headers = {'X-Requested-With': 'XMLHttpRequest'} if xhr else {}
+    return client.post(
+        url_for('upload_file'),
+        data=form,
+        follow_redirects=False,
+        headers=headers,
+    )
+
 def test_upload_text_note_requires_login(client):
     """Test that uploading a text note requires authentication."""
     # Mock encrypted text data (base64 encoded)
@@ -27,17 +49,7 @@ def test_upload_text_note_success(client, app, files_store):
     test_text = b"This is a secret text note"
     mock_encrypted = base64.b64encode(test_text).decode('utf-8')
 
-    data = {
-        'note_text': mock_encrypted,
-        'type': 'text'
-    }
-
-    response = client.post(
-        url_for('upload_file'),
-        data=data,
-        follow_redirects=False,
-        headers={'X-Requested-With': 'XMLHttpRequest'}
-    )
+    response = upload_note(client, files_store, data={'note_text': mock_encrypted})
 
     assert response.status_code == 200
     json_data = response.get_json()
@@ -61,17 +73,9 @@ def test_upload_text_note_with_expiry(client, app, files_store):
     mock_encrypted = base64.b64encode(b"Expiring note").decode('utf-8')
     expiry_date = '2025-12-31T23:59'
 
-    data = {
-        'note_text': mock_encrypted,
-        'type': 'text',
-        'expiry': expiry_date
-    }
-
-    response = client.post(
-        url_for('upload_file'),
-        data=data,
-        follow_redirects=False,
-        headers={'X-Requested-With': 'XMLHttpRequest'}
+    response = upload_note(
+        client, files_store,
+        data={'note_text': mock_encrypted, 'expiry': expiry_date},
     )
 
     assert response.status_code == 200
@@ -87,14 +91,9 @@ def test_upload_text_note_stores_private_note(client, files_store):
     """Test text note upload stores a private note for the uploader."""
     login_user(client, 'testuser', 'password')
 
-    response = client.post(
-        url_for('upload_file'),
-        data={
-            'note_text': base64.b64encode(b"Test note").decode('utf-8'),
-            'type': 'text',
-            'private_note': 'Password for the ZIP'
-        },
-        headers={'X-Requested-With': 'XMLHttpRequest'}
+    response = upload_note(
+        client, files_store,
+        data={'private_note': 'Password for the ZIP'},
     )
 
     assert response.status_code == 200
@@ -109,12 +108,7 @@ def test_view_text_note_shows_correct_template(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
     # Upload a text note first
-    mock_encrypted = base64.b64encode(b"Test note").decode('utf-8')
-    response = client.post(
-        url_for('upload_file'),
-        data={'note_text': mock_encrypted, 'type': 'text'},
-        headers={'X-Requested-With': 'XMLHttpRequest'}
-    )
+    response = upload_note(client, files_store)
     note_id = response.get_json()['file_id']
 
     # View the note (confirm page)
@@ -131,12 +125,7 @@ def test_confirm_view_text_note(client, app, files_store, csrf_form_data):
     login_user(client, 'testuser', 'password')
 
     # Upload a text note first
-    mock_encrypted = base64.b64encode(b"Test note").decode('utf-8')
-    response = client.post(
-        url_for('upload_file'),
-        data={'note_text': mock_encrypted, 'type': 'text'},
-        headers={'X-Requested-With': 'XMLHttpRequest'}
-    )
+    response = upload_note(client, files_store)
     note_id = response.get_json()['file_id']
 
     # Confirm view
@@ -151,12 +140,7 @@ def test_text_note_type_field_in_database(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
     # Upload text note
-    mock_encrypted = base64.b64encode(b"Test note").decode('utf-8')
-    response = client.post(
-        url_for('upload_file'),
-        data={'note_text': mock_encrypted, 'type': 'text'},
-        headers={'X-Requested-With': 'XMLHttpRequest'}
-    )
+    response = upload_note(client, files_store)
     note_id = response.get_json()['file_id']
 
     # Check database
@@ -166,9 +150,17 @@ def test_text_note_type_field_in_database(client, app, files_store):
 
     # Compare with regular file upload
     import io
+    import secrets
+    import uuid
+    file_id = str(uuid.uuid4())
+    files_store.create_key_share(file_id, secrets.token_hex(32))
     file_response = client.post(
         url_for('upload_file'),
-        data={'file': (io.BytesIO(b"test content"), "test.txt")},
+        data={
+            'file': (io.BytesIO(b"test content"), "test.txt"),
+            'oracle_file_id': file_id,
+            'key_verifier': 'cc' * 32,
+        },
         content_type='multipart/form-data',
         follow_redirects=False
     )
@@ -180,18 +172,14 @@ def test_text_note_type_field_in_database(client, app, files_store):
     file_upload = [f for f in all_files if f['id'] != note_id][0]
     assert file_upload['type'] == 'file'
 
-def test_text_note_success_page(client, app):
+def test_text_note_success_page(client, app, files_store):
     """Test that success page shows correct message for text notes."""
     login_user(client, 'testuser', 'password')
 
     mock_encrypted = base64.b64encode(b"Test note").decode('utf-8')
 
     # Post without AJAX to get HTML response
-    response = client.post(
-        url_for('upload_file'),
-        data={'note_text': mock_encrypted, 'type': 'text'},
-        follow_redirects=False
-    )
+    response = upload_note(client, files_store, xhr=False)
 
     assert response.status_code == 200
     assert b'Note is in the hive' in response.data
@@ -202,12 +190,7 @@ def test_text_note_deletion_after_view(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
     # Upload text note
-    mock_encrypted = base64.b64encode(b"Test note").decode('utf-8')
-    response = client.post(
-        url_for('upload_file'),
-        data={'note_text': mock_encrypted, 'type': 'text'},
-        headers={'X-Requested-With': 'XMLHttpRequest'}
-    )
+    response = upload_note(client, files_store)
     note_id = response.get_json()['file_id']
 
     # Download the note
@@ -228,12 +211,7 @@ def test_delete_text_note_before_view(client, app, files_store, csrf_form_data):
     login_user(client, 'testuser', 'password')
 
     # Upload text note
-    mock_encrypted = base64.b64encode(b"Test note").decode('utf-8')
-    response = client.post(
-        url_for('upload_file'),
-        data={'note_text': mock_encrypted, 'type': 'text'},
-        headers={'X-Requested-With': 'XMLHttpRequest'}
-    )
+    response = upload_note(client, files_store)
     note_id = response.get_json()['file_id']
 
     # Delete the note
@@ -245,14 +223,17 @@ def test_delete_text_note_before_view(client, app, files_store, csrf_form_data):
     note_info = files_store.get_by_id(note_id)
     assert note_info is None
 
-def test_text_note_empty_content(client, app):
+def test_text_note_empty_content(client, app, oracle_share):
     """Test that empty text note is rejected."""
     login_user(client, 'testuser', 'password')
 
     # Try to upload empty note
+    file_id, _h = oracle_share()
     data = {
         'note_text': '',
-        'type': 'text'
+        'type': 'text',
+        'oracle_file_id': file_id,
+        'key_verifier': 'cc' * 32,
     }
 
     response = client.post(
@@ -271,12 +252,7 @@ def test_report_decryption_for_text_note(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
     # Upload text note
-    mock_encrypted = base64.b64encode(b"Test note").decode('utf-8')
-    response = client.post(
-        url_for('upload_file'),
-        data={'note_text': mock_encrypted, 'type': 'text'},
-        headers={'X-Requested-With': 'XMLHttpRequest'}
-    )
+    response = upload_note(client, files_store)
     note_id = response.get_json()['file_id']
 
     # Report decryption success
@@ -305,15 +281,7 @@ def test_report_decryption_for_text_note_sends_failed_notification(client, app, 
     sent_messages = []
     monkeypatch.setattr('app._send_email', lambda recipient, subject, body: sent_messages.append((recipient, subject, body)))
 
-    response = client.post(
-        url_for('upload_file'),
-        data={
-            'note_text': base64.b64encode(b"Test note").decode('utf-8'),
-            'type': 'text',
-            'notify_on_open': 'true',
-        },
-        headers={'X-Requested-With': 'XMLHttpRequest'}
-    )
+    response = upload_note(client, files_store, data={'notify_on_open': 'true'})
     note_id = response.get_json()['file_id']
 
     client.get(url_for('download_file', file_id=note_id))
@@ -343,15 +311,7 @@ def test_text_note_notifications_can_use_verified_account_email(client, app, fil
     sent_messages = []
     monkeypatch.setattr('app._send_email', lambda recipient, subject, body: sent_messages.append((recipient, subject, body)))
 
-    response = client.post(
-        url_for('upload_file'),
-        data={
-            'note_text': base64.b64encode(b"Test note").decode('utf-8'),
-            'type': 'text',
-            'notify_on_open': 'true',
-        },
-        headers={'X-Requested-With': 'XMLHttpRequest'}
-    )
+    response = upload_note(client, files_store, data={'notify_on_open': 'true'})
     note_id = response.get_json()['file_id']
 
     client.get(url_for('download_file', file_id=note_id))

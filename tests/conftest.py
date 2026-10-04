@@ -1,6 +1,9 @@
+import io
 import os
+import secrets
 import sys
 import tempfile
+import uuid
 import pytest
 from dotenv import load_dotenv
 
@@ -133,3 +136,49 @@ def files_store(db_instance):
 def tokens_store(db_instance):
     """Provides a direct reference to the api_tokens store of the test backend."""
     return db_instance.tokens
+
+
+@pytest.fixture
+def oracle_share(files_store):
+    """
+    Create a pending oracle key share directly in the store — the same
+    state /upload/begin produces, without spending a rate-limited request.
+
+    Returns a factory: _create(file_id=None) -> (file_id, h_hex).
+    """
+    def _create(file_id=None):
+        file_id = file_id or str(uuid.uuid4())
+        h_hex = secrets.token_hex(32)
+        files_store.create_key_share(file_id, h_hex)
+        return file_id, h_hex
+    return _create
+
+
+@pytest.fixture
+def oracle_upload(client, oracle_share):
+    """
+    POST a complete two-phase oracle upload and return
+    (file_id, h_hex, response).
+
+    ``data`` is merged into the multipart form; pass note fields for text
+    notes. ``verifier`` defaults to a fixed valid hex string — the real
+    V is only meaningful to crypto tests, not to route tests.
+    """
+    def _upload(data=None, filename='test.txt', content=b'content',
+                headers=None, verifier='cc' * 32, xhr=True):
+        file_id, h_hex = oracle_share()
+        form = dict(data or {})
+        if 'file' not in form and 'note_text' not in form:
+            form['file'] = (io.BytesIO(content), filename)
+        form['oracle_file_id'] = file_id
+        form['key_verifier'] = verifier
+        if headers is None:
+            headers = {'X-Requested-With': 'XMLHttpRequest'} if xhr else {}
+        response = client.post(
+            '/upload',
+            data=form,
+            content_type='multipart/form-data',
+            headers=headers,
+        )
+        return file_id, h_hex, response
+    return _upload

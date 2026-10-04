@@ -215,8 +215,8 @@ def test_oracle_upload_rejected_when_disabled(client, files_store, oracle_settin
     assert finish.status_code == 409
 
 
-def test_legacy_upload_still_works(client, files_store):
-    """Plain uploads without oracle fields are untouched (v1/v2 path)."""
+def test_upload_without_oracle_fields_rejected(client, files_store):
+    """Every upload is two-phase — a bare multipart POST is a 400."""
     login_user(client)
     response = client.post(
         url_for('upload_file'),
@@ -224,10 +224,8 @@ def test_legacy_upload_still_works(client, files_store):
         content_type='multipart/form-data',
         headers={'X-Requested-With': 'XMLHttpRequest'},
     )
-    assert response.status_code == 200
-    file_info = files_store.get_by(original_name='legacy.txt')
-    assert file_info is not None
-    assert files_store.get_key_share(file_info['id']) is None
+    assert response.status_code == 400
+    assert files_store.get_by(original_name='legacy.txt') is None
 
 
 # ---------------------------------------------------------------------------
@@ -291,8 +289,8 @@ def test_release_burn_on_lockout(client, files_store, oracle_settings):
     assert follow_up.status_code == 404
 
 
-def test_release_on_legacy_share_is_404(client, files_store):
-    """v1/v2 blobs have no key share — the oracle does not apply."""
+def test_release_without_key_share_is_404(client, files_store):
+    """A file record with no share (e.g. after burn) has nothing to release."""
     _create_file_record(files_store, file_id='legacy-1')
     response = client.post(
         url_for('release_key', file_id='legacy-1'), json={'v': 'bb' * 32})
@@ -416,7 +414,7 @@ def test_oracle_end_to_end(client, files_store):
     file_id = begin.get_json()['file_id']
     h = bytes.fromhex(begin.get_json()['h'])
 
-    blob, v_hex = buzz.encrypt_file_v3(plaintext, password, h)
+    blob, v_hex = buzz.encrypt_file(plaintext, password, h)
     assert blob.startswith(b'BKV3')
 
     finish = client.post(

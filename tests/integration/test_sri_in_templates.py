@@ -35,21 +35,21 @@ def test_index_page_has_sri_for_main_js(client):
     assert re.search(pattern, html), "main.js script tag should have correct SRI attributes"
 
 
-def test_view_page_has_sri_for_view_js(client, db_instance, files_store, csrf_form_data):
+def test_view_page_has_sri_for_view_js(client, db_instance, files_store, csrf_form_data, oracle_share):
     """Test that view page includes SRI integrity check for view.js."""
     # Login first
     with client.session_transaction() as sess:
         sess['username'] = 'testuser'
         sess['is_admin'] = False
 
-    # Upload a test file
+    # Upload a test file via the two-phase oracle flow
+    file_id, _h = oracle_share()
     client.post('/upload', data={
         'file': (BytesIO(b'test content'), 'test.txt'),
-        'expiry': ''
+        'expiry': '',
+        'oracle_file_id': file_id,
+        'key_verifier': 'cc' * 32,
     }, content_type='multipart/form-data')
-
-    # Get file_id from database
-
 
     file_info = files_store.get_by(original_name='test.txt')
     assert file_info is not None
@@ -74,16 +74,19 @@ def test_view_page_has_sri_for_view_js(client, db_instance, files_store, csrf_fo
     assert re.search(pattern, html), "view.js script tag should have correct SRI attributes"
 
 
-def test_success_page_has_sri_for_success_js(client, db_instance, files_store):
+def test_success_page_has_sri_for_success_js(client, db_instance, files_store, oracle_share):
     """Test that success page includes SRI integrity check for success.js."""
     with client.session_transaction() as sess:
         sess['username'] = 'testuser'
         sess['is_admin'] = False
 
-    # Upload a test file to get to success page
+    # Upload a test file via the two-phase oracle flow to get to success page
+    file_id, _h = oracle_share()
     client.post('/upload', data={
         'file': (BytesIO(b'test content'), 'success_test.txt'),
-        'expiry': ''
+        'expiry': '',
+        'oracle_file_id': file_id,
+        'key_verifier': 'cc' * 32,
     }, content_type='multipart/form-data')
 
     # Get file_id from database

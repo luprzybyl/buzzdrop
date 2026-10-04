@@ -2,7 +2,6 @@ import math
 import os
 import secrets
 import smtplib
-import uuid
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import parseaddr
@@ -669,7 +668,8 @@ def upload_file():
     private_note = (request.form.get('private_note') or '').strip() or None
     wants_json = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
-    # Oracle fields: set when the client ran the /upload/begin handshake.
+    # Every upload is two-phase: the client must have run /upload/begin
+    # and sends back the minted file_id plus the password verifier V.
     oracle_file_id = (request.form.get('oracle_file_id') or '').strip() or None
     key_verifier = (request.form.get('key_verifier') or '').strip().lower() or None
 
@@ -684,19 +684,17 @@ def upload_file():
     except NotificationPreferenceError as exc:
         return _fail(exc.message)
 
-    if oracle_file_id or key_verifier:
-        # Both fields travel together — half a handshake is an error.
-        if not oracle_file_id or not _is_valid_key_material(key_verifier):
-            return _fail('Invalid oracle upload')
-        share = file_repo.get_key_share(oracle_file_id)
-        if (
-            not current_app.config.get('ORACLE_ENABLED', False)
-            or share is None
-            or share.get('v') is not None
-            or share.get('released_at') is not None
-            or file_repo.get_by_id(oracle_file_id) is not None
-        ):
-            return _fail('Unknown or already finalized oracle upload', 409)
+    if not oracle_file_id or not _is_valid_key_material(key_verifier):
+        return _fail('Invalid oracle upload')
+    share = file_repo.get_key_share(oracle_file_id)
+    if (
+        not current_app.config.get('ORACLE_ENABLED', False)
+        or share is None
+        or share.get('v') is not None
+        or share.get('released_at') is not None
+        or file_repo.get_by_id(oracle_file_id) is not None
+    ):
+        return _fail('Unknown or already finalized oracle upload', 409)
 
     if upload_type == 'text' and note_text:
         # Handle text note upload
@@ -712,12 +710,12 @@ def upload_file():
             except ValueError:
                 expiry_iso = None
 
-        # Oracle uploads reuse the file_id minted by /upload/begin
-        unique_id = oracle_file_id or str(uuid.uuid4())
+        # The file_id was minted by /upload/begin
+        unique_id = oracle_file_id
 
         # Binding V atomically claims the pending share — a racing second
         # finish loses here, before any blob or record is written.
-        if key_verifier and not file_repo.bind_key_verifier(unique_id, key_verifier):
+        if not file_repo.bind_key_verifier(unique_id, key_verifier):
             return _fail('Oracle upload was finalized elsewhere', 409)
 
         # Save to storage
@@ -757,12 +755,12 @@ def upload_file():
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
 
-        # Oracle uploads reuse the file_id minted by /upload/begin
-        unique_id = oracle_file_id or str(uuid.uuid4())
+        # The file_id was minted by /upload/begin
+        unique_id = oracle_file_id
 
         # Binding V atomically claims the pending share — a racing second
         # finish loses here, before any blob or record is written.
-        if key_verifier and not file_repo.bind_key_verifier(unique_id, key_verifier):
+        if not file_repo.bind_key_verifier(unique_id, key_verifier):
             return _fail('Oracle upload was finalized elsewhere', 409)
 
         file_path = storage.save(unique_id, file)
@@ -972,7 +970,8 @@ def release_key(file_id):
         return {'error': 'File has expired'}, 410
 
     share = file_repo.get_key_share(file_id)
-    # No share (v1/v2 legacy blob) or a pending one — nothing to release.
+    # No share (e.g. after a lockout burn) or a pending one — nothing
+    # to release.
     if share is None or share.get('v') is None:
         return {'error': 'Not found'}, 404
     if share.get('released_at'):
