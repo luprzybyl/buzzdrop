@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#07080B">
-    <meta name="description" content="BuzzDrop: secure, one-time file sharing. Upload encrypted files or secret notes, send a link, and let the stored copy vanish as soon as the recipient downloads it.">
+    <meta name="description" content="BuzzDrop: secure, one-time file sharing. Upload encrypted files or secret notes, send a link, and let them vanish as soon as the recipient downloads them.">
     <title>BuzzDrop: Secure, One-Time File Sharing</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=sri_hash('css/app.css')) }}">
@@ -108,7 +108,7 @@
             <div class="container-shell flex flex-col gap-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                 <p class="flex items-start gap-2 sm:items-center">
                     <span class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-honey-400 sm:mt-0" aria-hidden="true"></span>
-                    <span>This drop's server copy is spent on first open — no re-reads, no replays. Share the key separately when trust matters most.</span>
+                    <span>This drop self-destructs after opening. Share the key separately when trust matters most.</span>
                 </p>
                 <p class="text-slate-600">Proudly developed with vibe coding.</p>
             </div>

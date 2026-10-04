@@ -10,15 +10,15 @@
 
 # Buzzdrop: File Sharing That Stings—Just Once! 🐝
 
-**Buzzdrop** is a one-time, self-destructing file drop. Upload files or share secret text notes, get a link, and—BZZT!—the stored copy is gone after a single view. One honest footnote: "one-time" means nobody gets a *second* read—it cannot un-read what the recipient already decrypted (that's physics, not a bug). The crypto still does the heavy lifting: everything is encrypted right in your browser, and the key itself is split in half—one half lives in your password, the other half sits in the server's vault and is handed over exactly once.
+**Buzzdrop** is a one-time, self-destructing file drop. Upload files or share secret text notes, get a link, and—BZZT!—they vanish after a single view. (One honest footnote: "one-time" means nobody gets a *second* read—what the recipient already saw can't be un-seen.) The crypto does the heavy lifting: everything is encrypted right in your browser, and the key itself is split in half—one half lives in your password, the other half sits in the server's vault and is handed over exactly once.
 
 ## Why Buzzdrop?
 
-- 🐝 **One-Time Download**: Each link is a mayfly—one claim, and the stored copy is gone for good!
+- 🐝 **One-Time Download**: Each link is a mayfly—one click and it's gone!
 - 📝 **Secret Text Notes**: Share passwords, API keys, or sensitive text—no files needed!
 - 🔒 **In-Browser Encryption**: Your data is locked tight (AES-GCM + PBKDF2) before it ever leaves your device.
 - 🗝️ **Server-Gated Key Release**: The decryption key is split between the password and a server-held share that's released exactly once—leaked ciphertext alone is just noise, not a brute-force target.
-- 💥 **Auto-Delete**: Downloaded or viewed? Boom—the server copy is gone and its key share is burned. Even stale ciphertext bytes left on disk are dead weight without it.
+- 💥 **Auto-Delete**: Downloaded or viewed? Boom, gone.
 - 🔗 **Smart Sharing**: Generate links with embedded passwords for one-click access, or share separately for extra security.
 - ☁️ **Local or S3 Storage**: Choose your hive—local or Amazon S3.
 - 👩‍💻 **Configurable**: File types, size limits, and users—tweak in `.env`.
@@ -94,7 +94,7 @@ Stop the swarm with `docker-compose down`—no mess, no leftovers.
    - **🔗 One-Click Link**: Password embedded in URL fragment (convenient, but less secure)
    - **🔒 Separate Sharing**: Share link and password via different channels (maximum security)
 5. Recipient opens link, confirms download, enters password (or auto-filled from URL), and decrypts.
-6. First download zaps the stored copy and its key share—BZZT!
+6. First download zaps it for good—BZZT!
 7. Optionally enable **"Notify me when this is opened"** to receive a single email after the recipient attempts decryption.
 
 ### For Secret Text Notes:
