@@ -397,6 +397,9 @@ The §6 design is implemented as the **only** share format —
 (default: on) gates the upload handshake; when off, `/upload/begin`
 returns 404 and uploads are refused.
 
+- Rate-limit accounting: `/upload/begin` and `/upload` share the
+  `UPLOAD_RATE_LIMIT` bucket — a complete upload costs 2 hits
+  (effective 15 files/h at the default `30 per hour`).
 - Wire format: `BKV3 ‖ salt(16) ‖ iv(12) ‖ AES-GCM`, inner `BKP-FILE`
   header kept. `Kp`/`V`/`file_key` use HKDF-SHA256 with the blob salt
   and `info` labels `enc`/`ver`/`file`. Only `BKV3` is read or written;
