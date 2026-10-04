@@ -83,6 +83,13 @@ class Config:
     KEY_SHARE_PENDING_TTL_SECONDS = int(
         os.getenv('KEY_SHARE_PENDING_TTL_SECONDS', '3600'))
 
+    # Expired drops are always swept once at startup. This interval
+    # (seconds) additionally re-sweeps on a daemon thread, so a drop
+    # nobody ever opens still loses its ciphertext and key share.
+    # 0 disables the periodic sweep.
+    EXPIRY_SWEEP_INTERVAL_SECONDS = int(
+        os.getenv('EXPIRY_SWEEP_INTERVAL_SECONDS', '300'))
+
     @classmethod
     def validate(cls):
         """
@@ -117,6 +124,9 @@ class Config:
 
         if cls.KEY_RELEASE_MAX_ATTEMPTS < 1:
             raise ValueError("KEY_RELEASE_MAX_ATTEMPTS must be at least 1")
+
+        if cls.EXPIRY_SWEEP_INTERVAL_SECONDS < 0:
+            raise ValueError("EXPIRY_SWEEP_INTERVAL_SECONDS must be 0 or greater")
 
     @classmethod
     def get_database_url(cls) -> str:
@@ -169,6 +179,7 @@ class Config:
             'api_token_rate_limit': cls.API_TOKEN_RATE_LIMIT,
             'upload_rate_limit': cls.UPLOAD_RATE_LIMIT,
             'public_file_rate_limit': cls.PUBLIC_FILE_RATE_LIMIT,
+            'expiry_sweep_interval_seconds': cls.EXPIRY_SWEEP_INTERVAL_SECONDS,
             's3_configured': bool(cls.S3_BUCKET) if cls.STORAGE_BACKEND == 's3' else False,
             's3_region': cls.S3_REGION if cls.STORAGE_BACKEND == 's3' else 'N/A',
             'email_notifications_configured': bool(cls.SMTP_HOST and cls.SMTP_FROM_EMAIL),

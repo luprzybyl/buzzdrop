@@ -2,6 +2,7 @@ import math
 import os
 import secrets
 import smtplib
+import threading
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import parseaddr
@@ -413,6 +414,87 @@ def check_and_handle_expiry(file_info):
         return True
 
     return False
+
+
+def sweep_expired_files() -> int:
+    """
+    Expire every active drop whose expiry_at has passed: delete the
+    stored blob (local or S3 — check_and_handle_expiry goes through the
+    storage abstraction), burn the key share, and mark the record
+    expired.
+
+    Expiry must not depend on someone touching the link — this runs
+    once at startup and, when EXPIRY_SWEEP_INTERVAL_SECONDS > 0, again
+    on a timer.
+
+    Returns:
+        Number of drops expired by this pass.
+    """
+    expired_count = 0
+    for file_info in file_repo.get_all_active():
+        try:
+            if check_and_handle_expiry(file_info):
+                expired_count += 1
+        except Exception:
+            # One bad row must not stop the sweep — keep going.
+            app.logger.exception(
+                'Expiry sweep failed for file %s', file_info.get('id'))
+    return expired_count
+
+
+# Startup sweep — drops that expired while the app was down must be
+# destroyed even if nobody ever opens them (same pattern as the
+# pending-share purge above).
+_startup_expired_count = sweep_expired_files()
+if _startup_expired_count:
+    app.logger.info(
+        'Startup expiry sweep removed %d expired drop(s)',
+        _startup_expired_count)
+
+
+def _expiry_sweep_loop(interval_seconds: float,
+                       stop_event: threading.Event) -> None:
+    while not stop_event.wait(interval_seconds):
+        try:
+            removed = sweep_expired_files()
+            if removed:
+                app.logger.info(
+                    'Periodic expiry sweep removed %d drop(s)', removed)
+        except Exception:
+            app.logger.exception('Periodic expiry sweep failed')
+
+
+def start_expiry_sweep_thread(interval_seconds: float):
+    """
+    Spawn the periodic expiry sweeper as a daemon thread.
+
+    The sweep is idempotent, so it is safe under WSGI deployments with
+    several workers and under the dev reloader — every process sweeps
+    the same database and repeated passes converge. Daemon threads die
+    with their process, so production code never stops them; the
+    thread's ``sweep_stop`` event exists for tests that need a clean
+    shutdown. An interval <= 0 disables the periodic sweep (the
+    startup sweep above already ran).
+
+    Returns:
+        The started Thread, or None when disabled.
+    """
+    if interval_seconds <= 0:
+        return None
+    stop_event = threading.Event()
+    thread = threading.Thread(
+        target=_expiry_sweep_loop,
+        args=(interval_seconds, stop_event),
+        name='buzzdrop-expiry-sweep',
+        daemon=True,
+    )
+    thread.sweep_stop = stop_event
+    thread.start()
+    return thread
+
+
+_expiry_sweep_thread = start_expiry_sweep_thread(
+    app.config.get('EXPIRY_SWEEP_INTERVAL_SECONDS', 0))
 
 
 @app.errorhandler(RequestEntityTooLarge)
