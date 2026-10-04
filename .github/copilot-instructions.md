@@ -21,7 +21,7 @@ pytest tests/integration/test_app.py::test_function_name -v
 
 ## Architecture
 
-Buzzdrop is a one-time self-destructing file-sharing app where files are encrypted client-side (AES-GCM + PBKDF2) before upload. The server never handles plaintext data.
+Buzzdrop is a one-time self-destructing file-sharing app where files are encrypted client-side (AES-GCM) under a **server-gated key release** scheme (`docs/true-one-time.md` §6): `file_key = HKDF(Kp ‖ H)` where `Kp` derives from the password and `H` is a server-held share released exactly once. The server never handles plaintext data.
 
 **Module layout** — the app was refactored from a single-file monolith; responsibilities are now split:
 - `app.py` — Flask routes, `get_backend()`/`get_files_store()` helpers, SRI context processor, startup logic
@@ -37,17 +37,19 @@ Buzzdrop is a one-time self-destructing file-sharing app where files are encrypt
 - `static/js/view.js` — client-side decryption on download
 
 **File lifecycle:**
-1. Browser encrypts file → POST `/upload` → stored with UUID filename (local path or S3 key)
-2. DB entry created: `status: active`, `downloaded_at: null`
+1. Browser calls `POST /upload/begin` → server mints `{file_id, h}` (random 32-byte share, hex); a pending row lands in the `file_keys` table
+2. Browser derives `file_key = HKDF(Kp ‖ H)`, encrypts, then `POST /upload` with `oracle_file_id` + `key_verifier` (hex verifier V) → V is bound to the pending share atomically, blob stored (local path or S3 key), `files` entry created: `status: active`, `downloaded_at: null`
 3. Recipient visits `/view/<id>` → confirms → `/view/<id>/confirm` renders decryption UI
-4. Browser fetches `/download/<id>` → file streamed once, then deleted from storage; `downloaded_at` set
-5. Optional expiry: `check_and_handle_expiry()` marks `status: expired` and deletes storage file
+4. Browser fetches `/download/<id>` → ciphertext streamed once, then deleted from storage; `downloaded_at` set
+5. Browser `POST /release/<id>` `{v}` → server compares V constant-time, atomically claims, returns `h` exactly once (later calls → 410). Misses increment `file_keys.attempts`; lockout at `ORACLE_MAX_RELEASE_ATTEMPTS` (with `ORACLE_BURN_ON_LOCKOUT` the row — and H — is deleted). `/release` is rate-limited per file_id, not per IP
+6. Browser derives `file_key` and decrypts client-side
+7. Optional expiry: `check_and_handle_expiry()` marks `status: expired` and deletes storage file
 
 **Storage abstraction:** `get_storage_backend(config)` returns either `LocalStorage` or `S3Storage`. Both expose `save(file_id, file_data) -> path`, `retrieve(path) -> Iterator[bytes]`, `delete(path)`. The `path` stored in DB is a local filesystem path for local storage and an S3 key (`uploads/{uuid}`) for S3.
 
-**API token auth:** `POST /api/token` (admin-only, JSON `{"username": "..."}`) issues a raw token shown once. The `@api_auth_required` decorator on `/upload` accepts either `Authorization: Bearer <token>` or a session cookie. When a Bearer header is present and invalid → 401 JSON (no session fallback). On success it sets `flask.g.username`; routes read `g.username` not `session['username']`. Tokens are stored as SHA-256 hashes in the `api_tokens` table via `TokenStore` — never the raw token.
+**API token auth:** `POST /api/token` (admin-only, JSON `{"username": "..."}`) issues a raw token shown once. The `@api_auth_required` decorator on `/upload` and `/upload/begin` accepts either `Authorization: Bearer <token>` or a session cookie. When a Bearer header is present and invalid → 401 JSON (no session fallback). On success it sets `flask.g.username`; routes read `g.username` not `session['username']`. Tokens are stored as PBKDF2-HMAC-SHA256 digests in the `api_tokens` table via `TokenStore` — never the raw token.
 
-**`buzz` CLI** (`cli/buzz`): encrypts a file with the same AES-GCM format as the browser, then uploads via Bearer token. Reads `~/.buzz_token` as JSON `{"token": "...", "server": "https://..."}`. Requires `cryptography` and `requests` (see `requirements-cli.txt`). Generates a 4-word passphrase if `-p` is omitted.
+**`buzz` CLI** (`cli/buzz`): encrypts a file with the same `BKV3` format as the browser and runs the same two-phase upload (`/upload/begin` → `/upload`); aborts if begin 404s. Uploads via Bearer token. Reads `~/.buzz_token` as JSON `{"token": "...", "server": "https://..."}`. Requires `cryptography` and `requests` (see `requirements-cli.txt`). Generates a 4-word passphrase if `-p` is omitted.
 
  All `<script>` tags must include `integrity="{{ sri_hash('js/filename.js') }}" crossorigin="anonymous"`. In development, missing files raise `FileNotFoundError`; in production they log a warning.
 
@@ -61,7 +63,9 @@ Buzzdrop is a one-time self-destructing file-sharing app where files are encrypt
 
 **Test isolation:** `conftest.py` sets `FLASK_USER_1`/`FLASK_USER_2` at module level before any imports. The `db_instance` fixture is `scope='function'` and truncates all tables per test. The `app` fixture is `scope='session'` with a shared temp DB file.
 
-**Encrypted binary format (client-side):** `salt (16 bytes) + iv (12 bytes) + AES-GCM ciphertext`. The plaintext has magic header `BKP-FILE` prepended before encryption for integrity validation on decrypt.
+**Encrypted binary format (client-side, `BKV3` only):** `BKV3 ‖ salt (16 bytes) ‖ iv (12 bytes) ‖ AES-GCM ciphertext`. Key derivation: `master = PBKDF2-SHA256(password, salt, 600k)`, `Kp = HKDF(master, salt, 'enc')`, `V = HKDF(master, salt, 'ver')`, `file_key = HKDF(Kp ‖ H, salt, 'file')` — `H` is the server share from `file_keys`, `V` the verifier sent on upload/release (both as hex). The plaintext has magic header `BKP-FILE` prepended before encryption for integrity validation on decrypt. Pre-oracle v1/v2 blobs are rejected — no backward compatibility (pre-production wipe).
+
+**Oracle config:** `ORACLE_ENABLED` (default on; when off `/upload/begin` 404s and uploads are refused), `ORACLE_RELEASE_RATE_LIMIT` (10/min per file_id), `ORACLE_MAX_RELEASE_ATTEMPTS` (5), `ORACLE_BURN_ON_LOCKOUT` (default off — lockout keeps H, burn deletes the `file_keys` row). `/upload/begin` and `/upload` share the `UPLOAD_RATE_LIMIT` bucket.
 
 **Type field:** DB entries have `type: 'file'` or `type: 'text'` (text notes). Text note content is base64-encoded encrypted data sent via form field `note_text`; file uploads use `multipart/form-data` with field `file`.
 
