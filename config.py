@@ -121,7 +121,7 @@ class Config:
         Raises:
             ValueError: If required configuration is missing or invalid
         """
-        is_production = os.getenv('FLASK_ENV') == 'production'
+        is_production = os.getenv('FLASK_ENV', '').strip().lower() == 'production'
 
         # Check secret key in production
         if not cls.SECRET_KEY and is_production:

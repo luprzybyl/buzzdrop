@@ -281,7 +281,8 @@ def login_user(username: str, password: str) -> bool:
     users = get_users()
     user = users.get(username)
     
-    # Set session data
+    # Set session data — permanent so PERMANENT_SESSION_LIFETIME applies
+    session.permanent = True
     session['username'] = username
     session['is_admin'] = user.get('is_admin', False)
     session['csrf_token'] = secrets.token_urlsafe(32)
