@@ -4,7 +4,7 @@ import test from 'node:test';
 // crypto.js uses `window.crypto`; Node exposes Web Crypto on globalThis.
 globalThis.window = globalThis;
 
-const { CryptoService } = await import('../../static/js/crypto.js');
+const { CryptoService, bytesToHex, hexToBytes } = await import('../../static/js/crypto.js');
 
 const service = new CryptoService();
 const encoder = new TextEncoder();
@@ -94,4 +94,70 @@ test('random v1-style blob is detected as v1', () => {
     const blob = crypto.getRandomValues(new Uint8Array(64));
     blob[0] = 0xff; // ensure it does not accidentally start with 'B'
     assert.equal(service.detectVersion(blob).version, 1);
+});
+
+// ---------------------------------------------------------------------------
+// v3 oracle format — byte-identical fixture to tests/unit/test_cli_crypto.py
+// ---------------------------------------------------------------------------
+const V3_FIXTURE = Uint8Array.from(
+    Buffer.from(
+        '424b5633' +
+        '000102030405060708090a0b0c0d0e0f' +
+        '101112131415161718191a1b' +
+        '9d9e3a85dc0667cf0bbb1518c026c1077fae042f4b6eb1a5a413d9fc50b9b4d6cbdf69ba',
+        'hex',
+    ),
+);
+const V3_FIXTURE_H = hexToBytes(
+    '202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f');
+const V3_FIXTURE_V =
+    '0ec3a6fe37dd4e652583c3dcde17bad20e019cbbf47d8f281bbf3f028ab482db';
+
+test('encryptV3 produces a BKV3 envelope detected as v3', async () => {
+    const h = crypto.getRandomValues(new Uint8Array(32));
+    const { blob, verifier } = await service.encryptV3(
+        encoder.encode('secret'), 'pw', h);
+    assert.deepEqual([...blob.slice(0, 4)], [...encoder.encode('BKV3')]);
+    assert.equal(service.detectVersion(blob).version, 3);
+    assert.equal(verifier.length, 32);
+});
+
+test('v3 encrypt/decrypt round-trips through the server share', async () => {
+    const h = crypto.getRandomValues(new Uint8Array(32));
+    const data = encoder.encode('oracle payload \x00\x01');
+    const { blob } = await service.encryptV3(data, 'pw', h);
+    const decrypted = await service.decryptV3(blob, 'pw', h);
+    assert.deepEqual(decrypted, data);
+});
+
+test('python-generated v3 fixture decrypts in JS', async () => {
+    assert.equal(service.detectVersion(V3_FIXTURE).version, 3);
+    const decrypted = await service.decryptV3(
+        V3_FIXTURE, FIXTURE_PASSWORD, V3_FIXTURE_H);
+    assert.deepEqual(decrypted, FIXTURE_DATA);
+});
+
+test('v3 verifier derivation matches the python fixture', async () => {
+    const salt = V3_FIXTURE.slice(4, 20);
+    const v = await service.deriveVerifier(FIXTURE_PASSWORD, salt);
+    assert.equal(bytesToHex(v), V3_FIXTURE_V);
+});
+
+test('v3 blob cannot decrypt without the server share', async () => {
+    const h = crypto.getRandomValues(new Uint8Array(32));
+    const { blob } = await service.encryptV3(encoder.encode('x'), 'pw', h);
+    // Legacy decrypt path refuses v3 outright...
+    await assert.rejects(service.decrypt(blob, 'pw'));
+    // ...and a wrong H fails the GCM tag.
+    await assert.rejects(
+        service.decryptV3(blob, 'pw', crypto.getRandomValues(new Uint8Array(32))));
+    await assert.rejects(service.decryptV3(blob, 'wrong', h));
+});
+
+test('hex helpers round-trip and reject malformed input', () => {
+    const bytes = hexToBytes('00ff10');
+    assert.deepEqual([...bytes], [0, 255, 16]);
+    assert.equal(bytesToHex(bytes), '00ff10');
+    assert.throws(() => hexToBytes('xyz'));
+    assert.throws(() => hexToBytes('abc'));
 });

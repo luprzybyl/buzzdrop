@@ -50,6 +50,7 @@
 </div>
 <script>
 window.downloadUrl = "{{ url_for('download_file', file_id=file_id) }}";
+window.releaseUrl = "{{ url_for('release_key', file_id=file_id) }}";
 window.reportDecryptionUrl = "{{ url_for('report_decryption', file_id=file_id) }}";
 window.originalName = "{{ original_name }}";
 window.fileType = "{{ file_type }}";

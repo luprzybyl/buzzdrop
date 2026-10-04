@@ -1,9 +1,13 @@
 // Import CryptoService for encryption
-import { CryptoService } from './crypto.js';
+import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
 import { buildSharedFilesUrl, getSharedFilesPage } from './shared-files.mjs';
 import { assessPassword, generatePassphrase } from './passphrase.mjs';
 
 const cryptoService = new CryptoService();
+// Server-gated key release (docs/true-one-time.md §6): when the server
+// advertises ORACLE_ENABLED, uploads run the /upload/begin handshake and
+// produce v3 payloads; otherwise they stay on the self-contained v2 format.
+const oracleEnabled = window.oracleEnabled === true;
 let activeShareMode = 'file';
 let uploadInProgress = false;
 
@@ -171,6 +175,39 @@ function enforcePasswordStrength(password) {
 }
 
 // --- Shared Upload Logic ---
+
+/**
+ * Encrypt data for upload, running the two-phase oracle handshake when
+ * the server enables it. Falls back to a self-contained v2 blob when the
+ * begin call fails, so an upgrade never strands a client mid-upload.
+ * @param {Uint8Array} data - Raw plaintext
+ * @param {string} password
+ * @returns {Promise<{blob: Uint8Array, oracleFileId?: string, keyVerifier?: string}>}
+ */
+async function encryptForUpload(data, password) {
+    if (oracleEnabled) {
+        try {
+            const res = await fetch(window.uploadBeginUrl, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (res.ok) {
+                const { file_id, h } = await res.json();
+                const { blob, verifier } = await cryptoService.encryptV3(
+                    data, password, hexToBytes(h));
+                return {
+                    blob,
+                    oracleFileId: file_id,
+                    keyVerifier: bytesToHex(verifier),
+                };
+            }
+        } catch (err) {
+            // fall through to the legacy path
+        }
+    }
+    return { blob: await cryptoService.encrypt(data, password) };
+}
+
 /**
  * Upload data with progress tracking via XHR.
  * @param {FormData} formData - Form data to upload
@@ -345,14 +382,19 @@ if (fileUploadForm) {
         if (!file || !password) return;
         if (!enforcePasswordStrength(password)) return;
 
-        // Read and encrypt file data
+        // Read and encrypt file data (oracle handshake when enabled)
         const fileData = new Uint8Array(await file.arrayBuffer());
-        const encrypted = await cryptoService.encrypt(fileData, password);
+        const { blob: encrypted, oracleFileId, keyVerifier } =
+            await encryptForUpload(fileData, password);
 
         // Prepare FormData
         const encBlob = new Blob([encrypted], { type: 'application/octet-stream' });
         const formData = new FormData();
         formData.append('file', new File([encBlob], file.name));
+        if (oracleFileId) {
+            formData.append('oracle_file_id', oracleFileId);
+            formData.append('key_verifier', keyVerifier);
+        }
         const expiryInput = document.getElementById('shared-expiry');
         const privateNoteInput = document.getElementById('shared-private-note');
         const notifyOnOpenInput = document.getElementById('notify-on-open');
@@ -396,16 +438,21 @@ async function uploadNote() {
     }
     if (!enforcePasswordStrength(password)) return;
 
-    // Encrypt text data
+    // Encrypt text data (oracle handshake when enabled)
     const enc = new TextEncoder();
     const textData = enc.encode(noteText);
-    const encrypted = await cryptoService.encrypt(textData, password);
+    const { blob: encrypted, oracleFileId, keyVerifier } =
+        await encryptForUpload(textData, password);
 
     // Prepare FormData with base64 encoded encrypted data
     const base64Encrypted = btoa(String.fromCharCode(...encrypted));
     const formData = new FormData();
     formData.append('note_text', base64Encrypted);
     formData.append('type', 'text');
+    if (oracleFileId) {
+        formData.append('oracle_file_id', oracleFileId);
+        formData.append('key_verifier', keyVerifier);
+    }
     if (expiry) {
         formData.append('expiry', expiry);
     }
