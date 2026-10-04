@@ -71,6 +71,8 @@ Buzzdrop is a one-time self-destructing file-sharing app where files are encrypt
 
 **AJAX detection:** Routes check `request.headers.get('X-Requested-With') == 'XMLHttpRequest'` to decide between JSON and redirect responses.
 
+**CSRF on session-authed mutating routes:** `_session_csrf_required()` gates `POST /upload`, `/upload/begin`, `/api/token` (and the form-based delete/confirm/revoke routes). The token travels as `X-CSRF-Token` header, `csrf_token` form field, or JSON field; templates render `<meta name="csrf-token">` (JS reads it in main.js) and hidden form inputs. Requests carrying an `Authorization` header are exempt — cross-site requests can't set it, so Bearer clients are CSRF-immune. Public POSTs (`/release`, `/report_decryption`) have no CSRF gate by design.
+
 **`sdk/` directory:** Contains a vendored copy of the Dagger Python SDK used by the Dagger-based CI pipeline. It is not part of the web application and should not be modified.
 
 **CLI binary releases:** Pushing to `main` with changes under `cli/` or `requirements-cli.txt` triggers `.github/workflows/release-cli.yml`, which builds a PyInstaller single-file binary and publishes it to GitHub Releases automatically.

@@ -103,6 +103,20 @@ def _is_valid_csrf_token() -> bool:
     return bool(submitted_token and session_token and secrets.compare_digest(submitted_token, session_token))
 
 
+def _session_csrf_required() -> bool:
+    """
+    CSRF gate for routes that accept session OR Bearer auth.
+
+    An ``Authorization`` header exempts the request outright: a
+    cross-site form/fetch cannot set it, so Bearer API clients are
+    CSRF-immune by construction. Session-authed requests must present
+    the session token (header, form field, or JSON field).
+    """
+    if request.headers.get('Authorization'):
+        return True
+    return _is_valid_csrf_token()
+
+
 def _parse_positive_integer(value):
     if isinstance(value, bool):
         raise ValueError
@@ -546,6 +560,8 @@ def create_api_token():
     ← shown once, store securely
     """
     from tokens import DEFAULT_TOKEN_EXPIRY_DAYS, generate_api_token
+    if not _session_csrf_required():
+        return {'error': 'CSRF validation failed'}, 403
     data = request.get_json(silent=True) or {}
     current_user = get_current_user()
     current_username = current_user['username']
@@ -667,6 +683,9 @@ def upload_begin():
     if not current_app.config.get('KEY_RELEASE_ENABLED', False):
         return {'error': 'Server-gated key release is disabled'}, 404
 
+    if not _session_csrf_required():
+        return {'error': 'CSRF validation failed'}, 403
+
     # Pending shares that never finished are dead weight — sweep them on
     # the same path that creates them.
     file_repo.purge_stale_key_shares(
@@ -689,6 +708,12 @@ def upload_file():
     upload_type = request.form.get('type', 'file')
     private_note = (request.form.get('private_note') or '').strip() or None
     wants_json = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    if not _session_csrf_required():
+        if wants_json:
+            return {'error': 'CSRF validation failed'}, 403
+        flash('Invalid request')
+        return redirect(url_for('index'))
 
     # Every upload is two-phase: the client must have run /upload/begin
     # and sends back the minted file_id, the password verifier V, and the

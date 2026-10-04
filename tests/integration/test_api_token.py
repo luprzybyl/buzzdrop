@@ -17,6 +17,9 @@ def _csrf_headers(client):
 def admin_client(client):
     """A test client logged in as admin."""
     client.post('/login', data={'username': 'adminuser', 'password': 'adminpass'})
+    # login rotates the session CSRF token — pin a known value for tests
+    with client.session_transaction() as session:
+        session['csrf_token'] = 'test-csrf-token'
     return client
 
 
@@ -24,6 +27,8 @@ def admin_client(client):
 def user_client(client):
     """A test client logged in as a regular user."""
     client.post('/login', data={'username': 'testuser', 'password': 'password'})
+    with client.session_transaction() as session:
+        session['csrf_token'] = 'test-csrf-token'
     return client
 
 
@@ -45,9 +50,22 @@ def test_create_token_unauthenticated(client):
     assert resp.status_code in (302, 401)
 
 
+def test_create_token_requires_csrf(user_client):
+    """Session-authed token creation without a CSRF token → 403.
+
+    A cross-site form could ride the victim's session cookie; without a
+    token the request must not mint a credential for the attacker.
+    """
+    with user_client.session_transaction() as session:
+        session.pop('csrf_token', None)
+    resp = user_client.post('/api/token', json={'username': 'testuser'})
+    assert resp.status_code == 403
+    assert resp.get_json()['error'] == 'CSRF validation failed'
+
+
 def test_create_token_for_self(user_client):
     """Regular users can generate a token for themselves."""
-    resp = user_client.post('/api/token', json={'username': 'testuser'})
+    resp = user_client.post('/api/token', headers=_csrf_headers(user_client), json={'username': 'testuser'})
     assert resp.status_code == 201
     data = resp.get_json()
     assert 'token' in data
@@ -57,7 +75,7 @@ def test_create_token_for_self(user_client):
 
 def test_create_token_for_self_no_username(user_client):
     """Omitting username defaults to the logged-in user."""
-    resp = user_client.post('/api/token', json={})
+    resp = user_client.post('/api/token', headers=_csrf_headers(user_client), json={})
     assert resp.status_code == 201
     assert len(resp.get_json()['token']) == 64
     assert 'expires_at' in resp.get_json()
@@ -65,32 +83,32 @@ def test_create_token_for_self_no_username(user_client):
 
 def test_create_token_for_other_user_forbidden(user_client):
     """Non-admin cannot generate a token for a different user."""
-    resp = user_client.post('/api/token', json={'username': 'adminuser'})
+    resp = user_client.post('/api/token', headers=_csrf_headers(user_client), json={'username': 'adminuser'})
     assert resp.status_code == 403
 
 
 def test_admin_can_create_token_for_any_user(admin_client):
     """Admins can generate a token for any existing user."""
-    resp = admin_client.post('/api/token', json={'username': 'testuser'})
+    resp = admin_client.post('/api/token', headers=_csrf_headers(admin_client), json={'username': 'testuser'})
     assert resp.status_code == 201
     assert len(resp.get_json()['token']) == 64
     assert 'expires_at' in resp.get_json()
 
 
 def test_create_token_unknown_user(admin_client):
-    resp = admin_client.post('/api/token', json={'username': 'nobody'})
+    resp = admin_client.post('/api/token', headers=_csrf_headers(admin_client), json={'username': 'nobody'})
     assert resp.status_code == 404
 
 
 def test_create_token_rejects_invalid_expiry(user_client):
-    resp = user_client.post('/api/token', json={'expires_in_days': 0})
+    resp = user_client.post('/api/token', headers=_csrf_headers(user_client), json={'expires_in_days': 0})
     assert resp.status_code == 400
     assert resp.get_json()['error'] == 'expires_in_days must be a positive integer'
 
 
 @pytest.mark.parametrize('expires_in_days', [1.5, True, float('inf')])
 def test_create_token_rejects_non_integer_expiry_values(user_client, expires_in_days):
-    resp = user_client.post('/api/token', json={'expires_in_days': expires_in_days})
+    resp = user_client.post('/api/token', headers=_csrf_headers(user_client), json={'expires_in_days': expires_in_days})
     assert resp.status_code == 400
     assert resp.get_json()['error'] == 'expires_in_days must be a positive integer'
 
@@ -222,6 +240,7 @@ def test_upload_with_valid_token(app, client, db_instance, key_share):
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
         },
         headers={
             'Authorization': f'Bearer {token}',
@@ -284,8 +303,10 @@ def test_upload_with_session_still_works(user_client, db_instance, key_share):
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
         },
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
         content_type='multipart/form-data',
     )
     assert resp.status_code == 200
@@ -327,6 +348,7 @@ def test_upload_token_sets_uploaded_by(app, client, db_instance, key_share):
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
         },
         headers={
             'Authorization': f'Bearer {token}',

@@ -85,10 +85,33 @@ def app():
     del os.environ['FLASK_USER_2']
 
 
+CSRF_TOKEN = 'test-csrf-token'
+
+
 @pytest.fixture
 def client(app):
-    """A test client for the app."""
-    return app.test_client()
+    """
+    A test client for the app — pre-seeded with a session CSRF token.
+
+    Session-authed mutating routes (POST /upload, /upload/begin,
+    /api/token, /delete, /view/<id>/confirm) require a matching token;
+    send ``CSRF_TOKEN`` as the ``X-CSRF-Token`` header, a ``csrf_token``
+    form field, or a JSON field. Tests proving a 403 must clear the
+    token via ``client.session_transaction()`` first.
+    """
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session['csrf_token'] = CSRF_TOKEN
+    return client
+
+
+@pytest.fixture
+def csrf_headers(client):
+    """XHR headers carrying the seeded session CSRF token."""
+    return {
+        'X-CSRF-Token': CSRF_TOKEN,
+        'X-Requested-With': 'XMLHttpRequest',
+    }
 
 
 @pytest.fixture
@@ -183,6 +206,7 @@ def key_release_upload(client, key_share):
         form['file_id'] = file_id
         form['key_verifier'] = verifier
         form['receipt_hash'] = receipt_hash
+        form.setdefault('csrf_token', CSRF_TOKEN)
         if headers is None:
             headers = {'X-Requested-With': 'XMLHttpRequest'} if xhr else {}
         response = client.post(

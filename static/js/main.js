@@ -172,6 +172,11 @@ function enforcePasswordStrength(password) {
 
 // --- Shared Upload Logic ---
 
+// Session-authed mutating routes require the CSRF token the server
+// renders into <meta name="csrf-token"> — read once, reused per request.
+const csrfToken =
+    document.querySelector('meta[name="csrf-token"]')?.content || '';
+
 /**
  * Encrypt data for upload through the two-phase key-release handshake:
  * /upload/begin mints file_id + the server share H, the client derives
@@ -185,7 +190,10 @@ function enforcePasswordStrength(password) {
 async function encryptForUpload(data, password) {
     const res = await fetch(window.uploadBeginUrl, {
         method: 'POST',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-Token': csrfToken,
+        },
     });
     if (!res.ok) {
         throw new Error('The server refused the upload handshake.');
@@ -234,6 +242,7 @@ function uploadWithProgress(formData, password, uiElements) {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', window.uploadUrl, true);
     xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.setRequestHeader('X-CSRF-Token', csrfToken);
 
     xhr.upload.onprogress = function(e) {
         if (e.lengthComputable) {

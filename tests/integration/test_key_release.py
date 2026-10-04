@@ -18,11 +18,20 @@ from flask import url_for
 
 
 def login_user(client, username='testuser', password='password'):
-    return client.post(
+    response = client.post(
         url_for('login'),
         data={'username': username, 'password': password},
         follow_redirects=True,
     )
+    with client.session_transaction() as session:
+        session['csrf_token'] = 'test-csrf-token'
+    return response
+
+
+def _clear_csrf(client):
+    """Remove the seeded session CSRF token — simulate a forged request."""
+    with client.session_transaction() as session:
+        session.pop('csrf_token', None)
 
 
 @pytest.fixture
@@ -70,7 +79,8 @@ def _key_release_upload(client, filename='key-release.txt', content=b'encrypted 
     import secrets
     begin = client.post(
         url_for('upload_begin'),
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     assert begin.status_code == 200
     file_id = begin.get_json()['file_id']
@@ -84,9 +94,11 @@ def _key_release_upload(client, filename='key-release.txt', content=b'encrypted 
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
             'receipt_hash': hashlib.sha256(receipt).hexdigest(),
+            'csrf_token': 'test-csrf-token',
         },
         content_type='multipart/form-data',
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     return file_id, h, receipt.hex(), finish
 
@@ -100,11 +112,37 @@ def test_upload_begin_requires_auth(client):
     assert url_for('login') in response.request.path
 
 
+def test_upload_begin_requires_csrf_on_session(client):
+    """A session-authed POST without a CSRF token is forge-proof: 403."""
+    login_user(client)
+    _clear_csrf(client)
+    response = client.post(
+        url_for('upload_begin'),
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    assert response.status_code == 403
+    assert response.get_json()['error'] == 'CSRF validation failed'
+
+
+def test_upload_begin_bearer_exempt_from_csrf(client):
+    """Bearer API clients are CSRF-immune — cross-site requests cannot
+    set the Authorization header, so no token is required."""
+    from tokens import generate_api_token
+    token = generate_api_token('testuser')
+    response = client.post(
+        url_for('upload_begin'),
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    assert response.status_code == 200
+    assert 'h' in response.get_json()
+
+
 def test_upload_begin_returns_pending_share(client, files_store):
     login_user(client)
     response = client.post(
         url_for('upload_begin'),
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     assert response.status_code == 200
     body = response.get_json()
@@ -124,7 +162,8 @@ def test_upload_begin_disabled(client, key_release_settings):
     login_user(client)
     response = client.post(
         url_for('upload_begin'),
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     assert response.status_code == 404
 
@@ -155,9 +194,11 @@ def test_key_release_upload_rejects_unknown_share(client, files_store):
             'file_id': 'does-not-exist',
             'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
         },
         content_type='multipart/form-data',
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     assert response.status_code == 409
 
@@ -174,26 +215,32 @@ def test_key_release_upload_rejects_finalized_share(client, files_store):
             'file_id': file_id,
             'key_verifier': 'dd' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
         },
         content_type='multipart/form-data',
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     assert second.status_code == 409
 
 
 def test_key_release_upload_rejects_partial_handshake(client):
     login_user(client)
+    csrf = 'test-csrf-token'
     for data in (
-        {'file': (io.BytesIO(b'b'), 'x.txt'), 'file_id': 'abc'},
-        {'file': (io.BytesIO(b'b'), 'x.txt'), 'key_verifier': 'cc' * 32},
+        {'file': (io.BytesIO(b'b'), 'x.txt'), 'file_id': 'abc',
+         'csrf_token': csrf},
+        {'file': (io.BytesIO(b'b'), 'x.txt'), 'key_verifier': 'cc' * 32,
+         'csrf_token': csrf},
         {'file': (io.BytesIO(b'b'), 'x.txt'),
-         'file_id': 'abc', 'key_verifier': 'not-hex'},
+         'file_id': 'abc', 'key_verifier': 'not-hex', 'csrf_token': csrf},
     ):
         response = client.post(
             url_for('upload_file'),
             data=data,
             content_type='multipart/form-data',
-            headers={'X-Requested-With': 'XMLHttpRequest'},
+            headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
         )
         assert response.status_code == 400
 
@@ -203,7 +250,8 @@ def test_key_release_upload_rejected_when_disabled(client, files_store, key_rele
     login_user(client)
     begin = client.post(
         url_for('upload_begin'),
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     file_id = begin.get_json()['file_id']
 
@@ -215,11 +263,53 @@ def test_key_release_upload_rejected_when_disabled(client, files_store, key_rele
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
+        },
+        content_type='multipart/form-data',
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
+    )
+    assert finish.status_code == 409
+
+
+def test_upload_finish_requires_csrf_on_session(client, key_share):
+    """/upload with session auth but no CSRF token → 403."""
+    login_user(client)
+    _clear_csrf(client)
+    file_id, _h = key_share()
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'file': (io.BytesIO(b'blob'), 'x.txt'),
+            'file_id': file_id,
+            'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
         },
         content_type='multipart/form-data',
         headers={'X-Requested-With': 'XMLHttpRequest'},
     )
-    assert finish.status_code == 409
+    assert response.status_code == 403
+    assert response.get_json()['error'] == 'CSRF validation failed'
+
+
+def test_upload_finish_bearer_exempt_from_csrf(client, key_share):
+    """Bearer upload completes without any CSRF token."""
+    from tokens import generate_api_token
+    token = generate_api_token('testuser')
+    file_id, _h = key_share()
+    response = client.post(
+        url_for('upload_file'),
+        data={
+            'file': (io.BytesIO(b'blob'), 'x.txt'),
+            'file_id': file_id,
+            'key_verifier': 'cc' * 32,
+            'receipt_hash': 'aa' * 32,
+        },
+        content_type='multipart/form-data',
+        headers={'Authorization': f'Bearer {token}',
+                 'X-Requested-With': 'XMLHttpRequest'},
+    )
+    assert response.status_code == 200
 
 
 def test_upload_without_key_release_fields_rejected(client, files_store):
@@ -227,9 +317,11 @@ def test_upload_without_key_release_fields_rejected(client, files_store):
     login_user(client)
     response = client.post(
         url_for('upload_file'),
-        data={'file': (io.BytesIO(b'plain blob'), 'legacy.txt')},
+        data={'file': (io.BytesIO(b'plain blob'), 'legacy.txt'),
+              'csrf_token': 'test-csrf-token'},
         content_type='multipart/form-data',
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     assert response.status_code == 400
     assert files_store.get_by(original_name='legacy.txt') is None
@@ -240,7 +332,8 @@ def test_key_release_upload_rejects_other_users_share(client, files_store):
     login_user(client)  # testuser mints the pending share
     begin = client.post(
         url_for('upload_begin'),
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     file_id = begin.get_json()['file_id']
     assert files_store.get_key_share(file_id)['created_by'] == 'testuser'
@@ -253,9 +346,11 @@ def test_key_release_upload_rejects_other_users_share(client, files_store):
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
         },
         content_type='multipart/form-data',
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     assert finish.status_code == 403
     # the share was NOT bound — still pending, still testuser's
@@ -276,7 +371,8 @@ def test_upload_missing_receipt_hash_rejected(client, key_share):
             'key_verifier': 'cc' * 32,
         },
         content_type='multipart/form-data',
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     assert response.status_code == 400
 
@@ -473,7 +569,8 @@ def test_key_release_end_to_end(client, files_store, key_release_settings):
 
     begin = client.post(
         url_for('upload_begin'),
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     file_id = begin.get_json()['file_id']
     h = bytes.fromhex(begin.get_json()['h'])
@@ -488,9 +585,11 @@ def test_key_release_end_to_end(client, files_store, key_release_settings):
             'file_id': file_id,
             'key_verifier': v_hex,
             'receipt_hash': receipt_hash,
+            'csrf_token': 'test-csrf-token',
         },
         content_type='multipart/form-data',
-        headers={'X-Requested-With': 'XMLHttpRequest'},
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                      'X-CSRF-Token': 'test-csrf-token'},
     )
     assert finish.status_code == 200
 

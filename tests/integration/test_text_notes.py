@@ -5,7 +5,10 @@ from unittest import mock
 
 def login_user(client, username, password):
     """Helper function to log in a user."""
-    return client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    response = client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    with client.session_transaction() as session:
+        session['csrf_token'] = 'test-csrf-token'
+    return response
 
 def upload_note(client, files_store, data=None, headers=None, xhr=True):
     """Upload a text note through the mandatory two-phase key-release flow.
@@ -25,6 +28,7 @@ def upload_note(client, files_store, data=None, headers=None, xhr=True):
         'file_id': file_id,
         'key_verifier': 'cc' * 32,
         'receipt_hash': hashlib.sha256(receipt).hexdigest(),
+        'csrf_token': 'test-csrf-token',
     }
     form.update(data or {})
     if headers is None:
@@ -170,6 +174,7 @@ def test_text_note_type_field_in_database(client, app, files_store):
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
         },
         content_type='multipart/form-data',
         follow_redirects=False
@@ -245,6 +250,7 @@ def test_text_note_empty_content(client, app, key_share):
         'file_id': file_id,
         'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
     }
 
     response = client.post(

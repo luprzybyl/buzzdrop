@@ -104,6 +104,8 @@ Passwords are hashed with PBKDF2-SHA256 via Werkzeug. `get_users()` function rea
 - `@admin_required`: Checks both login and admin flag
 - `@api_auth_required`: Accepts `Authorization: Bearer <token>` header **or** session cookie. If Bearer is present and invalid → 401 JSON (no session fallback). Sets `flask.g.username` on success; routes must read `g.username` not `session['username']`.
 
+**CSRF**: Session-authed mutating routes (`/upload`, `/upload/begin`, `/api/token`, `/delete/<id>`, `/view/<id>/confirm`, token revocation) call `_session_csrf_required()` — it accepts the token via `X-CSRF-Token` header, `csrf_token` form field, or JSON field; a request carrying an `Authorization` header is exempt (cross-site requests can't set one — Bearer clients are CSRF-immune). Public unauthenticated POSTs (`/release`, `/report_decryption`) intentionally have no CSRF gate. JS clients read the token from `<meta name="csrf-token">` in base.html.
+
 ### API Token Management
 
 `tokens.py` provides:

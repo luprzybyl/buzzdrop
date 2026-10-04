@@ -9,7 +9,10 @@ from auth import get_users
 # Test users from conftest.py: 'testuser:password:false', 'adminuser:adminpass:true'
 
 def login_user(client, username, password):
-    return client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    response = client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    with client.session_transaction() as session:
+        session['csrf_token'] = 'test-csrf-token'
+    return response
 
 # Helper function to upload a file for a user
 def upload_file_for_user(client, app, files_store, filename, content, username_for_db_record):
@@ -25,6 +28,7 @@ def upload_file_for_user(client, app, files_store, filename, content, username_f
         'file_id': file_id,
         'key_verifier': 'cc' * 32,
         'receipt_hash': hashlib.sha256(receipt).hexdigest(),
+        'csrf_token': 'test-csrf-token',
     }
     client.post(url_for('upload_file'), data=file_data, content_type='multipart/form-data')
 
@@ -89,7 +93,7 @@ def test_upload_file_no_file_part(client, key_share):
     response = client.post(
         url_for('upload_file'),
         data={'file_id': file_id, 'key_verifier': 'cc' * 32,
-              'receipt_hash': 'aa' * 32},
+              'receipt_hash': 'aa' * 32, 'csrf_token': 'test-csrf-token'},
         follow_redirects=True,
     )
     assert b'No file part' in response.data
@@ -105,6 +109,7 @@ def test_upload_file_no_selected_file(client, key_share):
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
         },
         follow_redirects=True,
     ) # Empty filename
@@ -119,6 +124,7 @@ def test_upload_file_disallowed_extension(client, app, key_share):
         'file_id': file_id,
         'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
     }
     response = client.post(url_for('upload_file'), data=data, content_type='multipart/form-data', follow_redirects=True)
     assert b'File type not allowed' in response.data
@@ -130,7 +136,8 @@ def test_upload_file_too_large(client, app):
     app.config['MAX_CONTENT_LENGTH'] = 10 # Set a very small limit for testing
 
     file_content = b"This content is larger than 10 bytes."
-    data = {'file': (io.BytesIO(file_content), "large_file.txt")}
+    data = {'file': (io.BytesIO(file_content), "large_file.txt"),
+            'csrf_token': 'test-csrf-token'}
 
     response_no_redirect = client.post(url_for('upload_file'), data=data, content_type='multipart/form-data')
     assert response_no_redirect.status_code == 413 # Request Entity Too Large

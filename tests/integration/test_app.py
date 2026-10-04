@@ -7,7 +7,10 @@ import io
 # Test users from conftest.py: 'testuser:password:false', 'adminuser:adminpass:true'
 
 def login_user(client, username, password):
-    return client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    response = client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
+    with client.session_transaction() as session:
+        session['csrf_token'] = 'test-csrf-token'
+    return response
 
 # Helper function to upload a file for a user (for testing index page listings)
 def upload_file_for_user(client, app, files_store, filename, content, username_for_db_record):
@@ -25,6 +28,7 @@ def upload_file_for_user(client, app, files_store, filename, content, username_f
         'file_id': file_id,
         'key_verifier': 'cc' * 32,
         'receipt_hash': hashlib.sha256(receipt).hexdigest(),
+        'csrf_token': 'test-csrf-token',
     }
     # Make sure to use the logged-in client to POST
     response = client.post(url_for('upload_file'), data=file_data, content_type='multipart/form-data')
@@ -165,6 +169,7 @@ def test_index_logged_in_user_sees_own_private_note(client, app, files_store):
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,
+            'csrf_token': 'test-csrf-token',
         },
         content_type='multipart/form-data',
         follow_redirects=False
