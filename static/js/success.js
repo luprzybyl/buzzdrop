@@ -72,15 +72,16 @@ function togglePasswordVisibility() {
 // flow navigates here with it). Read it once, then scrub it from the
 // address bar and history entry — nothing is persisted.
 document.addEventListener('DOMContentLoaded', function() {
-    if (window.location.hash.length <= 1) return;
-    window.history.replaceState(
-        null, '', window.location.pathname + window.location.search);
+    const hash = window.location.hash;
+    if (hash.length <= 1) return;
     let pwd = null;
     try {
-        pwd = decodeURIComponent(window.location.hash.substring(1));
+        pwd = decodeURIComponent(hash.substring(1));
     } catch (e) {
         pwd = null;
     }
+    window.history.replaceState(
+        null, '', window.location.pathname + window.location.search);
     if (pwd) {
         document.getElementById('password-display').value = pwd;
 
