@@ -24,7 +24,7 @@ from flask import (
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 from flask_limiter import Limiter
-from db import Database, Query
+from db import create_backend
 from dotenv import load_dotenv
 import base64
 import hashlib
@@ -277,9 +277,9 @@ def sri_hash_processor():
 if app.config['STORAGE_BACKEND'] == 'local':
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Initialize the SQLite document database
-db = Database(app.config['DATABASE_PATH'])
-app.db = db
+# Initialize the storage backend (sqlite:// today, swappable via DATABASE_URL)
+backend = create_backend(config_class.get_database_url())
+app.backend = backend
 
 # Initialize storage backend
 storage = get_storage_backend(app.config)
@@ -288,42 +288,52 @@ print_backend_info(storage)
 # Initialize file repository
 file_repo = FileRepository()
 
-def get_db():
-    """
-    Return the Database instance for the current app context.
+def _resolve_database_url() -> str:
+    """Resolve the effective DATABASE_URL for the current app context."""
+    configured = (
+        current_app.config if has_app_context() else app.config
+    )
+    url = configured.get('DATABASE_URL')
+    if url:
+        return url
+    # Deprecated fallback: plain file path → sqlite:///
+    return f"sqlite:///{configured.get('DATABASE_PATH') or 'buzzdrop.db'}"
 
-    A new Database is created when the app's cached instance is missing or
-    was opened against a different DATABASE_PATH (e.g. test scenarios that
+
+def get_backend():
+    """
+    Return the storage Backend for the current app context.
+
+    A new backend is created when the app's cached instance is missing or
+    was opened against a different DATABASE_URL (e.g. test scenarios that
     point the app at a temporary database file).
 
     Returns:
-        Database: Active database instance for the current app context
+        Backend: Active backend exposing .files/.tokens stores
     """
+    url = _resolve_database_url()
     if has_app_context():
-        database = getattr(current_app, 'db', None)
-        path = current_app.config.get('DATABASE_PATH', app.config['DATABASE_PATH'])
-        if database is None or database.path != path:
-            database = Database(path)
-            current_app.db = database
+        backend = getattr(current_app, 'backend', None)
+        if backend is None or backend.url != url:
+            backend = create_backend(url)
+            current_app.backend = backend
     else:
-        database = getattr(app, 'db', None)
-        path = app.config['DATABASE_PATH']
-        if database is None or database.path != path:
-            database = Database(path)
-            app.db = database
-    return database
+        backend = getattr(app, 'backend', None)
+        if backend is None or backend.url != url:
+            backend = create_backend(url)
+            app.backend = backend
+    return backend
 
 
-def get_files_table():
-    """Return the files table respecting the current app configuration."""
-    database = get_db()
-    return database.table('files')
+def get_files_store():
+    """Return the files store respecting the current app configuration."""
+    return get_backend().files
 
 # Clean up orphaned files on startup (local storage only)
 if app.config['STORAGE_BACKEND'] == 'local':
-    files_table = get_files_table()
+    files_store = get_files_store()
     tracked_files = set(
-        file_info['path'].split(os.sep)[-1] for file_info in files_table.all()
+        file_info['path'].split(os.sep)[-1] for file_info in files_store.all()
     )
     cleanup_orphaned_files(app.config['UPLOAD_FOLDER'], tracked_files)
 
@@ -436,11 +446,7 @@ def user_file_statuses():
         return {'error': 'Too many file IDs'}, 400
 
     current_user = get_current_user()
-    query = Query()
-    files = file_repo.table.search(
-        (query.uploaded_by == current_user['username']) &
-        query.id.one_of(requested_ids)
-    )
+    files = file_repo.get_user_files_by_ids(current_user['username'], requested_ids)
     statuses = []
     for file_info in files:
         check_and_handle_expiry(file_info)

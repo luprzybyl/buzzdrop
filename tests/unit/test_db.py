@@ -1,15 +1,14 @@
 import pytest
 import os
 import shutil # For file operations in cleanup test setup
-from app import get_files_table
 from utils import cleanup_orphaned_files
-from db import Query
-from unittest import mock
-# Fixtures 'app', 'db_instance', 'files_table' will be injected from conftest.py
 
-def test_add_and_get_file_record(files_table):
-    # files_table fixture ensures the table is empty at the start of the test
-    assert len(files_table.all()) == 0
+from unittest import mock
+# Fixtures 'app', 'db_instance', 'files_store' will be injected from conftest.py
+
+def test_add_and_get_file_record(files_store):
+    # files_store fixture ensures the table is empty at the start of the test
+    assert len(files_store.all()) == 0
 
     file_data = {
         'id': 'uuid1',
@@ -18,23 +17,23 @@ def test_add_and_get_file_record(files_table):
         'uploaded_by': 'testuser',
         'shared_with': []
     }
-    files_table.insert(file_data)
+    files_store.insert(file_data)
 
-    assert len(files_table.all()) == 1
-    File = Query()
-    retrieved_file = files_table.get(File.id == 'uuid1')
+    assert len(files_store.all()) == 1
+
+    retrieved_file = files_store.get_by_id('uuid1')
     assert retrieved_file is not None
     assert retrieved_file['original_name'] == 'test.txt'
     assert retrieved_file['uploaded_by'] == 'testuser'
 
-def test_get_non_existent_file_record(files_table):
-    File = Query()
-    retrieved_file = files_table.get(File.id == 'nonexistent')
+def test_get_non_existent_file_record(files_store):
+
+    retrieved_file = files_store.get_by_id('nonexistent')
     assert retrieved_file is None
 
-def test_cleanup_orphaned_files_no_orphans(app, files_table):
+def test_cleanup_orphaned_files_no_orphans(app, files_store):
     # app fixture provides UPLOAD_FOLDER
-    # files_table fixture provides the db table
+    # files_store fixture provides the db table
     upload_dir = app.config['UPLOAD_FOLDER']
 
     # Clean the upload directory before the test to remove leftovers from other tests
@@ -50,11 +49,11 @@ def test_cleanup_orphaned_files_no_orphans(app, files_table):
     with open(tracked_file_on_disk_path, "w") as f:
         f.write("content")
 
-    files_table.insert({'id': '1', 'path': tracked_file_on_disk_path, 'original_name': 'tracked_file.txt'})
+    files_store.insert({'id': '1', 'path': tracked_file_on_disk_path, 'original_name': 'tracked_file.txt'})
 
     # Get tracked files from database
-    tracked_files = set(f['path'].split(os.sep)[-1] for f in files_table.all())
-    
+    tracked_files = set(f['path'].split(os.sep)[-1] for f in files_store.all())
+
     with mock.patch('os.remove') as mock_remove:
         cleanup_orphaned_files(upload_dir, tracked_files)
         mock_remove.assert_not_called() # No files should be removed
@@ -64,7 +63,7 @@ def test_cleanup_orphaned_files_no_orphans(app, files_table):
     # Clean up the created file
     os.remove(tracked_file_on_disk_path)
 
-def test_cleanup_orphaned_files_with_orphans(app, files_table):
+def test_cleanup_orphaned_files_with_orphans(app, files_store):
     upload_dir = app.config['UPLOAD_FOLDER']
 
     # Clean the upload directory before the test
@@ -78,18 +77,18 @@ def test_cleanup_orphaned_files_with_orphans(app, files_table):
     # File on disk, tracked in DB
     tracked_file_path = os.path.join(upload_dir, "tracked.txt")
     with open(tracked_file_path, "w") as f: f.write("tracked")
-    files_table.insert({'id': 't1', 'path': tracked_file_path, 'original_name': 'tracked.txt'})
+    files_store.insert({'id': 't1', 'path': tracked_file_path, 'original_name': 'tracked.txt'})
 
     # File on disk, NOT tracked in DB (orphan)
     orphaned_file_path = os.path.join(upload_dir, "orphaned.txt")
     with open(orphaned_file_path, "w") as f: f.write("orphan")
 
     # File in DB, NOT on disk (should be ignored by cleanup_orphaned_files)
-    files_table.insert({'id': 'db_only', 'path': os.path.join(upload_dir, "db_only_missing_on_disk.txt"), 'original_name': 'db_only.txt'})
+    files_store.insert({'id': 'db_only', 'path': os.path.join(upload_dir, "db_only_missing_on_disk.txt"), 'original_name': 'db_only.txt'})
 
     # Get tracked files from database
-    tracked_files = set(f['path'].split(os.sep)[-1] for f in files_table.all())
-    
+    tracked_files = set(f['path'].split(os.sep)[-1] for f in files_store.all())
+
     # Mock os.remove to check it's called on the correct file
     # os.listdir and os.path.exists will operate on the actual temp test upload folder
     removed_paths = []
@@ -117,7 +116,7 @@ def test_cleanup_orphaned_files_with_orphans(app, files_table):
         os.remove(tracked_file_path)
 
 
-def test_cleanup_orphaned_files_empty_uploads_dir(app, files_table):
+def test_cleanup_orphaned_files_empty_uploads_dir(app, files_store):
     upload_dir = app.config['UPLOAD_FOLDER']
     # Clean the upload directory before the test (it should be empty for this test's purpose anyway)
     for item in os.listdir(upload_dir):
@@ -127,11 +126,11 @@ def test_cleanup_orphaned_files_empty_uploads_dir(app, files_table):
         elif os.path.isdir(item_path):
             shutil.rmtree(item_path)
 
-    files_table.insert({'id': 'db_only', 'path': os.path.join(upload_dir, "some_file_in_db.txt")})
+    files_store.insert({'id': 'db_only', 'path': os.path.join(upload_dir, "some_file_in_db.txt")})
 
     # Get tracked files from database
-    tracked_files = set(f['path'].split(os.sep)[-1] for f in files_table.all())
-    
+    tracked_files = set(f['path'].split(os.sep)[-1] for f in files_store.all())
+
     with mock.patch('os.remove') as mock_remove:
         cleanup_orphaned_files(upload_dir, tracked_files)
         mock_remove.assert_not_called()
@@ -181,7 +180,7 @@ def test_mark_downloaded_concurrent_claims_single_winner(app, db_instance):
     assert info['downloaded_by_ip'] in {f'10.0.0.{i}' for i in range(workers)}
 
 
-def test_cleanup_orphaned_files_uploads_dir_does_not_exist(app, files_table):
+def test_cleanup_orphaned_files_uploads_dir_does_not_exist(app, files_store):
     # This test needs to temporarily remove the upload directory.
     upload_dir = app.config['UPLOAD_FOLDER']
     original_upload_dir_path = upload_dir
@@ -202,8 +201,8 @@ def test_cleanup_orphaned_files_uploads_dir_does_not_exist(app, files_table):
         mock_path_exists.side_effect = side_effect_exists
 
         # Get tracked files from database  
-        tracked_files = set(f['path'].split(os.sep)[-1] for f in files_table.all())
-        
+        tracked_files = set(f['path'].split(os.sep)[-1] for f in files_store.all())
+
         cleanup_orphaned_files(upload_dir, tracked_files)
 
         mock_listdir.assert_not_called() # Should not attempt to listdir if path doesn't exist

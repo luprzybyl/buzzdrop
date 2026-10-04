@@ -15,7 +15,7 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)),
 # Add parent directory to sys.path to allow direct import of 'app'
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import app as flask_app, get_db, get_files_table, limiter # Import necessary items from your app
+from app import app as flask_app, get_backend, get_files_store, limiter # Import necessary items from your app
 from auth import get_users
 
 @pytest.fixture(scope='session')
@@ -30,6 +30,7 @@ def app():
 
     flask_app.config.update({
         'TESTING': True,
+        'DATABASE_URL': f'sqlite:///{db_path}',
         'DATABASE_PATH': db_path,
         'UPLOAD_FOLDER': temp_upload_folder,
         'WTF_CSRF_ENABLED': False, # Disable CSRF for easier testing of forms
@@ -46,22 +47,21 @@ def app():
     # Ensure the test upload folder exists
     os.makedirs(flask_app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    # Initialize/re-initialize the database for the test app context
-    # This ensures that get_db() and get_files_table() use the test database
+    # Initialize/re-initialize the backend for the test app context
+    # This ensures that get_backend() and get_files_store() use the test database
     with flask_app.app_context():
-        # Re-initialize db with the test path
-        flask_app.db = get_db() # This will use the updated DATABASE_PATH
-        # Optionally, clear out tables if necessary; the new file starts empty
-        files_table = get_files_table()
-        files_table.truncate() # Clear the files table for a clean state
+        # Re-initialize backend with the test DATABASE_URL
+        flask_app.backend = get_backend()
+        files_store = get_files_store()
+        files_store.truncate() # Clear the files table for a clean state
 
     yield flask_app
 
     # Teardown: clean up the temporary database and upload folder
     with flask_app.app_context():
-        database = getattr(flask_app, 'db', None)
-        if database is not None:
-            database.close()
+        backend = getattr(flask_app, 'backend', None)
+        if backend is not None:
+            backend.close()
     os.close(db_fd)
     os.unlink(db_path)
     # WAL sidecars, if any
@@ -118,20 +118,19 @@ def reset_user_cache():
 
 @pytest.fixture(scope='function')
 def db_instance(app):
-    """Provides a direct reference to the test database instance, ensuring tables are clean per test function."""
+    """Provides a direct reference to the test backend, ensuring tables are clean per test function."""
     with app.app_context():
-        database = get_db()
-        # Ensuring tables are clean for each test function that uses this fixture.
-        # Adjust if you need data to persist across tests within a class/module.
-        for table_name in database.tables():
-            database.table(table_name).truncate()
-
-        # Specifically ensure 'files' table is clean if it's commonly used
-        files_table = get_files_table() # This should get the table from the test DB
-        files_table.truncate()
-    return database
+        backend = get_backend()
+        backend.files.truncate()
+        backend.tokens.truncate()
+    return backend
 
 @pytest.fixture(scope='function')
-def files_table(db_instance):
-    """Provides a direct reference to the 'files' table from the test_db."""
-    return db_instance.table('files')
+def files_store(db_instance):
+    """Provides a direct reference to the files store of the test backend."""
+    return db_instance.files
+
+@pytest.fixture(scope='function')
+def tokens_store(db_instance):
+    """Provides a direct reference to the api_tokens store of the test backend."""
+    return db_instance.tokens

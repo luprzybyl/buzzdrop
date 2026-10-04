@@ -18,7 +18,10 @@ class Config:
     SECRET_KEY = os.getenv('FLASK_SECRET_KEY')
     TOKEN_HASH_SECRET = os.getenv('TOKEN_HASH_SECRET')
     
-    # Database (SQLite document store)
+    # Database — scheme selects the storage backend (sqlite:// only for now)
+    DATABASE_URL = os.getenv('DATABASE_URL')
+    # Deprecated: plain file path; used to build a sqlite:/// URL when
+    # DATABASE_URL is not set.
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'buzzdrop.db')
     
     # Upload settings
@@ -89,7 +92,19 @@ class Config:
 
         if cls.SMTP_USE_TLS and cls.SMTP_USE_SSL:
             raise ValueError("SMTP_USE_TLS and SMTP_USE_SSL cannot both be enabled")
-    
+
+    @classmethod
+    def get_database_url(cls) -> str:
+        """
+        Resolve the effective DATABASE_URL.
+
+        DATABASE_URL wins; otherwise the deprecated DATABASE_PATH is wrapped
+        in a sqlite:/// URL.
+        """
+        if cls.DATABASE_URL:
+            return cls.DATABASE_URL
+        return f'sqlite:///{cls.DATABASE_PATH or "buzzdrop.db"}'
+
     @classmethod
     def get_display_info(cls) -> dict:
         """
@@ -102,7 +117,7 @@ class Config:
         return {
             'storage_backend': cls.STORAGE_BACKEND,
             'upload_folder': cls.UPLOAD_FOLDER if cls.STORAGE_BACKEND == 'local' else 'N/A',
-            'database_path': cls.DATABASE_PATH,
+            'database_url': cls.get_database_url(),
             'max_file_size_mb': cls.MAX_CONTENT_LENGTH / (1024 * 1024),
             'allowed_extensions': ', '.join(sorted(cls.ALLOWED_EXTENSIONS)),
             'rate_limit_enabled': cls.RATE_LIMIT_ENABLED,

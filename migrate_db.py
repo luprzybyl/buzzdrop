@@ -15,7 +15,10 @@ import json
 import os
 import sys
 
-from db import Database
+from db import create_backend
+
+# TinyDB table name -> Backend store
+_STORES = {'files': 'files', 'api_tokens': 'tokens'}
 
 
 def migrate(source_path: str, target_path: str) -> int:
@@ -29,18 +32,18 @@ def migrate(source_path: str, target_path: str) -> int:
     with open(source_path, 'r', encoding='utf-8') as handle:
         payload = json.load(handle)
 
-    database = Database(target_path)
+    backend = create_backend(f'sqlite:///{target_path}')
     total = 0
     for table_name, documents in payload.items():
-        if not isinstance(documents, dict):
+        store = getattr(backend, _STORES.get(table_name, ''), None)
+        if store is None or not isinstance(documents, dict):
             print(f'skipping {table_name}: unexpected structure')
             continue
-        table = database.table(table_name)
         for doc_id, doc in sorted(documents.items(), key=lambda item: int(item[0])):
-            table.insert(doc, doc_id=int(doc_id))
+            store.insert(doc, doc_id=int(doc_id))
             total += 1
         print(f'{table_name}: migrated {len(documents)} document(s)')
-    database.close()
+    backend.close()
     print(f'done: {total} document(s) written to {target_path}')
     return 0
 

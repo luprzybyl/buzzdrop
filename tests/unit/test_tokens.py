@@ -48,19 +48,19 @@ def test_validate_api_token_invalid(app):
 
 def test_validate_api_token_expired(app, db_instance):
     with app.app_context():
-        from app import get_db
+        from app import get_backend
         from tokens import generate_api_token, validate_api_token
 
         token = generate_api_token('testuser', expires_at=datetime.now() - timedelta(minutes=1))
         assert validate_api_token(token) is None
-        assert get_db().table('api_tokens').all() == []
+        assert get_backend().tokens.all() == []
 
 
 def test_validate_api_token_rejects_removed_user(app, monkeypatch, clear_user_cache):
     with app.app_context():
-        from app import get_db
+        from app import get_backend
         from auth import get_users
-        from db import Query
+
         from tokens import _hash_token, generate_api_token, validate_api_token
 
         token = generate_api_token('testuser')
@@ -71,17 +71,17 @@ def test_validate_api_token_rejects_removed_user(app, monkeypatch, clear_user_ca
 
         assert validate_api_token(token) is None
 
-        entry = get_db().table('api_tokens').get(Query().token_hash == token_hash)
+        entry = get_backend().tokens.get_by_token_hash(token_hash)
         assert entry is None
 
 
 def test_token_stored_as_hash_not_plaintext(app):
     with app.app_context():
-        from app import get_db
+        from app import get_backend
         from tokens import TOKEN_HASH_VERSION, _hash_token, generate_api_token
 
         token = generate_api_token('testuser')
-        table = get_db().table('api_tokens')
+        table = get_backend().tokens
         entry = table.all()[-1]
         assert 'token_hash' in entry
         assert entry.get('token_hash') != token
@@ -104,12 +104,12 @@ def test_token_hash_requires_stable_secret_configuration(app, monkeypatch):
 
 def test_validate_api_token_rejects_legacy_hash(app, db_instance):
     with app.app_context():
-        from app import get_db
+        from app import get_backend
         from tokens import validate_api_token
 
         token = 'a' * 64
         legacy_hash = _historical_legacy_token_hash(token)
-        get_db().table('api_tokens').insert({
+        get_backend().tokens.insert({
             'token_hash': legacy_hash,
             'token_hash_version': 'legacy-pbkdf2-sha256-v1',
             'username': 'testuser',
@@ -118,7 +118,7 @@ def test_validate_api_token_rejects_legacy_hash(app, db_instance):
         })
 
         assert validate_api_token(token) is None
-        stored_entry = get_db().table('api_tokens').all()[-1]
+        stored_entry = get_backend().tokens.all()[-1]
         assert stored_entry['token_hash'] == legacy_hash
         assert stored_entry['token_hash_version'] == 'legacy-pbkdf2-sha256-v1'
         assert stored_entry.get('last_used_at') is None
@@ -126,13 +126,13 @@ def test_validate_api_token_rejects_legacy_hash(app, db_instance):
 
 def test_validate_api_token_sets_missing_hash_version(app, db_instance):
     with app.app_context():
-        from app import get_db
-        from db import Query
+        from app import get_backend
+
         from tokens import TOKEN_HASH_VERSION, _hash_token, validate_api_token
 
         token = 'b' * 64
         token_hash = _hash_token(token)
-        table = get_db().table('api_tokens')
+        table = get_backend().tokens
         table.insert({
             'token_hash': token_hash,
             'username': 'testuser',
@@ -141,25 +141,25 @@ def test_validate_api_token_sets_missing_hash_version(app, db_instance):
         })
 
         assert validate_api_token(token) == 'testuser'
-        entry = table.get(Query().token_hash == token_hash)
+        entry = table.get_by_token_hash(token_hash)
         assert entry['token_hash_version'] == TOKEN_HASH_VERSION
         assert entry['last_used_at'] is not None
 
 
 def test_validate_updates_last_used_at(app, db_instance):
     with app.app_context():
-        from app import get_db
-        from db import Query
+        from app import get_backend
+
         from tokens import _hash_token, generate_api_token, validate_api_token
 
         token = generate_api_token('testuser')
-        table = get_db().table('api_tokens')
+        table = get_backend().tokens
         token_hash = _hash_token(token)
-        entry_before = table.get(Query().token_hash == token_hash)
+        entry_before = table.get_by_token_hash(token_hash)
         assert entry_before['last_used_at'] is None
 
         validate_api_token(token)
-        entry_after = table.get(Query().token_hash == token_hash)
+        entry_after = table.get_by_token_hash(token_hash)
         assert entry_after['last_used_at'] is not None
 
 
@@ -175,13 +175,13 @@ def test_revoke_api_token(app):
 
 def test_revoke_api_token_does_not_remove_legacy_hash(app, db_instance):
     with app.app_context():
-        from app import get_db
-        from db import Query
+        from app import get_backend
+
         from tokens import revoke_api_token
 
         token = 'a' * 64
         legacy_hash = _historical_legacy_token_hash(token)
-        table = get_db().table('api_tokens')
+        table = get_backend().tokens
         table.insert({
             'token_hash': legacy_hash,
             'token_hash_version': 'legacy-pbkdf2-sha256-v1',
@@ -191,7 +191,7 @@ def test_revoke_api_token_does_not_remove_legacy_hash(app, db_instance):
         })
 
         assert revoke_api_token(token) is False
-        assert table.get(Query().token_hash == legacy_hash) is not None
+        assert table.get_by_token_hash(legacy_hash) is not None
 
 
 def test_revoke_nonexistent_token(app):
@@ -202,10 +202,10 @@ def test_revoke_nonexistent_token(app):
 
 def test_list_api_tokens_filters_expired_and_legacy_tokens(app, db_instance):
     with app.app_context():
-        from app import get_db
+        from app import get_backend
         from tokens import list_api_tokens
 
-        table = get_db().table('api_tokens')
+        table = get_backend().tokens
         table.insert({
             'token_hash': 'legacy-active',
             'username': 'testuser',

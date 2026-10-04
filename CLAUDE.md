@@ -63,7 +63,7 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 
 ### Database
 
-**SQLite** (stdlib `sqlite3` via `db.py`): Schemaless document store — each row is a JSON document — held in `buzzdrop.db`. `db.py` exposes a TinyDB-compatible `Database`/`Table`/`Query` API on top of real SQLite locking (WAL mode), so conditional updates run as single atomic statements. Two tables:
+**SQLite** (stdlib `sqlite3` via the `db/` package): Swappable-backend storage selected by `DATABASE_URL` (default `sqlite:///buzzdrop.db`). `db/base.py` defines the `FileStore`/`TokenStore` interfaces and `Backend` container; `db/sqlite_backend.py` is the SQLite implementation over raw DB-API with typed columns (plus an `extra` JSON overflow column). `db.create_backend(url)` picks the backend by URL scheme. New engines (PostgreSQL/MySQL/…) implement the two stores, register a scheme, and must pass `tests/contract/test_backend_contract.py`. Two tables:
 
 `files` table tracks:
 - `id` (UUID), `original_name`, `path` (local or S3 key)
@@ -78,8 +78,8 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 - `username`, `created_at`, `last_used_at`, `expires_at`
 
 **Database Helper Functions**:
-- `get_db()`: Returns the `Database` instance, recreating it when DATABASE_PATH changed (important for tests)
-- `get_files_table()`: Returns files table using current app context
+- `get_backend()`: Returns the `Backend` (.files/.tokens stores), recreating it when DATABASE_URL changed (important for tests)
+- `get_files_store()`: Returns the FileStore using current app context
 
 ### Authentication
 
@@ -161,7 +161,7 @@ Key variables in `.env`:
 - Storage: `STORAGE_BACKEND`, `UPLOAD_FOLDER`
 - S3: `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`
 - Limits: `MAX_CONTENT_LENGTH`, `ALLOWED_EXTENSIONS`
-- Database: `DATABASE_PATH`
+- Database: `DATABASE_URL` (`DATABASE_PATH` deprecated → sqlite:/// fallback)
 
 ### Deployment
 

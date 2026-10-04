@@ -1,16 +1,16 @@
 import pytest
 import os
 from flask import url_for, session
-from db import Query
+
 import io
-# Fixtures: 'app', 'client', 'db_instance', 'files_table' from conftest.py
+# Fixtures: 'app', 'client', 'db_instance', 'files_store' from conftest.py
 # Test users from conftest.py: 'testuser:password:false', 'adminuser:adminpass:true'
 
 def login_user(client, username, password):
     return client.post(url_for('login'), data={'username': username, 'password': password}, follow_redirects=True)
 
 # Helper function to upload a file for a user (for testing index page listings)
-def upload_file_for_user(client, app, files_table, filename, content, username_for_db_record):
+def upload_file_for_user(client, app, files_store, filename, content, username_for_db_record):
     # Assumes client is already logged in as the user who can upload
     # username_for_db_record is the 'uploaded_by' field in the db
     file_data = {'file': (io.BytesIO(content.encode()), filename)}
@@ -18,9 +18,9 @@ def upload_file_for_user(client, app, files_table, filename, content, username_f
     response = client.post(url_for('upload_file'), data=file_data, content_type='multipart/form-data')
 
     # Get file_id from DB to return
-    File = Query()
+
     # Query by original_name AND the user who uploaded it to ensure uniqueness if multiple users upload same filename
-    file_info = files_table.get((File.original_name == filename) & (File.uploaded_by == username_for_db_record))
+    file_info = files_store.get_by(original_name=filename, uploaded_by=username_for_db_record)
     return file_info['id'] if file_info else None
 
 def test_index_anonymous_user(client, app):
@@ -83,10 +83,10 @@ def test_index_logged_in_user_uses_shared_controls_for_both_tabs(client, app, db
     assert 'id="note-password"' not in html
     assert 'id="note-expiry"' not in html
 
-def test_index_logged_in_user_with_own_files(client, app, files_table):
+def test_index_logged_in_user_with_own_files(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
-    file_id = upload_file_for_user(client, app, files_table, "my_document.txt", "Hello world", "testuser")
+    file_id = upload_file_for_user(client, app, files_store, "my_document.txt", "Hello world", "testuser")
     assert file_id is not None
 
     response = client.get(url_for('index'))
@@ -104,10 +104,10 @@ def test_index_logged_in_user_with_own_files(client, app, files_table):
     assert response.headers['Cache-Control'] == 'no-store'
     # The "Shared With Me" section is missing in the template, so no assertions for it or its placeholders.
 
-def test_user_file_status_endpoint_returns_only_owned_file_statuses(client, app, files_table):
+def test_user_file_status_endpoint_returns_only_owned_file_statuses(client, app, files_store):
     login_user(client, 'testuser', 'password')
     for index in range(6):
-        files_table.insert({
+        files_store.insert({
             'id': f'file-{index}',
             'original_name': f'file-{index}.txt',
             'path': f'/fake/file-{index}',
@@ -117,8 +117,8 @@ def test_user_file_status_endpoint_returns_only_owned_file_statuses(client, app,
             'status': 'active',
         })
 
-    files_table.update({'downloaded_at': '2025-01-02T12:00:00'}, Query().id == 'file-5')
-    files_table.insert({
+    files_store.update_fields('file-5', {'downloaded_at': '2025-01-02T12:00:00'})
+    files_store.insert({
         'id': 'another-users-file',
         'uploaded_by': 'adminuser',
         'status': 'active',
@@ -137,7 +137,7 @@ def test_user_file_status_endpoint_returns_only_owned_file_statuses(client, app,
         'downloaded_by_ip': None,
     }
 
-def test_index_logged_in_user_sees_own_private_note(client, app, files_table):
+def test_index_logged_in_user_sees_own_private_note(client, app, files_store):
     login_user(client, 'testuser', 'password')
 
     response = client.post(
@@ -156,12 +156,12 @@ def test_index_logged_in_user_sees_own_private_note(client, app, files_table):
     assert b'noted_document.txt' in response.data
     assert b'haslo do wordpressa' in response.data
 
-def test_index_logged_in_user_with_shared_files(client, app, files_table):
+def test_index_logged_in_user_with_shared_files(client, app, files_store):
     # NOTE: The current index.html template does NOT display files shared with the user.
     # This test will need to be adjusted if/when the template is fixed.
     # For now, we test that the shared file does NOT appear, as per current template.
     shared_file_id = "shared_file_uuid"
-    files_table.insert({
+    files_store.insert({
         'id': shared_file_id,
         'original_name': 'shared_document.pdf',
         'path': '/fake/path/shared_document.pdf',
