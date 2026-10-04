@@ -29,18 +29,29 @@ const cryptoService = new CryptoService();
         return;
     }
 
-    // Auto-fill password from sessionStorage if available (from URL fragment)
-    const savedPassword = sessionStorage.getItem('downloadPassword');
-    if (savedPassword) {
-        passInput.value = savedPassword;
-        sessionStorage.removeItem('downloadPassword');
-        // Show status message
-        const statusMsg = document.getElementById('password-status');
-        if (statusMsg) {
-            statusMsg.style.display = 'block';
+    // One-click links carry the password in the URL fragment — read it
+    // once and scrub it from the address bar and history entry; nothing is
+    // persisted.
+    const fragmentHash = window.location.hash;
+    if (fragmentHash.length > 1) {
+        window.history.replaceState(
+            null, '', window.location.pathname + window.location.search);
+        let fragmentPassword = null;
+        try {
+            fragmentPassword = decodeURIComponent(fragmentHash.substring(1));
+        } catch (err) {
+            fragmentPassword = null;
         }
-        // Focus the decrypt button so user can easily press Enter to proceed
-        decryptBtn.focus();
+        if (fragmentPassword) {
+            passInput.value = fragmentPassword;
+            // Show status message
+            const statusMsg = document.getElementById('password-status');
+            if (statusMsg) {
+                statusMsg.style.display = 'flex';
+            }
+            // Focus the decrypt button so user can easily press Enter to proceed
+            decryptBtn.focus();
+        }
     }
 
     function reportDecryption(success, receiptHex) {

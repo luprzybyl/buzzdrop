@@ -7,6 +7,15 @@ const cryptoService = new CryptoService();
 let activeShareMode = 'file';
 let uploadInProgress = false;
 
+// The index page never uses URL fragments — a stray one here can only be a
+// password leaked by fragment inheritance across a redirect (e.g. a dead
+// one-click link). Scrub it so it does not linger in the address bar or
+// history.
+if (window.location.hash.length > 1) {
+    window.history.replaceState(
+        null, '', window.location.pathname + window.location.search);
+}
+
 // Parse allowed file extensions from a hidden JSON element injected by the server
 const allowedExtensions = JSON.parse(document.getElementById('allowed-extensions-json').textContent);
 
@@ -148,7 +157,7 @@ if (generatePasswordBtn && passwordInput) {
     generatePasswordBtn.addEventListener('click', () => {
         passwordInput.value = generatePassphrase();
         // Show the phrase so the sender can read it back on another channel;
-        // the success page reveals it again anyway via sessionStorage.
+        // the success page reveals it again via the URL fragment.
         passwordInput.type = 'text';
         setPasswordError('');
         updatePasswordStrength();
@@ -215,7 +224,7 @@ async function encryptForUpload(data, password) {
 /**
  * Upload data with progress tracking via XHR.
  * @param {FormData} formData - Form data to upload
- * @param {string} password - Password to store in sessionStorage on success
+ * @param {string} password - Password carried to the success page in the URL fragment
  * @param {Object} uiElements - UI element IDs for progress display
  * @param {string} uiElements.btnId - Upload button element ID
  * @param {string} uiElements.containerId - Progress container element ID
@@ -265,8 +274,11 @@ function uploadWithProgress(formData, password, uiElements) {
                 progressContainer.style.display = 'none';
                 return;
             }
-            sessionStorage.setItem('uploadPassword', password);
-            window.location.href = `/success/${json.file_id}`;
+            // Hand the password to the success page via the URL fragment —
+            // the same in-memory-only channel as one-click links. It is
+            // read once there and scrubbed; nothing is persisted.
+            window.location.href =
+                `/success/${json.file_id}#${encodeURIComponent(password)}`;
         } else {
             let msg = 'Upload failed';
             try {
