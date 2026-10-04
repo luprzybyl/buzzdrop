@@ -391,16 +391,19 @@ decryption.
 
 ### Implementation note
 
-The §6 design is implemented and gated by `ORACLE_ENABLED`
-(default: on for new uploads; disabling only affects *new* uploads —
-shares already created still release H):
+The §6 design is implemented as the **only** share format —
+**breaking change: no backward compatibility with pre-oracle shares
+(acceptable per owner; pre-production wipe)**. `ORACLE_ENABLED`
+(default: on) gates the upload handshake; when off, `/upload/begin`
+returns 404 and uploads are refused.
 
 - Wire format: `BKV3 ‖ salt(16) ‖ iv(12) ‖ AES-GCM`, inner `BKP-FILE`
   header kept. `Kp`/`V`/`file_key` use HKDF-SHA256 with the blob salt
-  and `info` labels `enc`/`ver`/`file`. v1/v2 blobs still decrypt
-  entirely client-side, untouched.
-- Upload: `POST /upload/begin` → `{file_id, h}`; `POST /upload` with
-  `oracle_file_id` + `key_verifier` binds V and stores the blob.
+  and `info` labels `enc`/`ver`/`file`. Only `BKV3` is read or written;
+  the magic stays for future version bumps.
+- Upload (always two-phase): `POST /upload/begin` → `{file_id, h}`;
+  `POST /upload` requires `oracle_file_id` + `key_verifier` and
+  atomically binds V to the pending share.
 - Download: `POST /release/<file_id> {v}` — constant-time verifier
   check plus a single conditional write
   (`UPDATE ... WHERE released_at IS NULL`) → exactly one winner gets H.
@@ -412,5 +415,5 @@ shares already created still release H):
   (per file_id), `ORACLE_MAX_RELEASE_ATTEMPTS` (default 5), and
   `ORACLE_BURN_ON_LOCKOUT` (default off — lockout only; when on, the
   share row is deleted, destroying H).
-- CLI parity: `cli/buzz` performs the same handshake and falls back to
-  v2 when the server returns 404 on `/upload/begin`.
+- CLI parity: `cli/buzz` performs the same handshake and aborts when
+  the server returns 404 on `/upload/begin`.
