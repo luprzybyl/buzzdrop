@@ -89,18 +89,25 @@ def enhance_file_display(file_dict: dict, tz_name: str = DEFAULT_TIMEZONE) -> di
     Returns:
         Enhanced file_dict with:
         - Formatted timestamp fields (created_at, downloaded_at, expiry_at)
-        - status_display field ('Expired', 'Success', 'Failed', or empty string)
+        - status_display field ('Success', 'Failed', 'Downloaded', 'Expired',
+          or empty string for an active drop)
     """
     # Format timestamps
     format_file_timestamps(file_dict, tz_name)
     
-    # Determine status display inline (previously get_status_display)
-    if file_dict.get('status') == 'expired':
-        file_dict['status_display'] = 'Expired'
-    elif file_dict.get('decryption_success') is True:
+    # Determine status display inline (previously get_status_display).
+    # downloaded_at outranks expired: a drop that was claimed before its
+    # deadline was consumed, not expired — and a downloaded drop with no
+    # decryption report (e.g. wrong password, share burned) must not fall
+    # through to the 'Active' fallback.
+    if file_dict.get('decryption_success') is True:
         file_dict['status_display'] = 'Success'
     elif file_dict.get('decryption_success') is False:
         file_dict['status_display'] = 'Failed'
+    elif file_dict.get('downloaded_at'):
+        file_dict['status_display'] = 'Downloaded'
+    elif file_dict.get('status') == 'expired':
+        file_dict['status_display'] = 'Expired'
     else:
         file_dict['status_display'] = ''
     

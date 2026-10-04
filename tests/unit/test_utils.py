@@ -121,3 +121,38 @@ def test_get_users_non_sequential_and_invalid_vars():
     assert "user3" in users
     assert "FLASK_USER_X" not in users # Ensure it's not misinterpreted
     assert len(users) == 2
+
+
+from utils import enhance_file_display
+
+
+def test_status_display_downloaded_without_decryption_report():
+    """Wrong-password flow: blob claimed, no report → 'Downloaded', not Active."""
+    f = {
+        'status': 'active',
+        'downloaded_at': '2026-10-04T21:21:08',
+        'decryption_success': None,
+    }
+    enhance_file_display(f)
+    assert f['status_display'] == 'Downloaded'
+
+
+def test_status_display_decryption_outcomes():
+    for success, expected in ((True, 'Success'), (False, 'Failed')):
+        f = {
+            'status': 'active',
+            'downloaded_at': '2026-10-04T21:21:08',
+            'decryption_success': success,
+        }
+        enhance_file_display(f)
+        assert f['status_display'] == expected
+
+
+def test_status_display_expired_and_active():
+    expired = {'status': 'expired', 'downloaded_at': None, 'decryption_success': None}
+    enhance_file_display(expired)
+    assert expired['status_display'] == 'Expired'
+
+    active = {'status': 'active', 'downloaded_at': None, 'decryption_success': None}
+    enhance_file_display(active)
+    assert active['status_display'] == ''
