@@ -17,7 +17,7 @@
 - 🐝 **One-Time Download**: Each link is a mayfly—one click and it's gone!
 - 📝 **Secret Text Notes**: Share passwords, API keys, or sensitive text—no files needed!
 - 🔒 **In-Browser Encryption**: Your data is locked tight (AES-GCM + PBKDF2) before it ever leaves your device.
-- 🗝️ **Server-Gated Key Release**: The decryption key is split between the password and a server-held share that's released exactly once—leaked ciphertext alone is just noise, not a brute-force target.
+- 🗝️ **Server-Gated Key Release**: The decryption key is split between the password and a server-held share that's released exactly once—leaked ciphertext alone is just noise, not a brute-force target. (Internal codename: "oracle" — the cryptographic kind, not the database vendor.)
 - 💥 **Auto-Delete**: Downloaded or viewed? Boom, gone. No leftovers.
 - 🔗 **Smart Sharing**: Generate links with embedded passwords for one-click access, or share separately for extra security.
 - ☁️ **Local or S3 Storage**: Choose your hive—local or Amazon S3.

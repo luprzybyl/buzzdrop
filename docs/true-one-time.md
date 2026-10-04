@@ -151,6 +151,14 @@ The only way to make "one-time" a fact rather than a hope:
 A piece of the key is held by the server and released once, under
 conditions the server itself enforces.
 
+> **Terminology.** We call this design *"the oracle"*: in cryptography an
+> oracle is a service that answers yes/no queries — here, "is this the
+> right password?" — and today the ciphertext itself plays that role for
+> free, infinitely often. The design moves the oracle to the server,
+> where questions are counted and limited. Unrelated to **Oracle** the
+> database vendor, which appears in this project only as a future
+> `DATABASE_URL` scheme (`oracle://`).
+
 ### 6.1. Concepts (plainly, no jargon)
 
 - **PBKDF2** — a function that turns a password into a key,

@@ -65,7 +65,7 @@ Buzzdrop is a one-time self-destructing file-sharing app where files are encrypt
 
 **Encrypted binary format (client-side, `BKV3` only):** `BKV3 ‖ salt (16 bytes) ‖ iv (12 bytes) ‖ AES-GCM ciphertext`. Key derivation: `master = PBKDF2-SHA256(password, salt, 600k)`, `Kp = HKDF(master, salt, 'enc')`, `V = HKDF(master, salt, 'ver')`, `file_key = HKDF(Kp ‖ H, salt, 'file')` — `H` is the server share from `file_keys`, `V` the verifier sent on upload/release (both as hex). The plaintext has magic header `BKP-FILE` prepended before encryption for integrity validation on decrypt. Pre-oracle v1/v2 blobs are rejected — no backward compatibility (pre-production wipe).
 
-**Oracle config:** `ORACLE_ENABLED` (default on; when off `/upload/begin` 404s and uploads are refused), `ORACLE_RELEASE_RATE_LIMIT` (10/min per file_id), `ORACLE_MAX_RELEASE_ATTEMPTS` (5), `ORACLE_BURN_ON_LOCKOUT` (default off — lockout keeps H, burn deletes the `file_keys` row). `/upload/begin` and `/upload` share the `UPLOAD_RATE_LIMIT` bucket.
+**Oracle config** ("oracle" = the server-gated key-release scheme, a crypto term for a service answering yes/no queries — not Oracle DB): `ORACLE_ENABLED` (default on; when off `/upload/begin` 404s and uploads are refused), `ORACLE_RELEASE_RATE_LIMIT` (10/min per file_id), `ORACLE_MAX_RELEASE_ATTEMPTS` (5), `ORACLE_BURN_ON_LOCKOUT` (default off — lockout keeps H, burn deletes the `file_keys` row). `/upload/begin` and `/upload` share the `UPLOAD_RATE_LIMIT` bucket.
 
 **Type field:** DB entries have `type: 'file'` or `type: 'text'` (text notes). Text note content is base64-encoded encrypted data sent via form field `note_text`; file uploads use `multipart/form-data` with field `file`.
 
