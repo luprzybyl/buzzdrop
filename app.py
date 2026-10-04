@@ -846,9 +846,6 @@ def upload_file():
     note_text = request.form.get('note_text')
     upload_type = request.form.get('type', 'file')
     private_note = (request.form.get('private_note') or '').strip() or None
-    # Opt-in: without this flag recipients only ever see a generic label.
-    show_filename = (request.form.get('show_filename') or '').strip().lower() in {
-        '1', 'true', 'yes', 'on'}
     wants_json = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     if not _session_csrf_required():
@@ -997,7 +994,6 @@ def upload_file():
                 'notify_on_open': notify_on_open,
                 'notification_email': notification_email,
                 'receipt_hash': receipt_hash,
-                'show_filename': show_filename,
             }, file_id=unique_id)
         except Exception:
             if file_path is not None:
@@ -1075,7 +1071,7 @@ def download_file(file_id):
     response = current_app.response_class(
         generate(),
         headers={
-            'Content-Disposition': f'attachment; filename="{_recipient_display_name(file_info)}"'
+            'Content-Disposition': f'attachment; filename="{file_info.get("original_name") or "download"}"'
         },
         mimetype='application/octet-stream'
     )
@@ -1117,20 +1113,6 @@ def upload_success(file_id):
     return render_template('success.html', share_link=share_link)
 
 
-def _recipient_display_name(file_info: dict) -> str:
-    """
-    Name shown to an unauthenticated recipient: the real
-    ``original_name`` only when the uploader opted in
-    (``show_filename``), otherwise a generic label. The confirm page
-    is public — anyone holding the link must not learn the filename
-    by default.
-    """
-    if file_info.get('show_filename'):
-        return file_info.get('original_name') or (
-            'a note' if file_info.get('type') == 'text' else 'a file')
-    return 'a note' if file_info.get('type') == 'text' else 'a file'
-
-
 @app.route('/view/<file_id>', methods=['GET'])
 @limiter.shared_limit(
     lambda: current_app.config['PUBLIC_FILE_RATE_LIMIT'],
@@ -1147,7 +1129,7 @@ def view_file(file_id):
         flash('File has expired')
         return redirect(url_for('index'))
     file_type = file_info.get('type', 'file')
-    return render_template('confirm_download.html', file_id=file_id, original_name=_recipient_display_name(file_info), file_type=file_type)
+    return render_template('confirm_download.html', file_id=file_id, original_name=file_info.get('original_name'), file_type=file_type)
 
 @app.route('/view/<file_id>/confirm', methods=['POST'])
 @limiter.shared_limit(
@@ -1168,7 +1150,7 @@ def confirm_view_file(file_id):
         flash('Invalid request')
         return redirect(url_for('view_file', file_id=file_id))
     file_type = file_info.get('type', 'file')
-    return render_template('view.html', file_id=file_id, original_name=_recipient_display_name(file_info), file_type=file_type)
+    return render_template('view.html', file_id=file_id, original_name=file_info.get('original_name'), file_type=file_type)
 
 
 def _release_rate_limit_key() -> str:

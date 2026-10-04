@@ -124,11 +124,11 @@ def test_view_text_note_shows_correct_template(client, app, files_store):
     response = upload_note(client, files_store)
     note_id = response.get_json()['file_id']
 
-    # View the note (confirm page) — names are opt-in, so the generic
-    # label is what the unauthenticated recipient sees.
+    # View the note (confirm page) — the unauthenticated recipient sees
+    # the note's label.
     response = client.get(url_for('view_file', file_id=note_id))
     assert response.status_code == 200
-    assert b'a note' in response.data
+    assert b'Secret Note' in response.data
     assert b'Ready to view?' in response.data
     assert b'Continuing deletes this note from the server immediately.' in response.data
     assert b'If the sender shared the password separately' in response.data

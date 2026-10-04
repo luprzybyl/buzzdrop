@@ -150,8 +150,7 @@ def test_download_file_success(client, app, files_store, key_release_upload):
     file_content = b"Downloadable content."
     file_name = "download_me.txt"
     file_id, _h, _rcpt, _resp = key_release_upload(
-        data={'file': (io.BytesIO(file_content), file_name),
-              'show_filename': 'true'})
+        data={'file': (io.BytesIO(file_content), file_name)})
 
     file_info = files_store.get_by_id(file_id)
     assert file_info is not None
@@ -195,8 +194,7 @@ def test_view_file_success(client, app, files_store, key_release_upload):
 
     file_name = "view_me.txt"
     file_id, _h, _rcpt, _resp = key_release_upload(
-        data={'file': (io.BytesIO(b"view content"), file_name),
-              'show_filename': 'true'})
+        data={'file': (io.BytesIO(b"view content"), file_name)})
 
     response = client.get(url_for('view_file', file_id=file_id))
     assert response.status_code == 200
@@ -304,42 +302,14 @@ def test_view_file_expired(client, app, files_store, key_release_upload):
     assert not os.path.exists(updated['path'])
 
 
-def test_view_file_hides_filename_by_default(client, app, files_store, key_release_upload):
-    """Unauthenticated recipients get a generic label — the filename is
-    server-side metadata unless the uploader opts in."""
+def test_view_file_shows_filename_to_recipient(client, app, files_store, key_release_upload):
+    """Recipients see the real filename on view/confirm and in the
+    download's Content-Disposition."""
     login_user(client, 'testuser', 'password')
 
     file_id, _h, _rcpt, response = key_release_upload(
         data={'file': (io.BytesIO(b'content'), 'medical-records.txt')})
     assert response.status_code == 200
-    assert files_store.get_by_id(file_id).get('show_filename') is None
-
-    view = client.get(url_for('view_file', file_id=file_id))
-    assert view.status_code == 200
-    assert b'medical-records.txt' not in view.data
-    assert b'a file' in view.data
-
-    confirm = client.post(
-        url_for('confirm_view_file', file_id=file_id),
-        data={'csrf_token': 'test-csrf-token'})
-    assert confirm.status_code == 200
-    assert b'medical-records.txt' not in confirm.data
-    assert b'"originalName": "a file"' in confirm.data
-
-    download = client.get(url_for('download_file', file_id=file_id))
-    assert download.headers['Content-Disposition'] == 'attachment; filename="a file"'
-
-
-def test_view_file_shows_filename_when_opted_in(client, app, files_store, key_release_upload):
-    login_user(client, 'testuser', 'password')
-
-    file_id, _h, _rcpt, response = key_release_upload(
-        data={
-            'file': (io.BytesIO(b'content'), 'medical-records.txt'),
-            'show_filename': 'true',
-        })
-    assert response.status_code == 200
-    assert files_store.get_by_id(file_id)['show_filename'] is True
 
     view = client.get(url_for('view_file', file_id=file_id))
     assert view.status_code == 200
@@ -349,7 +319,10 @@ def test_view_file_shows_filename_when_opted_in(client, app, files_store, key_re
         url_for('confirm_view_file', file_id=file_id),
         data={'csrf_token': 'test-csrf-token'})
     assert confirm.status_code == 200
-    assert b'medical-records.txt' in confirm.data
+    assert b'"originalName": "medical-records.txt"' in confirm.data
+
+    download = client.get(url_for('download_file', file_id=file_id))
+    assert download.headers['Content-Disposition'] == 'attachment; filename="medical-records.txt"'
 
 def test_report_decryption_success(client, app, files_store):
     login_user(client, 'testuser', 'password')
