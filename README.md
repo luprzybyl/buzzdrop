@@ -10,15 +10,15 @@
 
 # Buzzdrop: File Sharing That Stings—Just Once! 🐝
 
-**Buzzdrop** is a one-time, self-destructing file drop. Upload files or share secret text notes, get a link, and—BZZT!—they vanish after a single view. Your secrets are safe: everything is encrypted right in your browser, and the key itself is split in half—one half lives in your password, the other half sits in the server's vault and is handed over exactly once.
+**Buzzdrop** is a one-time, self-destructing file drop. Upload files or share secret text notes, get a link, and—BZZT!—the stored copy is gone after a single view. One honest footnote: "one-time" means nobody gets a *second* read—it cannot un-read what the recipient already decrypted (that's physics, not a bug). The crypto still does the heavy lifting: everything is encrypted right in your browser, and the key itself is split in half—one half lives in your password, the other half sits in the server's vault and is handed over exactly once.
 
 ## Why Buzzdrop?
 
-- 🐝 **One-Time Download**: Each link is a mayfly—one click and it's gone!
+- 🐝 **One-Time Download**: Each link is a mayfly—one claim, and the stored copy is gone for good!
 - 📝 **Secret Text Notes**: Share passwords, API keys, or sensitive text—no files needed!
 - 🔒 **In-Browser Encryption**: Your data is locked tight (AES-GCM + PBKDF2) before it ever leaves your device.
 - 🗝️ **Server-Gated Key Release**: The decryption key is split between the password and a server-held share that's released exactly once—leaked ciphertext alone is just noise, not a brute-force target.
-- 💥 **Auto-Delete**: Downloaded or viewed? Boom, gone. No leftovers.
+- 💥 **Auto-Delete**: Downloaded or viewed? Boom—the server copy is gone and its key share is burned. Even stale ciphertext bytes left on disk are dead weight without it.
 - 🔗 **Smart Sharing**: Generate links with embedded passwords for one-click access, or share separately for extra security.
 - ☁️ **Local or S3 Storage**: Choose your hive—local or Amazon S3.
 - 👩‍💻 **Configurable**: File types, size limits, and users—tweak in `.env`.
@@ -94,7 +94,7 @@ Stop the swarm with `docker-compose down`—no mess, no leftovers.
    - **🔗 One-Click Link**: Password embedded in URL fragment (convenient, but less secure)
    - **🔒 Separate Sharing**: Share link and password via different channels (maximum security)
 5. Recipient opens link, confirms download, enters password (or auto-filled from URL), and decrypts.
-6. First download zaps the file from existence—BZZT!
+6. First download zaps the stored copy and its key share—BZZT!
 7. Optionally enable **"Notify me when this is opened"** to receive a single email after the recipient attempts decryption.
 
 ### For Secret Text Notes:
@@ -113,6 +113,13 @@ Stop the swarm with `docker-compose down`—no mess, no leftovers.
 ## Security Buzz
 
 Buzzdrop takes security seriously. Here's how we protect your secrets:
+
+### What "one-time" actually promises
+
+- **One claim, no re-reads.** The stored ciphertext is served exactly once and the key share `H` is released exactly once, inside a single atomic transaction. After that the link is spent—for the recipient, for a link thief, for everyone.
+- **It protects against re-reading, not against remembering.** Nothing takes back plaintext the recipient already saw (the analog hole is physics, not a roadmap item), and nothing stops a malicious server operator.
+- **Brute force is a separate fight.** Self-destruct was never the anti-cracking feature: a stolen ciphertext without `H` is mathematically dead, so password guessing only happens through `/release`—rate-limited per share, counted, and burned on lockout. Password *strength* still matters, which is why the generator and the strength gate exist.
+- Full threat model, including what cannot be fixed: [`docs/true-one-time.md`](docs/true-one-time.md).
 
 ### Encryption & Storage:
 - **Client-Side Encryption**: AES-GCM with a key derived from your password (PBKDF2-HMAC-SHA256, 600k iterations) **and** a random 32-byte share `H` the server holds in its `file_keys` table — `file_key = HKDF(Kp ‖ H)`. Neither half decrypts alone.
@@ -226,7 +233,7 @@ ln -s $(pwd)/cli/buzz ~/.local/bin/buzz
 ### Usage
 
 ```bash
-buzz file.pdf                        # auto-generates a 4-word passphrase
+buzz file.pdf                        # auto-generates a 6-word passphrase
 buzz file.pdf -p my-secret-pass      # use your own password
 buzz file.pdf --expiry 2025-12-31T23:59
 ```
@@ -237,9 +244,9 @@ Encrypting file.pdf... done
 Uploading... done
 
 Share link:     https://your-buzzdrop.example.com/view/abc123
-Password:       tiger-ocean-lamp-drift
+Password:       tiger-ocean-lamp-drift-maple-ember
 
-One-click link: https://your-buzzdrop.example.com/view/abc123#tiger-ocean-lamp-drift
+One-click link: https://your-buzzdrop.example.com/view/abc123#tiger-ocean-lamp-drift-maple-ember
 ```
 
 The recipient opens the share link, enters the password (or uses the one-click link), and the file decrypts in their browser — exactly the same as a web upload. Under the hood `buzz` speaks the same `BKV3` protocol: it runs `POST /upload/begin` to fetch the server's key share, encrypts with the split key (receipt included), and binds the verifier plus `receipt_hash` on `/upload`. It requires a server that answers `/upload/begin` — against an older server without key release it aborts rather than silently downgrading. It also refuses plain-`http://` servers outside localhost unless you pass `--insecure`, because a released key share over cleartext HTTP is a self-own.

@@ -187,7 +187,7 @@
             </div>
             <div class="flex flex-wrap gap-2 pt-2">
                 <span class="stat-chip">AES-GCM</span>
-                <span class="stat-chip">PBKDF2 · 100k</span>
+                <span class="stat-chip">PBKDF2 · 600k</span>
                 <span class="stat-chip">Local or S3</span>
                 <span class="stat-chip">CLI included</span>
             </div>
@@ -238,7 +238,7 @@
                                     <span class="flow-secret">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>
                                     <svg class="flow-lock" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4 4 0 0 0-4 4v3H5.5A1.5 1.5 0 0 0 4 9.5v7A1.5 1.5 0 0 0 5.5 18h9a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 14.5 8H14V5a4 4 0 0 0-4-4Zm2 7V5a2 2 0 1 0-4 0v3h4Z" clip-rule="evenodd"/></svg>
                                 </div>
-                                <span class="flow-tag">AES-GCM &middot; PBKDF2 100k</span>
+                                <span class="flow-tag">AES-GCM &middot; PBKDF2 600k</span>
                             </div>
                             <p class="flow-cap"><strong>Set a password.</strong> Encryption happens in your browser, before anything is uploaded.</p>
                         </li>
@@ -343,7 +343,7 @@
             <article class="feature-card animate-fade-up delay-4">
                 <div class="flex items-center gap-4">
                     <span class="hex-step">3</span>
-                    <h3 class="text-base font-semibold text-white">Watch it self-destruct</h3>
+                    <h3 class="text-base font-semibold text-white">Watch the copy self-destruct</h3>
                 </div>
                 <p class="mt-4 text-sm leading-relaxed text-slate-400">
                     The stored copy is deleted the moment the recipient continues &mdash; before the password is even checked.
@@ -366,7 +366,7 @@
                 </svg>
                 <div>
                     <h3 class="text-base font-semibold leading-snug text-white">The server never sees your key</h3>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">Your password becomes an AES-GCM key in the browser via PBKDF2, 100,000 iterations, and never leaves the device. Buzzdrop stores ciphertext and metadata; it cannot read the drop.</p>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">Your password derives half the key in the browser via PBKDF2 — 600,000 iterations — and never leaves the device. The other half is a server-held share released exactly once, so a stolen ciphertext alone is dead bytes. Buzzdrop stores ciphertext and metadata; it cannot read the drop.</p>
                 </div>
             </div>
         </article>
