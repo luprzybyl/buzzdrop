@@ -1406,7 +1406,7 @@ def upload_begin(server: str, token: str) -> dict | None:
     Phase 1 of a key-release upload: ask the server for file_id + H.
 
     Returns the JSON body on success, or None when the server does not
-    offer server-gated key release (KEY_RELEASE_ENABLED off / older server) —
+    offer server-gated key release (older server without /upload/begin) —
     every upload is two-phase, so the caller must abort in that case.
     """
     requests = _requests()

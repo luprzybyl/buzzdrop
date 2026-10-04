@@ -400,9 +400,9 @@ decryption.
 
 The §6 design is implemented as the **only** share format —
 **breaking change: no backward compatibility with pre-key-release shares
-(acceptable per owner; pre-production wipe)**. `KEY_RELEASE_ENABLED`
-(default: on) gates the upload handshake; when off, `/upload/begin`
-returns 404 and uploads are refused.
+(acceptable per owner; pre-production wipe)**. The upload handshake is
+always on — there is no opt-out flag; rollback is a git revert, not a
+runtime toggle.
 
 - Rate-limit accounting: `/upload/begin` and `/upload` share the
   `UPLOAD_RATE_LIMIT` bucket — a complete upload costs 2 hits
@@ -437,8 +437,9 @@ returns 404 and uploads are refused.
 - Failure policy is configurable: `KEY_RELEASE_RATE_LIMIT`
   (per file_id), `KEY_RELEASE_MAX_ATTEMPTS` (default 1 — a single
   wrong password locks the share), and `KEY_RELEASE_BURN_ON_LOCKOUT`
-  (default off — lockout only; when on, the share row is deleted,
-  destroying H).
+  (default on — the share row is deleted, destroying H+V; off keeps
+  the row but permanently refuses releases — currently no unlock path,
+  kept as an option for a future one).
 - Post-release cleanup: the winning attempt sets `h = NULL, v = NULL`
   inside the release transaction — the row keeps only bookkeeping
   (`released_at`, `attempts`), so a post-release DB theft yields no
