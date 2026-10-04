@@ -268,7 +268,7 @@ Returns `{"token": "<64-char hex>", "expires_at": "<ISO-8601 timestamp>"}` — *
 
 By default, tokens expire after 30 days. You can optionally pass `{"expires_in_days": 7}` when creating a token to shorten or extend that lifetime.
 
-Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; the raw value is never persisted. The hash secret can be set explicitly with `TOKEN_HASH_SECRET`, otherwise Buzzdrop falls back to a configured `FLASK_SECRET_KEY`. Configure one of those stable secrets before issuing or validating API tokens. **Breaking change:** legacy API tokens generated before the PBKDF2 migration are no longer accepted; users must generate replacement tokens with `POST /api/token`. Logged-in users can list their active tokens with `GET /api/tokens` and revoke one with `POST /api/tokens/<token_id>/revoke`. Admins can also review and revoke active tokens for any user from the **Manage Users** page.
+Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; the raw value is never persisted. In production (`FLASK_ENV=production`), `TOKEN_HASH_SECRET` is **required** and must differ from `FLASK_SECRET_KEY` — one secret must not protect both session cookies and token hashes, and startup fails loudly otherwise. In development/testing it may fall back to `FLASK_SECRET_KEY`. Configure a stable secret before issuing or validating API tokens. **Breaking change:** legacy API tokens generated before the PBKDF2 migration are no longer accepted; users must generate replacement tokens with `POST /api/token`. Logged-in users can list their active tokens with `GET /api/tokens` and revoke one with `POST /api/tokens/<token_id>/revoke`. Admins can also review and revoke active tokens for any user from the **Manage Users** page.
 
 
 The application is built with:
@@ -296,17 +296,19 @@ Before deploying Buzzdrop to production, ensure you:
    # Set FLASK_SECRET_KEY in your .env with this value
    ```
 
-2. **Reset all user passwords**: Old SHA-256 hashes are incompatible with the new PBKDF2 system. Update all `FLASK_USER_*` entries in your `.env`.
+2. **Set a dedicated token hash secret**: `TOKEN_HASH_SECRET` is required in production and must differ from `FLASK_SECRET_KEY`. Session cookies ship `Secure` + `SameSite=Lax` by default (override with `SESSION_COOKIE_*` env vars if you must serve HTTP).
 
-3. **Enable HTTPS**: Security headers like HSTS require HTTPS. Configure your reverse proxy (nginx/Apache) with valid SSL/TLS certificates.
+3. **Reset all user passwords**: Old SHA-256 hashes are incompatible with the new PBKDF2 system. Update all `FLASK_USER_*` entries in your `.env`.
 
-4. **Configure rate limiting**: Review the built-in Flask-Limiter settings in `.env`, make sure your reverse-proxy deployment preserves the real client IP safely, and layer nginx, Cloudflare, or AWS WAF limits on top for production-grade protection.
+4. **Enable HTTPS**: Security headers like HSTS require HTTPS. Configure your reverse proxy (nginx/Apache) with valid SSL/TLS certificates.
 
-5. **Set up S3 (optional)**: For scalable storage, configure `STORAGE_BACKEND=s3` and provide AWS credentials in `.env`.
+5. **Configure rate limiting**: Review the built-in Flask-Limiter settings in `.env`, make sure your reverse-proxy deployment preserves the real client IP safely, and layer nginx, Cloudflare, or AWS WAF limits on top for production-grade protection.
 
-6. **Review IP tracking**: Client IP addresses are logged for accountability. Ensure compliance with your privacy policy and local regulations (GDPR, etc.).
+6. **Set up S3 (optional)**: For scalable storage, configure `STORAGE_BACKEND=s3` and provide AWS credentials in `.env`.
 
-7. **Test security headers**:
+7. **Review IP tracking**: Client IP addresses are logged for accountability. Ensure compliance with your privacy policy and local regulations (GDPR, etc.).
+
+8. **Test security headers**:
    ```bash
    curl -I https://your-domain.com
    # Verify X-Frame-Options, X-Content-Type-Options, CSP, etc. are present

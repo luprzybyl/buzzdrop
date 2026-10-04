@@ -603,8 +603,13 @@ def login():
 
     return render_template('login.html')
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 def logout():
+    # Logout mutates session state — POST only, gated by the session CSRF
+    # token (Bearer Authorization exempts the check as on other routes).
+    if not _session_csrf_required():
+        flash('Invalid request')
+        return redirect(url_for('index'))
     logout_user()
     flash('Logged out successfully', 'success')
     return redirect(url_for('index'))

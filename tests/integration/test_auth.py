@@ -67,18 +67,61 @@ def test_login_invalid_password(client):
         assert 'username' not in sess
     assert b'Invalid username or password' in response.data
 
+def _post_logout(client, csrf_token='test-csrf-token'):
+    """POST /logout with a session-matching CSRF token (re-seeded because
+    login rotates session['csrf_token'])."""
+    with client.session_transaction() as sess:
+        sess['csrf_token'] = 'test-csrf-token'
+    data = {'csrf_token': csrf_token} if csrf_token is not None else {}
+    return client.post(url_for('logout'), data=data, follow_redirects=True)
+
+
 def test_logout(client, app):
     # First, log in a user
     client.post(url_for('login'), data={'username': 'testuser', 'password': 'password'})
 
-    # Then, log out
-    response = client.get(url_for('logout'), follow_redirects=True)
+    # Then, log out via POST with a valid CSRF token
+    response = _post_logout(client)
     assert response.status_code == 200
     assert url_for('index') in response.request.path
     with client.session_transaction() as sess:
         assert 'username' not in sess
         assert 'is_admin' not in sess
     assert b'Logged out successfully' in response.data
+
+
+def test_logout_get_not_allowed(client, app):
+    """GET /logout must not exist — logout mutates state and needs CSRF."""
+    client.post(url_for('login'), data={'username': 'testuser', 'password': 'password'})
+    response = client.get(url_for('logout'))
+    assert response.status_code == 405
+    with client.session_transaction() as sess:
+        assert sess.get('username') == 'testuser'
+
+
+def test_logout_requires_csrf_token(client, app):
+    """POST /logout without a matching CSRF token leaves the session intact."""
+    client.post(url_for('login'), data={'username': 'testuser', 'password': 'password'})
+
+    response = _post_logout(client, csrf_token='forged-token')
+    assert response.status_code == 200  # redirects to index
+    with client.session_transaction() as sess:
+        assert sess.get('username') == 'testuser'  # still logged in
+
+    # No token at all — same result
+    response = _post_logout(client, csrf_token=None)
+    with client.session_transaction() as sess:
+        assert sess.get('username') == 'testuser'
+
+def test_session_cookie_flags_on_login(client):
+    response = client.post(url_for('login'), data={'username': 'testuser', 'password': 'password'})
+    set_cookie = response.headers.get('Set-Cookie', '')
+    assert 'HttpOnly' in set_cookie
+    assert 'SameSite=Lax' in set_cookie
+    # TestingConfig runs over plain HTTP, so Secure is off; production
+    # defaults it on (see config.ProductionConfig).
+    assert 'Secure' not in set_cookie
+
 
 def test_login_required_redirects_to_login(client):
     # Accessing a login-required page like upload_success without being logged in

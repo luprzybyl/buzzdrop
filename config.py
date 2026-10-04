@@ -3,12 +3,32 @@ Configuration module for Buzzdrop application.
 Centralizes all configuration settings from environment variables.
 """
 import os
-from typing import Set
+from typing import Optional, Set
 
 
 def _env_bool(name: str, default: bool) -> bool:
     """Read a boolean environment variable."""
     return os.getenv(name, str(default)).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+# Values copied verbatim from .env.example are not credentials.
+_PLACEHOLDER_VALUES = {
+    'changeme', 'change-me', 'change_me', 'placeholder', 'todo', 'xxx',
+    'bucketname', 'bucket-name', 'accesskey', 'secretkey',
+}
+
+
+def _looks_like_placeholder(value: Optional[str]) -> bool:
+    """Heuristic: does this config value look like a shipped placeholder?"""
+    if not value:
+        return False
+    v = value.strip().lower()
+    return (
+        v in _PLACEHOLDER_VALUES
+        or v.startswith('your')          # youraccesskey, your-secret-key, ...
+        or v.startswith('<') and v.endswith('>')  # <access-key>
+        or 'example' in v                # example-bucket, key@example.com
+    )
 
 
 class Config:
@@ -24,9 +44,19 @@ class Config:
     # DATABASE_URL is not set.
     DATABASE_PATH = os.getenv('DATABASE_PATH', 'buzzdrop.db')
     
+    # Session cookie hardening.
+    # SESSION_COOKIE_SECURE defaults to True (production-safe); development
+    # and testing default it to False because the app is commonly served
+    # over plain HTTP there — set SESSION_COOKIE_SECURE=true to override.
+    SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', True)
+    SESSION_COOKIE_HTTPONLY = _env_bool('SESSION_COOKIE_HTTPONLY', True)
+    SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
+    # Lifetime of permanent sessions, in seconds (default 8 hours).
+    PERMANENT_SESSION_LIFETIME = int(os.getenv('PERMANENT_SESSION_LIFETIME', str(8 * 3600)))
+
     # Upload settings
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
-    MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', str(16 * 1024 * 1024)))
+    MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', str(100 * 1024 * 1024)))
     ALLOWED_EXTENSIONS: Set[str] = set(
         os.getenv('ALLOWED_EXTENSIONS', 'txt,pdf,png,jpg,jpeg,gif,doc,docx,xls,xlsx').split(',')
     )
@@ -98,17 +128,56 @@ class Config:
         Raises:
             ValueError: If required configuration is missing or invalid
         """
+        is_production = os.getenv('FLASK_ENV', '').strip().lower() == 'production'
+
         # Check secret key in production
-        if not cls.SECRET_KEY and os.getenv('FLASK_ENV') == 'production':
+        if not cls.SECRET_KEY and is_production:
             raise ValueError("FLASK_SECRET_KEY must be set in production environment")
-        
+
+        # One secret must not protect both session cookies and token hashes:
+        # require a dedicated TOKEN_HASH_SECRET in production. Outside
+        # production a FLASK_SECRET_KEY fallback is tolerated (tokens.py).
+        if is_production:
+            if not cls.TOKEN_HASH_SECRET:
+                raise ValueError(
+                    "TOKEN_HASH_SECRET must be set in production — refusing to reuse "
+                    "FLASK_SECRET_KEY for API token hashing"
+                )
+            if cls.TOKEN_HASH_SECRET == cls.SECRET_KEY:
+                raise ValueError(
+                    "TOKEN_HASH_SECRET must differ from FLASK_SECRET_KEY"
+                )
+
         # Validate S3 configuration if using S3 backend
         if cls.STORAGE_BACKEND == 's3':
             if not all([cls.S3_BUCKET, cls.S3_ACCESS_KEY, cls.S3_SECRET_KEY]):
                 raise ValueError(
                     "S3 configuration incomplete. Required: S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY"
                 )
-        
+            for name, value in (
+                ('S3_BUCKET', cls.S3_BUCKET),
+                ('S3_ACCESS_KEY', cls.S3_ACCESS_KEY),
+                ('S3_SECRET_KEY', cls.S3_SECRET_KEY),
+            ):
+                if _looks_like_placeholder(value):
+                    raise ValueError(
+                        f"{name} looks like a placeholder value — set real "
+                        "credentials when STORAGE_BACKEND=s3"
+                    )
+
+        # Session cookie validation
+        samesite = (cls.SESSION_COOKIE_SAMESITE or '').strip().lower()
+        if samesite not in {'lax', 'strict', 'none'}:
+            raise ValueError(
+                "SESSION_COOKIE_SAMESITE must be one of: Lax, Strict, None"
+            )
+        if samesite == 'none' and not cls.SESSION_COOKIE_SECURE:
+            raise ValueError(
+                "SESSION_COOKIE_SAMESITE=None requires SESSION_COOKIE_SECURE=true"
+            )
+        if cls.PERMANENT_SESSION_LIFETIME < 60:
+            raise ValueError("PERMANENT_SESSION_LIFETIME must be at least 60 seconds")
+
         # Validate max content length
         if cls.MAX_CONTENT_LENGTH < 1024:  # Minimum 1KB
             raise ValueError("MAX_CONTENT_LENGTH must be at least 1024 bytes")
@@ -190,6 +259,9 @@ class DevelopmentConfig(Config):
     """Development environment configuration."""
     DEBUG = True
     TESTING = False
+    # Local dev usually runs over plain HTTP — allow cookies without TLS.
+    # SESSION_COOKIE_SECURE env var still overrides when set explicitly.
+    SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', False)
     LOGIN_RATE_LIMIT = os.getenv('LOGIN_RATE_LIMIT', '100 per minute')
     API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '60 per hour')
     UPLOAD_RATE_LIMIT = os.getenv('UPLOAD_RATE_LIMIT', '120 per hour')
@@ -200,6 +272,8 @@ class TestingConfig(Config):
     """Testing environment configuration."""
     TESTING = True
     DEBUG = True
+    # The test client speaks plain HTTP.
+    SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', False)
     # Tests will override DATABASE_URL in conftest.py
     LOGIN_RATE_LIMIT = os.getenv('LOGIN_RATE_LIMIT', '1000 per minute')
     API_TOKEN_RATE_LIMIT = os.getenv('API_TOKEN_RATE_LIMIT', '1000 per hour')
