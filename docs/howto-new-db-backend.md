@@ -1,14 +1,14 @@
-# HOWTO: implementacja nowego backendu bazy danych
+# HOWTO: implementing a new database backend
 
 | | |
 |---|---|
-| **Wersja dokumentu** | 1.0 |
-| **Dotyczy** | architektury `db/` wprowadzonej w PR #141 |
-| **Cel** | dodanie backendu (PostgreSQL / MySQL / Oracle) bez zmian w reszcie aplikacji |
+| **Document version** | 1.0 |
+| **Applies to** | the `db/` architecture introduced in PR #141 |
+| **Goal** | add a backend (PostgreSQL / MySQL / Oracle) without changes to the rest of the application |
 
 ---
 
-## 1. Architektura w pigułce
+## 1. Architecture at a glance
 
 ```
 app.py / routes
@@ -27,55 +27,57 @@ FileRepository (models.py)          tokens.py
    sqlite_backend  postgres?      mysql? / oracle?
 ```
 
-Zasada: aplikacja **nie wie**, jaki silnik jest pod spodem. Widzi tylko
-`Backend` z dwoma store'ami domenowymi. Twój backend implementuje dwa
-interfejsy i rejestruje się w factory — to cała umowa.
+The rule: the application **doesn't know** which engine is underneath.
+It only sees a `Backend` with two domain stores. Your backend implements
+two interfaces and registers in the factory — that's the whole contract.
 
-**Granica abstrakcji jest domenowa, nie dokumentowa.** Nie portujesz
-żadnego query-DSL — piszesz idiomatyczny SQL pod swój silnik.
+**The abstraction boundary is domain-level, not document-level.** You
+aren't porting a query DSL — you write idiomatic SQL for your engine.
 
 ---
 
-## 2. Kontrakt — co MUSI gwarantować implementacja
+## 2. The contract — what an implementation MUST guarantee
 
-Pełne sygnatury: `db/base.py`. Semantyka, której testy kontraktowe pilnują:
+Full signatures: `db/base.py`. The semantics the contract suite enforces:
 
 ### FileStore
 
-| Metoda | Kontrakt |
+| Method | Contract |
 |---|---|
-| `insert(doc, doc_id=None) -> int` | zwraca `doc_id`; rekordy to plain dicty, `doc_id` dołączany do dicta przy odczycie |
-| `get_by_id(file_id)` / `get_by(**filters)` / `list_by(**filters)` / `all()` | zwracają dict lub `None`/listę; filtry = równość po kolumnach |
-| `update_fields(file_id, fields) -> bool` | `False` gdy rekord nie istnieje |
-| `claim_download(file_id, ip) -> bool` | **ATOMOWO** — pojedynczy warunkowy `UPDATE ... WHERE id=? AND downloaded_at IS NULL` (lub równoważnik); `True` tylko u zwycięzcy wyścigu |
-| `claim_notification_send(file_id) -> bool` | jw., pole `notification_sent_at` |
+| `insert(doc, doc_id=None) -> int` | returns `doc_id`; records are plain dicts, `doc_id` is attached to the dict on read |
+| `get_by_id(file_id)` / `get_by(**filters)` / `list_by(**filters)` / `all()` | return dict or `None`/list; filters = column equality |
+| `update_fields(file_id, fields) -> bool` | `False` when the record doesn't exist |
+| `claim_download(file_id, ip) -> bool` | **ATOMIC** — a single conditional `UPDATE ... WHERE id=? AND downloaded_at IS NULL AND (status IS NULL OR status != 'expired') AND expiry_at > now` (or equivalent); `True` for the race winner only |
+| `claim_notification_send(file_id) -> bool` | ditto, for the `notification_sent_at` field |
 | `delete(file_id) -> bool` / `truncate()` | — |
 
 ### TokenStore
 
-Analogicznie: `insert`, `get_by_id`, `get_by_token_hash`, `get_by`/`list_by`/`all`,
+Analogous: `insert`, `get_by_id`, `get_by_token_hash`, `get_by`/`list_by`/`all`,
 `update_fields`, `remove_by_id`/`remove_by_ids`/`remove_by_hash`,
 `purge_expired(now_iso) -> int`, `truncate`.
 
-### Twarde wymagania pozasygnaturowe
+### Hard requirements beyond signatures
 
-- **`claim_download` musi być atomowy na poziomie silnika** — nie „SELECT
-  potem UPDATE". Wyścig 8 wątków musi dać dokładnie 1 zwycięzcę
+- **`claim_download` must be engine-atomic** — not "SELECT then UPDATE".
+  An 8-thread race must produce exactly 1 winner
   (test `test_claim_download_concurrent_single_winner`).
-- **Typy round-tripują**: `True`/`False`/`None` wracają jako takie,
-  `shared_with` wraca jako lista (JSON), `doc_id` jako int.
-- **Nieznane pola** lądują w kolumnie `extra` (JSON) i wracają
-  zmergowane do dicta — insert nie może się wywalić na polu bez kolumny.
-- **Thread-safety**: połączenie per wątek (wzorzec thread-local z
-  `sqlite_backend.py`) albo pool — Flask + testy wyścigowe uderzają
-  równolegle.
-- **`close()`** na `Backend` — sprząta połączenia.
+- **Types round-trip**: `True`/`False`/`None` come back as such,
+  `shared_with` comes back as a list (JSON), `doc_id` as int.
+- **Unknown fields** go into the `extra` column (JSON) and merge back
+  into the dict — insert must not crash on a field without a column.
+  On read, typed columns win over `extra` copies (`setdefault` merge).
+- **Thread-safety**: a connection per thread (thread-local pattern from
+  `sqlite_backend.py`) or a pool — Flask and the race tests hit it
+  concurrently.
+- **`close()`** on `Backend` — releases connections; calling into a
+  closed backend must raise rather than silently reopen.
 
 ---
 
-## 3. Schema — wzór do przeniesienia
+## 3. Schema — the template to port
 
-`db/sqlite_backend.py` (typowane kolumny, `extra` jako overflow):
+`db/sqlite_backend.py` (typed columns, `extra` as overflow):
 
 ```sql
 files(doc_id PK AUTOINCREMENT, id TEXT UNIQUE, original_name, path,
@@ -88,35 +90,35 @@ api_tokens(doc_id PK AUTOINCREMENT, token_hash, token_hash_version,
            username, created_at, last_used_at, expires_at, extra)
 ```
 
-Mapowanie typów per silnik:
+Type mapping per engine:
 
-| Kolumna | SQLite | PostgreSQL | MySQL | Oracle |
+| Column | SQLite | PostgreSQL | MySQL | Oracle |
 |---|---|---|---|---|
 | `doc_id` | `INTEGER PK AUTOINCREMENT` | `GENERATED ALWAYS AS IDENTITY` | `INT AUTO_INCREMENT PK` | `NUMBER GENERATED AS IDENTITY` |
-| bool (`decryption_success` itd.) | `INTEGER` | `BOOLEAN` | `TINYINT(1)` | `NUMBER(1)` (BOOLEAN dopiero od 23c) |
+| bool (`decryption_success` etc.) | `INTEGER` | `BOOLEAN` | `TINYINT(1)` | `NUMBER(1)` (BOOLEAN only from 23c) |
 | JSON (`shared_with`, `extra`) | `TEXT` + `json_*` | `JSONB` | `JSON` | `CLOB`/`JSON` (21c+) |
-| timestampy | `TEXT` ISO-8601 | `TEXT` lub `TIMESTAMPTZ` | `TEXT` lub `DATETIME` | `VARCHAR2`/`TIMESTAMP` |
+| timestamps | `TEXT` ISO-8601 | `TEXT` or `TIMESTAMPTZ` | `TEXT` or `DATETIME` | `VARCHAR2`/`TIMESTAMP` |
 
-Konwencja projektu: timestampy jako **ISO-8601 stringi** — najmniej
-problemów przy porównaniach i serializacji; trzymaj się tego.
+Project convention: timestamps as **ISO-8601 strings** — fewest
+problems with comparisons and serialization; stick to it.
 
 ---
 
-## 4. Krok po kroku
+## 4. Step by step
 
-### 4.1. Szablon pliku
+### 4.1. File template
 
 `db/postgres_backend.py`:
 
 ```python
 import threading
-import psycopg  # raw DB-API — bez ORM, decyzja architektoniczna
+import psycopg  # raw DB-API — no ORM, architectural decision
 
 from db.base import Backend, FileStore, TokenStore
 
 class PostgresFileStore(FileStore):
     def __init__(self, backend): self._b = backend
-    # ... wszystkie metody kontraktu, %s placeholders ...
+    # ... all contract methods, %s placeholders ...
 
 class PostgresTokenStore(TokenStore): ...
 
@@ -134,9 +136,9 @@ class PostgresBackend(Backend):
     def close(self): ...
 ```
 
-### 4.2. Rejestracja w factory
+### 4.2. Registering in the factory
 
-`db/__init__.py`, w `create_backend()`:
+`db/__init__.py`, in `create_backend()`:
 
 ```python
 if scheme in ('postgresql', 'postgres'):
@@ -144,70 +146,76 @@ if scheme in ('postgresql', 'postgres'):
     return PostgresBackend(database_url)
 ```
 
-Import wewnątrz gałęzi — bez twardej zależności na `psycopg` dla
-użytkowników SQLite.
+Import inside the branch — no hard dependency on `psycopg` for
+SQLite users.
 
-### 4.3. Testy kontraktowe
+### 4.3. Contract tests
 
-Nic nie piszesz — suite już jest sparametryzowana
-(`tests/contract/test_backend_contract.py`). Wystarczy DSN:
+You write nothing — the suite is already parametrized
+(`tests/contract/test_backend_contract.py`). A DSN is enough:
 
 ```bash
 BUZZDROP_TEST_PG_DSN=postgresql://user:pass@localhost/testdb pytest tests/contract -v
 ```
 
-Fixtura sama truncate'uje tabele między testami (dlatego `truncate()`
-jest w kontrakcie). Jeśli Twój silnik nie jest w `_EXTRA_DSNS`,
-dodaj wpis `('moj_silnik', 'BUZZDROP_TEST_X_DSN')`.
+The fixture truncates tables between tests (that's why `truncate()`
+is in the contract). If your engine isn't in `_EXTRA_DSNS`, add an
+entry `('my_engine', 'BUZZDROP_TEST_X_DSN')`.
 
-### 4.4. Pułapki per silnik
+### 4.4. Per-engine pitfalls
 
-- **Placeholdery**: sqlite3 `?`, psycopg/mysql `%s`, oracledb `:1`.
-  Nie składaj SQL f-stringami z wartościami — kolumny mogą, wartości nie.
-- **`UPDATE ... RETURNING`**: Postgres/SQLite mają; MySQL nie — licz
-  na `cursor.rowcount`; Oracle ma `RETURNING INTO` z bind zmienną.
-- **Atomic claim**: na wszystkich silnikach wystarczy warunkowy UPDATE
-  + rowcount — transakcja read-committed wystarczy, bo warunek
-  ewaluuje się na wierszu pod lockiem.
-- **Oracle**: brak `AUTOINCREMENT` (IDENTITY columns od 12c), brak
-  `BOOLEAN` w SQL przed 23c, nazwy tabel uppercase w katalogu.
-- **`extra`/JSON**: Postgres `JSONB` z `->>`/`->`, MySQL `JSON_EXTRACT`,
-  Oracle `JSON_VALUE` — albo po prostu czytaj/zapisuj cały CLOB i
-  mierz w Pythonie, jak w SQLite.
-- **Commit**: DB-API nie autocommituje domyślnie (psycopg3: autocommit
-  off) — każdy write musi kończyć `conn.commit()` albo włącz
-  autocommit na połączeniu.
+- **Placeholders**: sqlite3 `?`, psycopg/mysql `%s`, oracledb `:1`.
+  Don't build SQL from f-strings with values — identifiers may be
+  static, values never.
+- **`UPDATE ... RETURNING`**: Postgres/SQLite have it; MySQL doesn't —
+  rely on `cursor.rowcount`; Oracle has `RETURNING INTO` with a bind
+  variable.
+- **Atomic claim**: a conditional UPDATE + rowcount suffices on all
+  engines — read-committed is enough, because the predicate is
+  evaluated on the row under lock.
+- **Oracle**: no `AUTOINCREMENT` (IDENTITY columns from 12c), no
+  `BOOLEAN` in SQL before 23c, uppercase table names in the catalog.
+- **`extra`/JSON**: Postgres `JSONB` with `->>`/`->`, MySQL
+  `JSON_EXTRACT`, Oracle `JSON_VALUE` — or simply read/write the whole
+  CLOB and merge in Python, like SQLite does.
+- **Commit**: DB-API doesn't autocommit by default (psycopg3:
+  autocommit off) — every write must end with `conn.commit()` or
+  enable autocommit on the connection.
+- **`expires_at` semantics**: `purge_expired` is deliberately
+  fail-closed — a malformed `expires_at` is treated as expired
+  (deleting a credential is the safer failure than keeping it valid).
 
-### 4.5. Checklist PR-a
+### 4.5. PR checklist
 
 - [ ] `db/<engine>_backend.py`: `FileStore` + `TokenStore` + `Backend` + `_migrate()`
-- [ ] rejestracja scheme w `create_backend()` + lazy import drivera
-- [ ] wpis w `_EXTRA_DSNS` w suite kontraktowej
-- [ ] `pytest tests/contract -v` zielone na Twoim DSN (zwłaszcza race test)
-- [ ] `pytest -v` całość zielona na sqlite (regresja)
-- [ ] `.env.example` + README: przykładowy `DATABASE_URL`
-- [ ] sterownik w `requirements.txt` jako opcjonalny extras / komentarz
-- [ ] dokumentacja odstępstw od konwencji (jeśli jakieś są)
+- [ ] scheme registration in `create_backend()` + lazy driver import
+- [ ] entry in `_EXTRA_DSNS` in the contract suite
+- [ ] `pytest tests/contract -v` green on your DSN (especially the race test)
+- [ ] `pytest -v` green on sqlite (regression)
+- [ ] `.env.example` + README: sample `DATABASE_URL`
+- [ ] driver in `requirements.txt` as an optional extra / comment
+- [ ] documented deviations from conventions (if any)
 
 ---
 
-## 5. Czego NIE robić
+## 5. What NOT to do
 
-- Nie rozszerzaj `base.py` o metody „bo się przydadzą" — interfejs
-  rośnie tylko, gdy call-site tego wymaga. Każda metoda to koszt
-  implementacji na KAŻDYM backendzie.
-- Nie implementuj `claim_download` jako read-modify-write — złamiesz
-  jedyną kontrolę bezpieczeństwa, która tu jest prawdziwa.
-- Nie czytaj `.env`/configu w backendzie — DSN przychodzi z factory.
-- Nie zwracaj obiektów ORM-owych ani klas — kontrakt to plain dicty.
+- Don't extend `base.py` with methods "because they might be useful" —
+  the interface grows only when a call site requires it. Every method
+  is an implementation cost on EVERY backend.
+- Don't implement `claim_download` as read-modify-write — you'd break
+  the only real security control here.
+- Don't read `.env`/config inside a backend — the DSN arrives via the
+  factory.
+- Don't return ORM objects or classes — the contract is plain dicts.
 
 ---
 
-## 6. Status backendów
+## 6. Backend status
 
-| Scheme | Status | Plik |
+| Scheme | Status | File |
 |---|---|---|
-| `sqlite:///` | ✅ zaimplementowany | `db/sqlite_backend.py` |
-| `postgresql://` | szkielet w kontrakcie (`BUZZDROP_TEST_PG_DSN`) | — |
-| `mysql://` | jw. (`BUZZDROP_TEST_MYSQL_DSN`) | — |
-| `oracle://` | jw. (`BUZZDROP_TEST_ORACLE_DSN`) | — |
+| `sqlite:///` | ✅ implemented | `db/sqlite_backend.py` |
+| `postgresql://` | stub in contract (`BUZZDROP_TEST_PG_DSN`) | — |
+| `mysql://` | ditto (`BUZZDROP_TEST_MYSQL_DSN`) | — |
+| `oracle://` | ditto (`BUZZDROP_TEST_ORACLE_DSN`) | — |

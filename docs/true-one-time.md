@@ -1,388 +1,390 @@
-# Prawdziwa jednorazowość: dlaczego „self-destructing" to dziś obietnica, a nie mechanizm
+# True one-time: why "self-destructing" is a promise today, not a mechanism
 
-Dokument zbiera pełną analizę problemu „true one-time download" w buzzdrop:
-co dziś naprawdę chroni, czego nie da się ochronić w ogóle, i jak wygląda
-jedyny design, w którym jednorazowość jest egzekwowana przez serwer,
-a nie przez uczciwość JavaScriptu odbiorcy.
+This document collects the full analysis of the "true one-time download"
+problem in buzzdrop: what actually protects the data today, what cannot
+be protected at all, and the only design in which one-time semantics are
+enforced by the server rather than by the recipient's honest JavaScript.
 
-Źródło: audyt bezpieczeństwa `audyt-bezpieczenstwa.md` (ustalenia 1 i 10)
-oraz zamknięta decyzja architektoniczna w issue #138.
+Source: security audit `audyt-bezpieczenstwa.md` (findings 1 and 10)
+and the closed architecture decision in issue #138.
 
 ---
 
-## 1. Na czym polega problem
+## 1. What the problem is
 
-Buzzdrop reklamuje się jako „one-time, self-destructing". Kolejność zdarzeń
-przy pobraniu wygląda jednak tak:
+Buzzdrop advertises itself as "one-time, self-destructing". The actual
+sequence of events at download time looks like this:
 
 ```
-1. GET /view/<id>         → strona potwierdzenia
-2. GET /download/<id>     → serwer wydaje pełny ciphertext i KASUJE plik
-3. użytkownik wpisuje hasło → view.js deszyfruje LOKALNIE w przeglądarce
+1. GET /view/<id>         → confirmation page
+2. GET /download/<id>     → server hands out the full ciphertext and DELETES the file
+3. user enters password   → view.js decrypts LOCALLY in the browser
 ```
 
-Serwer nigdy nie widzi hasła i nigdy nie sprawdza żadnej próby deszyfrowania.
-„Jedna próba" jest egzekwowana wyłącznie przez to, że uczciwy `view.js`
-deaktywuje pole hasła po pierwszym błędzie:
+The server never sees the password and never checks a single decryption
+attempt. "One attempt" is enforced solely by the honest `view.js`
+disabling the password field after the first failure:
 
 ```js
 decryptBtn.disabled = true;
 passInput.disabled = true;
 ```
 
-To jest uprzejmość UI, nie granica bezpieczeństwa. Atakujący nie używa
-naszej przeglądarki ani naszego JavaScriptu — bierze bajty i łamie je
-lokalnie, dowolnie długo, dowolnie szybko.
+That is UI politeness, not a security boundary. An attacker does not
+use our browser or our JavaScript — they take the bytes and crack them
+locally, as long and as fast as they like.
 
-### Dlaczego ciphertext to „samopowiadająca się zagadka"
+### Why the ciphertext is a "self-answering puzzle"
 
-Kluczowa obserwacja: zaszyfrowany blob jest **samo-weryfikujący**.
-Format to `salt ‖ iv ‖ AES-GCM(klucz, dane)`. Tag GCM sprawdza się przy
-każdej próbie deszyfrowania — zgadłeś hasło, tag się zgadza; nie zgadłeś,
-dostajesz błąd. Oznacza to, że ciphertext zawiera w sobie **wyrocznię**:
-każdy, kto go ma, może sprawdzać dowolne hasło w nieskończoność,
-bez pytania kogokolwiek o zgodę.
+The key observation: the encrypted blob is **self-verifying**.
+The format is `salt ‖ iv ‖ AES-GCM(key, data)`. The GCM tag is checked
+on every decryption attempt — guess the password right and the tag
+verifies; guess wrong and you get an error. This means the ciphertext
+carries an **oracle** inside it: anyone holding it can test any password
+forever, without asking anyone's permission.
 
-To jest fundament całego problemu. Dopóki cały materiał potrzebny
-do deszyfrowania mieści się w jednym pliku, który wydajemy każdemu
-posiadaczowi linku — żadna polityka po stronie serwera niczego
-nie egzekwuje.
+This is the foundation of the entire problem. As long as all the
+material needed for decryption fits in a single file that we hand out
+to every link holder — no server-side policy enforces anything.
 
 ---
 
-## 2. Model zagrożeń: kto ma co
+## 2. Threat model: who holds what
 
-| Aktor | Co posiada | Co może dziś |
+| Actor | Holds | Can do today |
 |---|---|---|
-| Odbiorca (link + hasło) | ciphertext, hasło | deszyfruje — zgodnie z założeniem |
-| Złodziej linku (link, bez hasła) | ciphertext | brute-force offline, bez limitu |
-| Kradzież `buzzdrop.db` + `uploads/` | ciphertext wszystkich plików | brute-force offline, bez limitu |
-| Publiczne/misconfigured S3 | ciphertext | brute-force offline, bez limitu |
-| Administrator serwera | wszystko | wszystko — poza modelem |
-| Odbiorca po deszyfrowaniu | plaintext | nie do cofnięcia — patrz §3 |
+| Recipient (link + password) | ciphertext, password | decrypts — as intended |
+| Link thief (link, no password) | ciphertext | unlimited offline brute force |
+| Theft of `buzzdrop.db` + `uploads/` | ciphertext of all files | unlimited offline brute force |
+| Public/misconfigured S3 | ciphertext | unlimited offline brute force |
+| Server administrator | everything | everything — out of model |
+| Recipient after decryption | plaintext | irreversible — see §3 |
 
-Dziś **jedyną** kontrolą chroniącą ciphertext jest entropia hasła —
-kontrola, którą użytkownik musi sobie zapewnić sam.
-
----
-
-## 3. Granica fizyki: analog hole i co jest nierozwiązywalne
-
-Trzy rzeczy, których **żaden** projekt nie naprawi — warto je wymienić
-wprost, żeby nie gonić za niemożliwym:
-
-**Analog hole.** W chwili deszyfrowania plaintext siedzi w RAM
-przeglądarki odbiorcy. Może go skopiować, zrzutować ekran, przepisać
-na kartkę. Żadna kryptografia nie cofnie informacji, którą ktoś już
-przeczytał. Nawet Signal z disappearing messages nie broni przed
-screenshotem — broni tylko przed trwałą kopią na serwerze. Dla nas to
-zresztą feature: hasło *ma* trafić do odbiorcy. „One-time" chroni
-przed resztą świata, nie przed odbiorcą.
-
-**Administrator serwera.** Ma blob, bazę, kod i RAM. Zawsze wygrywa.
-Każdy model zero-knowledge to de facto „zero-knowledge modulo
-zaufany operator".
-
-**Atak offline na doręczony ciphertext przy słabym haśle.** To jedyny
-wektor, którego nie zamyka żadna kasacja, żaden rate limit — bo atak
-nie przechodzi przez serwer. Jedyną bronią jest entropia hasła
-(„trywialnie łamalne" vs „praktycznie niełamalne") albo odebranie
-atakującemu materiału do łamania — patrz §6.
+Today the **only** control protecting the ciphertext is password
+entropy — a control the user must supply themselves.
 
 ---
 
-## 4. Dlaczego entropia to dziś cała obrona
+## 3. The physics limit: analog hole and what is unsolvable
 
-Skoro blob jest samo-weryfikujący, koszt jego złamania to wyłącznie
-koszt przetrzebienia przestrzeni haseł przez PBKDF2.
+Three things **no** design can fix — worth stating explicitly so we
+don't chase the impossible:
 
-Stan obecny (audyt, ustalenie 1):
+**Analog hole.** At decryption time the plaintext sits in the
+recipient's browser RAM. They can copy it, screenshot it, write it
+down. No cryptography takes back information someone has already read.
+Even Signal with disappearing messages can't stop a screenshot — it
+only protects against a persistent copy on the server. For us this is
+arguably a feature: the password is *meant* to reach the recipient.
+"One-time" protects against the rest of the world, not the recipient.
 
-- CLI generuje domyślną frazę z listy **691 słów × 4 słowa** → ~37,7 bitów
-- PBKDF2-HMAC-SHA256, 100k iteracji → ~40 prób/s/rdzeń CPU;
-  GPU klasy hashcat: 5–20 mln prób/s
-- wynik: **domyślne hasło pada w godziny na jednym GPU**
+**Server administrator.** Has the blob, the database, the code and the
+RAM. Always wins. Every zero-knowledge model is de facto
+"zero-knowledge modulo trusted operator".
 
-Naprawa (issues #129, #130, #135):
-
-- lista EFF (7776 słów) × 6 słów → **~77,5 bitów**
-- PBKDF2 ≥ 600k iteracji → ~6× wyższy koszt pojedynczej próby
-- generator + bramka siły w UI — bo model stoi na entropii, więc
-  entropia musi być **egzekwowana**, nie sugerowana placeholderem
-
-Przy ~77 bitach i 600k iteracji offline brute-force przestaje być
-praktycznym atakiem dla pojedynczego aktora — staje się problemem
-budżetu państwowego. To wystarcza dla większości zastosowań.
-
-Ale: to nadal jest „ufamy entropii", a nie „serwer egzekwuje
-jednorazowość".
+**Offline attack on a delivered ciphertext with a weak password.** The
+only vector that no deletion and no rate limit closes — because the
+attack never goes through the server. The only defense is password
+entropy ("trivially crackable" vs "practically uncrackable") or taking
+the crackable material away from the attacker — see §6.
 
 ---
 
-## 5. Ślepa uliczka: kasowanie pliku i crypto-shredding
+## 4. Why entropy is the whole defense today
 
-Pierwsza naturalna odpowiedź — „usuńmy plik porządnie". Problem:
-`unlink()` nie wymazuje bajtów. Zwalnia bloki; stare dane przeżywają
-w snapshotach, backupach, wersjonowanym S3, na wear-levelowanym SSD.
-„Usunięcie" to best effort, nie gwarancja.
+Since the blob is self-verifying, the cost of breaking it is purely
+the cost of sweeping the password space through PBKDF2.
 
-Istnieje elegancki wzorzec na to — **crypto-shredding**: szyfruj
-blob po raz drugi kluczem per plik (DEK), trzymaj DEK w kontrolowanym
-miejscu (env/KMS/RAM), a kasowanie DEK = matematyczna śmierć
-wszystkich kopii ciphertextu, niezależnie od tego, gdzie bajty
-fizycznie przetrwały.
+Current state (audit, finding 1):
 
-Dlaczego to odrzuciliśmy (decyzja w #138): crypto-shredding broni
-przed **niedoręczonymi** kopiami — backupami i forensyką. Ale te kopie
-i tak stają się martwe, gdy fraza ma 77 bitów. W zamian dostajemy nowy
-tryb awarii: utrata klucza/master secret = śmierć wszystkich dropów.
-Duży koszt złożoności za ochronę wektora już zamkniętego przez
-entropię.
+- CLI generates a default passphrase from a **691-word list × 4 words** → ~37.7 bits
+- PBKDF2-HMAC-SHA256, 100k iterations → ~40 guesses/s/CPU core;
+  hashcat-class GPU: 5–20M guesses/s
+- result: **the default password falls in hours on a single GPU**
 
-I co ważniejsze — **nie rozwiązuje właściwego problemu**: doręczony
-blob wciąż jest samo-weryfikujący. Złodziej linku łamie go offline
-tak samo jak wcześniej.
+Fix (issues #129, #130, #135):
+
+- EFF list (7776 words) × 6 words → **~77.5 bits**
+- PBKDF2 ≥ 600k iterations → ~6× higher cost per guess
+- generator + strength gate in the UI — because the model rests on
+  entropy, entropy must be **enforced**, not suggested by a placeholder
+
+At ~77 bits and 600k iterations, offline brute force stops being a
+practical attack for a single actor — it becomes a state-budget
+problem. That is sufficient for most use cases.
+
+But: this is still "we trust entropy", not "the server enforces
+one-time".
 
 ---
 
-## 6. Design, który rozwiązuje właściwy problem: server-gated key release
+## 5. Dead end: file deletion and crypto-shredding
 
-Jedyny sposób, żeby „jednorazowość" była faktem a nie nadzieją:
-**blob nie może zawierać wszystkiego, co potrzebne do deszyfrowania**.
-Kawałek klucza trzyma serwer i wydaje go raz, pod warunkami,
-które sam egzekwuje.
+The first natural answer — "let's delete the file properly". Problem:
+`unlink()` doesn't erase bytes. It frees blocks; stale data survives
+in snapshots, backups, versioned S3, on wear-leveled SSDs.
+"Deletion" is best effort, not a guarantee.
 
-### 6.1. Pojęcia (czytelnie, bez żargonu)
+There is an elegant pattern for this — **crypto-shredding**: encrypt
+the blob a second time under a per-file key (DEK), keep the DEK in a
+controlled place (env/KMS/RAM), and deleting the DEK = mathematical
+death of every ciphertext copy, regardless of where the bytes
+physically survive.
 
-- **PBKDF2** — funkcja, która zamienia hasło w klucz, celowo wolno
-  (setki tysięcy iteracji), żeby zgadywanie kosztowało. Wyjście:
-  ciąg bajtów będący „materiałem kluczowym".
-- **HKDF** — funkcja, która z materiału kluczowego wyprowadza klucze
-  do konkretnych zastosowań. `HKDF(m, "enc")` i `HKDF(m, "ver")`
-  dają dwa różne klucze z tego samego `m`; znajomość jednego
-  **nie pozwala** wyliczyć drugiego ani `m` (funkcja jednokierunkowa).
-- **AES-GCM** — szyfrowanie z wbudowanym tagiem autentyczności:
-  błędny klucz = natychmiastowa odmowa, nie „mogło się udać".
-- **PAKE** — rodzina protokołów (SRP, OPAQUE), w których strona
-  dowodzi znajomości hasła bez wysyłania go i bez dawania serwerowi
-  czegokolwiek łamalnego offline. „Prawdziwa" wersja naszego V —
-  patrz §7.
+Why we rejected it (decision in #138): crypto-shredding defends
+**undelivered** copies — backups and forensics. But those copies are
+dead anyway once the passphrase has 77 bits. In exchange we get a new
+failure mode: losing the key/master secret = death of all drops.
+A large complexity cost for protection of a vector already closed
+by entropy.
 
-### 6.2. Nowe elementy
+And more importantly — **it doesn't solve the actual problem**: the
+delivered blob remains self-verifying. The link thief cracks it
+offline exactly as before.
+
+---
+
+## 6. The design that solves the actual problem: server-gated key release
+
+The only way to make "one-time" a fact rather than a hope:
+**the blob must not contain everything needed for decryption**.
+A piece of the key is held by the server and released once, under
+conditions the server itself enforces.
+
+### 6.1. Concepts (plainly, no jargon)
+
+- **PBKDF2** — a function that turns a password into a key,
+  deliberately slowly (hundreds of thousands of iterations) so that
+  guessing costs something. Output: a byte string of "key material".
+- **HKDF** — a function that derives purpose-specific keys from key
+  material. `HKDF(m, "enc")` and `HKDF(m, "ver")` produce two
+  different keys from the same `m`; knowing one **does not allow**
+  computing the other or `m` (one-way function).
+- **AES-GCM** — encryption with a built-in authenticity tag:
+  wrong key = immediate rejection, not "maybe it worked".
+- **PAKE** — a family of protocols (SRP, OPAQUE) in which a party
+  proves knowledge of a password without sending it and without
+  giving the server anything offline-crackable. The "proper" version
+  of our V — see §7.
+
+### 6.2. New elements
 
 ```
-master = PBKDF2(hasło, salt, 600k)   # wyliczany TYLKO w przeglądarce
-Kp     = HKDF(master, "enc")         # połowa klientowa — nigdy nie
-                                     # opuszcza przeglądarki
-V      = HKDF(master, "ver")         # weryfikator — trzymany na serwerze
-H      = losowe 32 bajty             # połowa serwerowa — trzymana
-                                     # na serwerze, wydawana RAZ
+master    = PBKDF2(password, salt, 600k)   # computed ONLY in the browser
+Kp        = HKDF(master, "enc")            # client half — never leaves
+                                           # the browser
+V         = HKDF(master, "ver")            # verifier — held by the server
+H         = random 32 bytes                # server half — held by the
+                                           # server, released ONCE
 
-klucz_pliku = HKDF(Kp ‖ H)           # potrzebne OBIE połowy
-blob = AES-GCM(klucz_pliku, plik)
+file_key  = HKDF(Kp ‖ H)                   # requires BOTH halves
+blob      = AES-GCM(file_key, file)
 ```
 
-**Najważniejsze zdanie tego dokumentu: serwer nigdy nie zna klucza
-pliku.** Nie ma go w żadnym momencie — nie przy uploadzie, nie przy
-pobraniu, nie w bazie, nie w logach. Klucz istnieje tylko tam, gdzie
-składane są `Kp` i `H`, a do złożenia potrzeba hasła, którego serwer
-również nie zna.
+**The most important sentence in this document: the server never
+knows the file key.** It doesn't have it at any point — not at upload,
+not at download, not in the database, not in logs. The key exists only
+where `Kp` and `H` are assembled, and assembling them requires the
+password, which the server doesn't know either.
 
-Co wie kto:
+Who knows what:
 
-| Podmiot | Posiada | Nie posiada |
+| Party | Holds | Does not hold |
 |---|---|---|
-| **przeglądarka** | `master`, `Kp`, `V`; `H` na chwilę (upload) lub raz (release) | — |
-| **serwer** | `V`, `H`, `salt`, ciphertext | `master`, `Kp`, **klucza pliku**, hasła |
-| **złodziej storage'u** | ciphertext | wszystkiego, co czyni go wartościowym |
+| **browser** | `master`, `Kp`, `V`; `H` briefly (upload) or once (release) | — |
+| **server** | `V`, `H`, `salt`, ciphertext | `master`, `Kp`, **file key**, password |
+| **storage thief** | ciphertext | everything that makes it valuable |
 
-Dlaczego `V` nie psuje zero-knowledge: `V` i `Kp` pochodzą z tego
-samego `master`, ale przez **różne etykiety HKDF**. Z `V` nie da się
-wyliczyć `Kp` ani `master` — funkcja jest jednokierunkowa. `V` to
-nie „część klucza", tylko odcisk hasła: dokładnie ten sam mechanizm,
-na którym opiera się każdy system logowania — serwer umie sprawdzić,
-czy wpisane hasło jest poprawne, nie znając samego hasła.
+Why `V` doesn't break zero-knowledge: `V` and `Kp` come from the same
+`master` but through **different HKDF labels**. `Kp` or `master`
+cannot be computed from `V` — the function is one-way. `V` is not
+"part of the key", it's a password fingerprint: the exact same
+mechanism every login system uses — a server can verify that the
+entered password is correct without knowing the password itself.
 
-### 6.3. Przepływ uploadu
+### 6.3. Upload flow
 
 ```
-1. POST /upload/begin      → serwer tworzy file_id + H, odsyła oba
-2. klient: master = PBKDF2(hasło, salt)
+1. POST /upload/begin      → server creates file_id + H, returns both
+2. client: master = PBKDF2(password, salt)
            Kp = HKDF(master,"enc"); V = HKDF(master,"ver")
-           klucz = HKDF(Kp ‖ H)
-           blob = AES-GCM(klucz, plik)
+           key  = HKDF(Kp ‖ H)
+           blob = AES-GCM(key, file)
 3. POST /upload/finish     → ciphertext + salt + V
-4. serwer zapisuje: {file_id, H, V, salt, ciphertext, attempts: 0}
+4. server stores: {file_id, H, V, salt, ciphertext, attempts: 0}
 ```
 
-Uwagi:
+Notes:
 
-- **H trafia do przeglądarki nadawcy** — to konieczność, nie błąd:
-  nadawca musi złożyć `Kp ‖ H`, żeby zaszyfrować plik. Jego znajomość
-  H nie jest przeciekiem — nadawca i tak posiada plaintext.
-- Po uploadzie przeglądarka nadawcy **zapomina H**. `H` nie może
-  trafić do share linku ani żadnego storage'u po stronie klienta —
-  inaczej gate przestaje istnieć, bo link znów dawałby komplet.
+- **H reaches the uploader's browser** — a necessity, not a bug:
+  the uploader must assemble `Kp ‖ H` to encrypt the file. Their
+  knowledge of H is not a leak — they hold the plaintext anyway.
+- After upload the uploader's browser **forgets H**. `H` must not
+  end up in the share link or any client-side storage — otherwise
+  the gate ceases to exist, because the link would again be complete.
 
-### 6.4. Przepływ pobrania
+### 6.4. Download flow
 
 ```
-1. GET /download/<id>      → ciphertext + salt   (H NIE jest wydawane)
-2. klient wpisuje hasło → master → V'
-3. POST /release/<id> {V'}   (wariant twardszy: HMAC(V', nonce) z challenge)
-4. serwer, w transakcji:
-     - compare_digest(V', V) — stałoczasowo
-     - MATCH → wydaje H, atomowo pali rekord
-               (UPDATE ... WHERE h_released IS NULL — tylko jeden zwycięzca)
-     - MISS  → attempts++, exponential backoff, limit per file_id;
-               opcjonalnie pali rekord po N pomyłkach
-5. klient: Kp ‖ H → klucz_pliku → deszyfruje lokalnie
+1. GET /download/<id>      → ciphertext + salt   (H is NOT released)
+2. client enters password → master → V'
+3. POST /release/<id> {V'}   (harder variant: HMAC(V', nonce) challenge)
+4. server, in a transaction:
+     - compare_digest(V', V) — constant time
+     - MATCH → releases H, atomically burns the record
+               (UPDATE ... WHERE h_released IS NULL — exactly one winner)
+     - MISS  → attempts++, exponential backoff, per-file_id limit;
+               optionally burns the record after N failures
+5. client: Kp ‖ H → file_key → decrypts locally
 ```
 
-**H opuszcza serwer dokładnie raz, w jednym momencie:** w odpowiedzi
-na zwycięskie `/release`, po udanym sprawdzeniu `V' == V`. Nie ma
-matcha — nie ma H, a skradziony lub legalnie pobrany ciphertext
-pozostaje matematycznie martwy. To jest sedno: część klucza trafia
-do klienta **dopiero po udowodnieniu znajomości hasła**, a samo
-wydanie jest jednorazową, atomową operacją bazodanową.
+**H leaves the server exactly once, at one moment:** in response to
+the winning `/release`, after a successful `V' == V` check. No match —
+no H, and a stolen or legitimately downloaded ciphertext remains
+mathematically dead. This is the essence: a piece of the key reaches
+the client **only after proving knowledge of the password**, and the
+release itself is a one-time atomic database operation.
 
-Po wydaniu H odbiorca posiada kompletny materiał kluczowy i może
-zapisać `ciphertext + Kp + H` i deszyfrować offline ile razy chce.
-Nie da się tego zablokować i nie trzeba — skoro może zapisać
-plaintext, pilnowanie liczby deszyfrowań ciphertextu jest bez
-przedmiotu (analog hole, §3). Jednorazowość dotyczy **dostępu do
-klucza**, nie do używania już odszyfrowanej treści.
+Once H is released the recipient holds complete key material and can
+save `ciphertext + Kp + H` and decrypt offline as many times as they
+like. That cannot and need not be blocked — since they can save the
+plaintext, policing ciphertext re-decryptions is moot (analog hole,
+§3). One-time semantics apply to **access to the key**, not to using
+already-decrypted content.
 
-### 6.5. Dlaczego serwer nadal nie umie deszyfrować
+### 6.5. Why the server still can't decrypt
 
-Tu często mieszają się dwa różne pytania — warto je rozdzielić:
+Two different questions often get conflated here — worth separating:
 
-**„Czy serwer umie sprawdzić hasło?" — TAK.** I tylko tyle potrzebuje.
-`V` działa jak hash w formularzu logowania: klient wylicza `V'` z
-wpisanego hasła, serwer porównuje ze zapisanym `V` (stałoczasowo,
-`compare_digest`). Match = „wpisano poprawne hasło" = wydaj H.
-Serwer nigdy nie widzi hasła ani klucza — widzi tylko odcisk.
+**"Can the server verify the password?" — YES.** And that's all it
+needs. `V` works like a login-form hash: the client computes `V'` from
+the entered password, the server compares it with the stored `V`
+(constant-time, `compare_digest`). Match = "correct password entered"
+= release H. The server never sees the password or the key — it only
+sees a fingerprint.
 
-**„Czy serwer umie odszyfrować plik?" — NIE.** Klucz pliku to
-`HKDF(Kp ‖ H)`. Serwer ma `H`, `V` i ciphertext, ale `Kp` wylicza
-się wyłącznie z hasła — a hasła serwer nie zna. Z `V` nie da się
-wycofać do `Kp` (inna domena HKDF, funkcja jednokierunkowa). Żeby
-deszyfrować, serwer musiałby złamać hasło brute-forcem — dokładnie
-tyle samo pracy, co atakujący dziś.
+**"Can the server decrypt the file?" — NO.** The file key is
+`HKDF(Kp ‖ H)`. The server has `H`, `V` and the ciphertext, but `Kp`
+is computed solely from the password — which the server doesn't know.
+`V` cannot be walked back to `Kp` (different HKDF domain, one-way
+function). To decrypt, the server would have to brute-force the
+password — exactly as much work as an attacker does today.
 
-Czyli ochroniarz sprawdza hasło po odcisku (V) i wydaje swój klucz
-(H) — ale sejf wymaga dwóch kluczy naraz, a drugi (Kp) składa się
-tylko w ręku tego, kto zna hasło. Serwer kontroluje **dostęp** do
-klucza, nie znając samego klucza. To jest cała wartość dodana
-designu wobec wariantu „serwer deszyfruje" (§8): gate bez
-rezygnacji z zero-knowledge.
+So the guard verifies the password by fingerprint (V) and hands out
+its key (H) — but the safe needs both keys at once, and the second
+(Kp) only assembles in the hand of whoever knows the password. The
+server controls **access** to the key without knowing the key itself.
+That is the entire added value of this design over the "server
+decrypts" variant (§8): a gate without giving up zero-knowledge.
 
-Zero-knowledge zachowane modulo standardowe zastrzeżenie:
-„zaufany operator" — admin może logować `V'`/`H` przy `/release`
-albo podmienić kod. Nie istnieje design, który to naprawia.
+Zero-knowledge preserved modulo the standard caveat:
+"trusted operator" — an admin can log `V'`/`H` at `/release` or
+swap the code. No design fixes that.
 
-### 6.6. Co to zmienia — ten sam model zagrożeń po wdrożeniu
+### 6.6. What this changes — the same threat model after implementation
 
-| Aktor | Dziś | Z oracle |
+| Actor | Today | With oracle |
 |---|---|---|
-| Złodziej linku bez hasła | blob → brute-force offline | **martwy blob** — brak H; zgadywanie tylko przez `/release` z rate limitem |
-| Kradzież `uploads/` / publiczne S3 | ciphertext → offline | **martwe bajty** — brak H i hasła |
-| Kradzież `db` + `uploads` | brute-force ciphertext | brute-force V (600k) → odzyskuje hasło → **nie gorzej niż dziś** |
-| Wyścig odbiorca vs złodziej | obaj dostają blob; wyścig o łamanie | atomowy claim — dokładnie jeden dostaje H; przegrany widzi „claimed" |
-| „Jedna próba" | uczciwość view.js | **polityka serwera**: X prób, backoff, burn — egzekwowana realnie |
-| Odbiorca po deszyfrowaniu | plaintext | plaintext — analog hole, poza modelem |
+| Link thief without password | blob → offline brute force | **dead blob** — no H; guessing only via `/release` under rate limit |
+| Theft of `uploads/` / public S3 | ciphertext → offline | **dead bytes** — no H and no password |
+| Theft of `db` + `uploads` | brute-force ciphertext | brute-force V (600k) → recovers password → **no worse than today** |
+| Race: recipient vs thief | both get the blob; race is at cracking | atomic claim — exactly one gets H; loser sees "claimed" |
+| "One attempt" | honesty of view.js | **server policy**: X attempts, backoff, burn — actually enforced |
+| Recipient after decryption | plaintext | plaintext — analog hole, out of model |
 
-Dwie dodatkowe własności warte podkreślenia:
+Two additional properties worth stressing:
 
-- **Blob przestaje być samo-weryfikujący.** Błędne hasło daje błędne
-  `Kp`, ale bez `H` atakujący nie potrafi nawet sprawdzić, czy zgadł —
-  wyrocznia została przeniesiona na serwer, gdzie każde pytanie
-  kosztuje i jest liczone.
-- **„Pomyłka = utrata pliku" znika.** Skoro próby liczy serwer, można
-  dać 3–5 prób zamiast natychmiastowej śmierci — zamyka to skargę
-  audytora na nieodwracalność literówki. Dziś kasowanie po pierwszym
-  pobraniu nie chroniło niczego (blob już u atakującego); palenie H
-  przy lockoucie naprawdę odbiera atakującemu kawałek układanki.
+- **The blob stops being self-verifying.** A wrong password yields a
+  wrong `Kp`, but without `H` the attacker can't even check whether
+  they guessed — the oracle moved to the server, where every question
+  costs and is counted.
+- **"Typo = file lost" disappears.** Since the server counts attempts,
+  we can allow 3–5 tries instead of instant death — closing the
+  auditor's complaint about typo irreversibility. Today deletion after
+  first download protected nothing (the attacker already had the
+  blob); burning H on lockout actually takes a puzzle piece away
+  from the attacker.
 
-### 6.7. Uczciwe koszty i kompromisy
+### 6.7. Honest costs and trade-offs
 
-- **Nowy protokół**: handshake przy uploadzie (H musi istnieć przed
-  szyfrowaniem), endpoint `/release`, wersjonowany format payloadu
-  (`BKP-FILE` v2), parzystość w CLI.
-- **V jest łamalny offline** po kradzieży `db` — wymaga mocnego KDF
-  (już jest: 600k) i nie pogarsza stanu względem dziś.
-- **Wektor DoS**: złodziej linku może marnować próby. Polityka
-  „burn po N fails" chroni sekret kosztem dostępności; „lock bez
-  burn" odwrotnie. Do wyboru per deployment — dla narzędzia do
-  sekretów utrata dostępności jest zwykle tańsza niż wyciek.
-- **Rate limit musi być per file_id**, nie tylko per IP — rotacja
-  adresów jest trywialna.
-- **Resztkowa luka**: `db` + `uploads` skradzione razem = powrót
-  do dziś (brute-force V). Domknięcie wymagałoby trzymania H poza
-  bazą (KMS) — wtedy kradzież bazy nie daje H, a kradzież samego
-  KMS to już inna liga ataku.
-- **Admin wygrywa zawsze** — może logować V'/H przy `/release` albo
-  podmienić kod. Nie naprawi tego żaden design.
-
----
-
-## 7. Wariant „po studiach": PAKE
-
-Słabym punktem §6 jest `V` — weryfikator, który po kradzieży bazy
-można łamać offline jak hash hasła. PAKE (SRP-6a, OPAQUE, SPAKE2)
-rozwiązuje dokładnie to: serwer przechowuje rejestrację, z której
-**nie da się** zgadywać offline, a klient dowodzi znajomości hasła
-wymieniając komunikaty, których podsłuch też niczego nie daje
-(nawet atakujący rejestrujący cały ruch).
-
-W naszym kontekście PAKE domknąłby ostatni wiersz tabeli z §6.6 —
-kradzież `db`+`uploads` przestawałaby dawać materiał do offline-ataku.
-Koszt: implementacja protokołu w JS + serwerze (OPAQUE ma biblioteki,
-ale to nadal poważny kawał pracy i powierzchnia do pomyłki
-kryptograficznej). Rekomendacja: design z §6 najpierw — PAKE jako
-ewolucja, jeśli produkt urośnie.
+- **New protocol**: upload handshake (H must exist before encryption),
+  `/release` endpoint, versioned payload format (`BKP-FILE` v2),
+  CLI parity.
+- **V is offline-crackable** after `db` theft — requires a strong KDF
+  (already: 600k) and is no worse than today.
+- **DoS vector**: a link thief can burn attempts. A "burn after N
+  fails" policy protects the secret at the cost of availability;
+  "lock without burn" does the reverse. Per-deployment choice —
+  for a secrets tool, lost availability is usually cheaper than
+  a leak.
+- **Rate limit must be per file_id**, not only per IP — rotating
+  addresses is trivial.
+- **Residual gap**: `db` + `uploads` stolen together = back to today
+  (brute-force V). Closing it would require holding H outside the
+  database (KMS) — then DB theft doesn't yield H, and stealing the
+  KMS itself is a different league of attack.
+- **Admin always wins** — can log `V'`/`H` at `/release` or swap
+  the code. No design fixes that.
 
 ---
 
-## 8. Alternatywa odrzucona: deszyfrowanie po stronie serwera
+## 7. The "graduate-level" variant: PAKE
 
-Najprostszy sposób na realny gate — niech serwer deszyfruje i serwuje
-plaintext po sprawdzeniu hasła. Odrzucone: serwer widzi wtedy wszystkie
-sekrety w plaintextcie, zero-knowledge umiera całkowicie, a kompromitacja
-serwera = katastrofa natychmiastowa dla wszystkich żywych dropów.
-Design z §6 trzyma serwer poza plaintextem — to jest cała wartość
-dodanej złożoności.
+The weak point of §6 is `V` — a verifier that, once the database is
+stolen, can be cracked offline like a password hash. PAKE (SRP-6a,
+OPAQUE, SPAKE2) solves exactly this: the server stores a registration
+from which **nothing can be guessed offline**, and the client proves
+knowledge of the password by exchanging messages that yield nothing
+to an eavesdropper either (even one recording all traffic).
+
+In our context PAKE would close the last row of the §6.6 table —
+`db`+`uploads` theft would stop yielding material for an offline
+attack. Cost: implementing the protocol in JS + server (OPAQUE has
+libraries, but it's still a serious chunk of work and a surface for
+crypto mistakes). Recommendation: the §6 design first — PAKE as an
+evolution if the product grows.
 
 ---
 
-## 9. Podsumowanie: co jest czym
+## 8. Rejected alternative: server-side decryption
 
-| Kontrola | Chroni przed | Nie chroni przed |
+The simplest way to a real gate — let the server decrypt and serve
+plaintext after verifying the password. Rejected: the server would
+then see every secret in plaintext, zero-knowledge dies completely,
+and a server compromise = instant catastrophe for all live drops.
+The §6 design keeps the server away from plaintext — that is the
+whole value of the added complexity.
+
+---
+
+## 9. Summary: what is what
+
+| Control | Protects against | Does not protect against |
 |---|---|---|
-| Entropia frazy (600k PBKDF2, 77+ bitów) | offline brute-force na każdym ciphertextcie | niczym innym — to jest jedyna uniwersalna bariera |
-| Jednorazowe kasowanie + atomowy claim | wyścigiem, powtórnym pobraniem | offline-łamaniem bloba |
-| Crypto-shredding (DEK) | forensyką dysku, backupami, S3 versioning | złodziejem z ciphertextem — odrzucone jako zbędne po fix entropii |
-| **Oracle (server-held H + V)** | offline-łamaniem bloba w ogóle; zamienia „one attempt" w politykę serwera | kradzieżą db+uploads (V łamalne), adminem, analog hole |
-| PAKE zamiast V | nawet kradzieżą db+uploads | adminem, analog hole — za drogo na dziś |
+| Passphrase entropy (600k PBKDF2, 77+ bits) | offline brute force on any ciphertext | anything else — it is the only universal barrier |
+| One-time deletion + atomic claim | races, re-download | offline cracking of the blob |
+| Crypto-shredding (DEK) | disk forensics, backups, S3 versioning | a thief with the ciphertext — rejected as redundant after the entropy fix |
+| **Oracle (server-held H + V)** | offline cracking of the blob at all; turns "one attempt" into server policy | db+uploads theft (V crackable), admin, analog hole |
+| PAKE instead of V | even db+uploads theft | admin, analog hole — too expensive today |
 
-**Zdanie dla audytora:** w modelu z oracle pobrany blob bez
-współpracy serwera jest matematycznie martwymi bajtami — zgadywanie
-hasła wymaga pytań do `/release`, gdzie obowiązuje rate limit,
-lockout i opcjonalne spalenie klucza. Jednorazowość przestaje być
-deklaracją JavaScriptu, a staje się transakcją bazodanową.
+**Sentence for the auditor:** in the oracle model a downloaded blob
+without server cooperation is mathematically dead bytes — password
+guessing requires asking `/release`, where a rate limit, lockout and
+optional key-burn apply. One-time semantics stop being a JavaScript
+declaration and become a database transaction.
 
-**Zdanie uczciwe dla klienta:** nic nie cofnie informacji raz
-odszyfrowanej i nic nie zatrzyma admina, który jest złośliwy.
-Wszystko powyżej dotyczy wyłącznie ochrony ciphertextu **przed**
-legalnym deszyfrowaniem.
+**Honest sentence for the client:** nothing takes back information
+once decrypted, and nothing stops a malicious admin. Everything above
+concerns exclusively protecting the ciphertext **before** legitimate
+decryption.
 
 ---
 
 ## 10. Status
 
-- Design z §6 zarejestrowany jako opcja B w issue #138 (zamknięte
-  jako `not planned` w cyklu audytowym — decyzja: najpierw naprawić
-  entropię i atomowość, które zamykają 95% ryzyka za 20% nakładu).
-- Wymaga jako fundamentu: #129, #130, #133, #135.
-- Jeśli wróci popyt (np. wymóg klienta „provable one-time"),
-  ten dokument jest specyfikacją implementacyjną.
+- The §6 design is registered as option B in issue #138 (closed as
+  `not planned` in the audit cycle — decision: fix entropy and
+  atomicity first, which close 95% of the risk for 20% of the effort).
+- Requires as foundation: #129, #130, #133, #135.
+- If demand returns (e.g. a client requirement for "provable
+  one-time"), this document is the implementation spec.
