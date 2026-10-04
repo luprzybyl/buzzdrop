@@ -145,7 +145,9 @@ def test_confirm_view_text_note(client, app, files_store, csrf_form_data):
     response = client.post(url_for('confirm_view_file', file_id=note_id), data=csrf_form_data())
     assert response.status_code == 200
     assert b'Decrypt and view' in response.data
-    assert b'window.fileType = "text"' in response.data
+    # File type travels via the view-config-json data island (CSP-safe),
+    # not an inline window.* script.
+    assert b'"fileType": "text"' in response.data
     assert b'text-display' in response.data  # Text display div should be present
 
 def test_text_note_type_field_in_database(client, app, files_store):

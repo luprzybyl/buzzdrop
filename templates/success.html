@@ -38,7 +38,7 @@
                         <label for="share-link" class="field-label">Link</label>
                         <div class="copy-field">
                             <input type="text" value="{{ share_link }}" readonly class="field-input flex-1 border-transparent bg-transparent shadow-none" id="share-link">
-                            <button onclick="copyLink()" class="btn-primary shrink-0 px-4 py-2.5"><span class="sr-only">Link: </span><span class="copy-label">Copy</span></button>
+                            <button id="copy-link-btn" class="btn-primary shrink-0 px-4 py-2.5"><span class="sr-only">Link: </span><span class="copy-label">Copy</span></button>
                         </div>
                     </div>
 
@@ -46,7 +46,7 @@
                         <label for="password-display" class="field-label">Password</label>
                         <div class="copy-field">
                             <input type="password" id="password-display" readonly class="field-input flex-1 border-transparent bg-transparent font-mono shadow-none">
-                            <button id="toggle-password" onclick="togglePasswordVisibility()" class="btn-secondary shrink-0 px-4 py-2.5">Show</button>
+                            <button id="toggle-password" class="btn-secondary shrink-0 px-4 py-2.5">Show</button>
                         </div>
                     </div>
                 </div>
@@ -60,7 +60,7 @@
                 </p>
                 <div class="copy-field mt-4">
                     <input type="text" id="share-link-with-password" readonly aria-label="One-click link with password" class="field-input flex-1 border-transparent bg-transparent shadow-none" value="">
-                    <button onclick="copyLinkWithPassword()" class="btn-secondary shrink-0 px-4 py-2.5"><span class="sr-only">One-click link: </span><span class="copy-label">Copy</span></button>
+                    <button id="copy-one-click-btn" class="btn-secondary shrink-0 px-4 py-2.5"><span class="sr-only">One-click link: </span><span class="copy-label">Copy</span></button>
                 </div>
             </section>
         </div>

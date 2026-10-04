@@ -743,6 +743,59 @@ def no_store_key_release_responses(response):
     return response
 
 
+# Baseline CSP: same-origin everything, no inline script. All markup ships
+# scripts as static files under SRI (see sri_hash_processor); the only
+# non-static <script> blocks are type="application/json" data islands,
+# which CSP does not treat as script. Inline *styles* are still used on a
+# few elements, so style-src keeps 'unsafe-inline'.
+CONTENT_SECURITY_POLICY = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+
+PERMISSIONS_POLICY = ", ".join([
+    "accelerometer=()",
+    "camera=()",
+    "geolocation=()",
+    "gyroscope=()",
+    "magnetometer=()",
+    "microphone=()",
+    "payment=()",
+    "usb=()",
+    "interest-cohort=()",
+])
+
+
+@app.after_request
+def set_security_headers(response):
+    """
+    Emit baseline security headers on every response.
+
+    - CSP + X-Frame-Options kill framing (/login credential phishing,
+      /view/<id> one-click-confirm clickjacking).
+    - Referrer-Policy keeps share links out of Referer headers.
+    - HSTS is sent unconditionally: browsers ignore it over plain HTTP,
+      and the app has no ProxyFix, so request.is_secure is unreliable
+      behind TLS-terminating proxies (Passenger/nginx).
+    """
+    response.headers['Content-Security-Policy'] = CONTENT_SECURITY_POLICY
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    response.headers['Strict-Transport-Security'] = (
+        'max-age=31536000; includeSubDomains')
+    response.headers['Permissions-Policy'] = PERMISSIONS_POLICY
+    return response
+
+
 def _is_valid_key_material(value) -> bool:
     """Key material (H, V, receipt hash) travels as 64 lowercase hex chars (32 bytes)."""
     return (

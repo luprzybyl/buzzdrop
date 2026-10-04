@@ -11,9 +11,19 @@ import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
 
 const cryptoService = new CryptoService();
 
+// Per-share config injected as a type="application/json" data island —
+// CSP does not treat it as script, so script-src can stay 'self'.
+const {
+    downloadUrl,
+    releaseUrl,
+    reportDecryptionUrl,
+    originalName,
+    fileType,
+} = JSON.parse(document.getElementById('view-config-json').textContent);
+
 (async () => {
     // Download the encrypted file as a single Uint8Array
-    const res = await fetch(window.downloadUrl);
+    const res = await fetch(downloadUrl);
     const encryptedData = new Uint8Array(await res.arrayBuffer());
     const decryptBtn = document.getElementById('decrypt-btn');
     const passInput = document.getElementById('password-input');
@@ -55,7 +65,7 @@ const cryptoService = new CryptoService();
     }
 
     function reportDecryption(success, receiptHex) {
-        fetch(window.reportDecryptionUrl, {
+        fetch(reportDecryptionUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             // The receipt lives inside the ciphertext — only a successful
@@ -66,7 +76,7 @@ const cryptoService = new CryptoService();
 
     function showPlaintext(fileBytes) {
         // Check if this is a text note or file
-        if (window.fileType === 'text') {
+        if (fileType === 'text') {
             // Display text in the page
             const text = new TextDecoder().decode(fileBytes);
             document.getElementById('text-content').textContent = text;
@@ -91,7 +101,7 @@ const cryptoService = new CryptoService();
             const blob = new Blob([fileBytes], { type: 'application/octet-stream' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = window.originalName;
+            a.download = originalName;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -109,7 +119,7 @@ const cryptoService = new CryptoService();
 
         let res;
         try {
-            res = await fetch(window.releaseUrl, {
+            res = await fetch(releaseUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -48,12 +48,12 @@
         Decryption happens entirely in your browser. The password is never sent to the server.
     </p>
 </div>
-<script>
-window.downloadUrl = "{{ url_for('download_file', file_id=file_id) }}";
-window.releaseUrl = "{{ url_for('release_key', file_id=file_id) }}";
-window.reportDecryptionUrl = "{{ url_for('report_decryption', file_id=file_id) }}";
-window.originalName = "{{ original_name }}";
-window.fileType = "{{ file_type }}";
-</script>
+<script id="view-config-json" type="application/json">{{ {
+    'downloadUrl': url_for('download_file', file_id=file_id),
+    'releaseUrl': url_for('release_key', file_id=file_id),
+    'reportDecryptionUrl': url_for('report_decryption', file_id=file_id),
+    'originalName': original_name,
+    'fileType': file_type,
+} | tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/view.js') }}" integrity="{{ sri_hash('js/view.js') }}" crossorigin="anonymous"></script>
 {% endblock %}

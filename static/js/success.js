@@ -68,6 +68,11 @@ function togglePasswordVisibility() {
     }
 }
 
+// Buttons wire up here, not via inline onclick — CSP forbids inline handlers.
+document.getElementById('copy-link-btn').addEventListener('click', copyLink);
+document.getElementById('copy-one-click-btn').addEventListener('click', copyLinkWithPassword);
+document.getElementById('toggle-password').addEventListener('click', togglePasswordVisibility);
+
 // On page load, auto-fill the password from the URL fragment (the upload
 // flow navigates here with it). Read it once, then scrub it from the
 // address bar and history entry — nothing is persisted.
