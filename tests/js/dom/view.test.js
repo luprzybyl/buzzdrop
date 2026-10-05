@@ -16,7 +16,7 @@ const RECEIPT_HEX = '07'.repeat(32);
 
 /**
  * @typedef {object} StartOptions
- * @property {string} [fixture] - 'view--text' or 'view--file'
+ * @property {'view--text' | 'view--file'} [fixture]
  * @property {string} [url] - the page's address, fragment included
  * @property {ReleaseAnswer} [release]
  * @property {boolean} [unsupported] - the downloaded blob isn't a BKV3 share

@@ -100,10 +100,7 @@ export async function initView(root, deps) {
         if (fragmentPassword) {
             passInput.value = fragmentPassword;
             // Show status message
-            const statusMsg = root.getElementById('password-status');
-            if (statusMsg) {
-                statusMsg.style.display = 'flex';
-            }
+            required(root, '#password-status', 'p').style.display = 'flex';
             // Focus the decrypt button so user can easily press Enter to proceed
             decryptBtn.focus();
         }
