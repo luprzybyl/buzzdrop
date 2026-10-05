@@ -11,6 +11,7 @@ and type="application/json" data islands).
 import base64
 import hashlib
 import re
+from html.parser import HTMLParser
 from io import BytesIO
 
 
@@ -37,20 +38,46 @@ def _upload_file(client, key_release_upload):
     return file_id
 
 
+class _ScriptCollector(HTMLParser):
+    """Collects every <script> element as (attrs, content), like a browser."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.scripts = []
+        self._current = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == 'script':
+            self._current = (dict(attrs), [])
+
+    def handle_data(self, data):
+        if self._current is not None:
+            self._current[1].append(data)
+
+    def handle_endtag(self, tag):
+        if tag == 'script' and self._current is not None:
+            attrs, chunks = self._current
+            self.scripts.append((attrs, ''.join(chunks)))
+            self._current = None
+
+
 def _assert_no_inline_script(response):
     """
-    Every <script> tag must either load an external file (src=...), be a
-    non-executable data island (type="application/json"), or be an inline
+    Every <script> element must either load an external file (src=...), be
+    a non-executable data island (type="application/json"), or be an inline
     block whose SHA-256 the response's CSP allows (base.html's import map).
     Anything else is inline JS, which CSP script-src 'self' forbids.
     """
-    html = response.data.decode('utf-8')
+    collector = _ScriptCollector()
+    collector.feed(response.data.decode('utf-8'))
+    collector.close()
     csp = response.headers['Content-Security-Policy']
-    for tag, content in re.findall(r'(<script[^>]*>)(.*?)</script>', html, re.DOTALL):
-        if 'src=' in tag or 'type="application/json"' in tag:
+    assert collector.scripts, "no <script> elements found"
+    for attrs, content in collector.scripts:
+        if 'src' in attrs or attrs.get('type') == 'application/json':
             continue
         digest = base64.b64encode(hashlib.sha256(content.encode('utf-8')).digest()).decode()
-        assert f"'sha256-{digest}'" in csp, f"inline <script> blocked by CSP: {tag}"
+        assert f"'sha256-{digest}'" in csp, f"inline <script> blocked by CSP: {attrs}"
 
 
 def _assert_no_inline_handlers(html):
