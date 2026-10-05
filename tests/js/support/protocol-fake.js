@@ -3,6 +3,17 @@
 // enforces what the server enforces and answers the way it answers. Held to
 // app.py by tests/js/integration/protocol-contract.test.js, which replays the
 // contract recorded from the real server against handle().
+//
+// Deliberately stricter than app.py where the page never takes the other path,
+// so a page change that would take it fails loudly instead of passing:
+// - CSRF is accepted only as the X-CSRF-Token header, not as a csrf_token form
+//   or JSON field, and an Authorization header does not exempt a request (the
+//   security invariants assert the page sends that header).
+// - /upload without X-Requested-With or a multipart body throws; app.py would
+//   answer with an HTML redirect the page's XHR code can't parse.
+// - A request to a route the fake doesn't serve throws.
+// And one check is left out: /upload takes any file extension. The page refuses
+// a disallowed one before sending anything, which the DOM tests cover.
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

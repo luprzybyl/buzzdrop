@@ -235,3 +235,69 @@ describe('XMLHttpRequest adapter', () => {
         expect(progress).toEqual([]);
     });
 });
+
+// Write-once state behind identical responses: the contract records the same
+// 200 / 429 either way, so these check the fake's state directly.
+describe('decryption result', () => {
+    const RECEIPT = '33'.repeat(32);
+    const V = '11'.repeat(32);
+
+    /**
+     * Upload a share through handle() and return its file_id.
+     * @param {ReturnType<typeof makeProtocolFake>} fake
+     */
+    async function uploadShare(fake) {
+        const headers = { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': contract.csrfToken };
+        const begin = await fake.handle({ method: 'POST', url: '/upload/begin', headers });
+        const fileId = JSON.parse(String(begin.body)).file_id;
+        const digest = await crypto.subtle.digest('SHA-256', Buffer.from(RECEIPT, 'hex'));
+        const form = new FormData();
+        form.append('file_id', fileId);
+        form.append('key_verifier', V);
+        form.append('receipt_hash', Buffer.from(digest).toString('hex'));
+        form.append('file', new File(['ciphertext'], 'report.pdf'));
+        const upload = await fake.handle({ method: 'POST', url: '/upload', headers, body: form });
+        expect(upload.status).toBe(200);
+        return fileId;
+    }
+
+    /**
+     * @param {ReturnType<typeof makeProtocolFake>} fake
+     * @param {string} fileId
+     * @param {boolean} success
+     */
+    function report(fake, fileId, success) {
+        return fake.handle({
+            method: 'POST',
+            url: `/report_decryption/${fileId}`,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ success, receipt: RECEIPT }),
+        });
+    }
+
+    it('keeps the first valid report', async () => {
+        const fake = makeProtocolFake();
+        const fileId = await uploadShare(fake);
+
+        expect((await report(fake, fileId, true)).status).toBe(200);
+        expect((await report(fake, fileId, false)).status).toBe(200);
+        expect(fake.state.files.get(fileId)?.decryptionSuccess).toBe(true);
+    });
+
+    it('records a lockout as a failure that a later report does not overwrite', async () => {
+        const fake = makeProtocolFake({ maxAttempts: 1 });
+        const fileId = await uploadShare(fake);
+
+        const locked = await fake.handle({
+            method: 'POST',
+            url: `/release/${fileId}`,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ v: '22'.repeat(32) }),
+        });
+        expect(locked.status).toBe(429);
+        expect(fake.state.files.get(fileId)?.decryptionSuccess).toBe(false);
+
+        expect((await report(fake, fileId, true)).status).toBe(200);
+        expect(fake.state.files.get(fileId)?.decryptionSuccess).toBe(false);
+    });
+});
