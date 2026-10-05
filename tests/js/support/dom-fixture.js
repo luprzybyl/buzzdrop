@@ -9,9 +9,10 @@ const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixture
 // Loads a rendered template fixture (tests/js/fixtures/html/<name>.html) into a
 // fresh happy-dom window, so listeners and state from one test can't leak into
 // the next. `settings` are happy-dom browser settings, e.g.
-// { device: { prefersReducedMotion: 'reduce' } }.
-export function loadFixture(name, settings = {}) {
-    const window = new Window({ url: 'http://localhost/', settings });
+// { device: { prefersReducedMotion: 'reduce' } }; `url` is the page's address,
+// for pages that read it (a password fragment, say).
+export function loadFixture(name, settings = {}, url = 'http://localhost/') {
+    const window = new Window({ url, settings });
     window.document.write(readFileSync(join(FIXTURE_DIR, `${name}.html`), 'utf8'));
     return window;
 }
