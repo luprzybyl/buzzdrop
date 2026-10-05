@@ -63,3 +63,11 @@ jobs:
         run: docker run --rm -v ${{ github.workspace }}/uploads:/app/uploads buzzdrop-test pytest
       - name: Smoke-test db.json migration
         run: docker run --rm buzzdrop-test sh -c "echo '{\"files\":{\"1\":{\"id\":\"smoke-1\",\"original_name\":\"a.txt\",\"path\":\"uploads/smoke-1\"}},\"api_tokens\":{}}' > /tmp/db.json && python migrate_db.py --source /tmp/db.json --target /tmp/migrated.db"
+      # Fixtures are rendered from the checked-out code (the same commit
+      # as the image) and must match what is committed.
+      - name: Check DOM fixtures are up to date
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app buzzdrop-test python tests/fixtures/render_dom_fixtures.py
+          git status --porcelain tests/js/fixtures/
+          git diff --exit-code tests/js/fixtures/
+          test -z "$(git status --porcelain tests/js/fixtures/)" || { echo '::error::DOM fixtures are stale; run npm run fixtures and commit the result'; exit 1; }

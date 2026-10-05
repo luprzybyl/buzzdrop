@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="fixture-csrf-token">
+    <meta name="theme-color" content="#07080B">
+    <meta name="description" content="BuzzDrop: secure, one-time file sharing. Upload encrypted files or secret notes, send a link, and let them vanish as soon as the recipient downloads them.">
+    <title>BuzzDrop: Secure, One-Time File Sharing</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/css/app.css?v=sha384-FIXTURE">
+</head>
+<body class="min-h-full">
+    <!-- Ambient layers: warm light pooling at the top, drifting honeycomb lattice. -->
+    <div class="glow-field" aria-hidden="true"></div>
+    <div class="hex-veil" aria-hidden="true"></div>
+
+    <div class="relative z-10 flex min-h-screen flex-col">
+        <div class="topline" aria-hidden="true"></div>
+
+        <nav class="nav-shell">
+            <div class="container-shell">
+                <div class="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex flex-wrap items-center gap-3 sm:gap-5">
+                        <a href="/" class="group flex items-center gap-3">
+                            <span class="relative">
+                                <span class="absolute inset-0 animate-halo-pulse rounded-full bg-honey-400/30 blur-lg" aria-hidden="true"></span>
+                                <svg viewBox="0 0 40 40" class="relative h-10 w-10 transition-transform duration-500 group-hover:-rotate-6" role="img" aria-label="BuzzDrop">
+                                    <defs>
+                                        <linearGradient id="bd-honey" x1="0" y1="0" x2="1" y2="1">
+                                            <stop offset="0%" stop-color="#FFE49B"/>
+                                            <stop offset="55%" stop-color="#FFB627"/>
+                                            <stop offset="100%" stop-color="#D97706"/>
+                                        </linearGradient>
+                                        <clipPath id="bd-drop">
+                                            <path d="M20 9s8 8.6 8 13.4a8 8 0 0 1-16 0C12 17.6 20 9 20 9Z"/>
+                                        </clipPath>
+                                    </defs>
+                                    <path d="M20 1.5 35.5 10.4v19.2L20 38.5 4.5 29.6V10.4z" fill="url(#bd-honey)" opacity=".15"/>
+                                    <path d="M20 1.5 35.5 10.4v19.2L20 38.5 4.5 29.6V10.4z" fill="none" stroke="url(#bd-honey)" stroke-width="1.5"/>
+                                    <path d="M20 9s8 8.6 8 13.4a8 8 0 0 1-16 0C12 17.6 20 9 20 9Z" fill="url(#bd-honey)"/>
+                                    <g clip-path="url(#bd-drop)" fill="#0B0D12" opacity=".85">
+                                        <rect x="10" y="19.4" width="20" height="2.3" rx="1.15"/>
+                                        <rect x="10" y="24.2" width="20" height="2.3" rx="1.15"/>
+                                    </g>
+                                </svg>
+                            </span>
+                            <span>
+                                <span class="block text-lg font-semibold tracking-tight text-white">Buzz<span class="honey-text">drop</span></span>
+                                <span class="block text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-500">One-time buzz</span>
+                            </span>
+                        </a>
+                        
+                        
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        
+                            <span class="status-badge status-badge-amber">
+                                <span class="h-1.5 w-1.5 rounded-full bg-honey-400" aria-hidden="true"></span>
+                                testuser
+                            </span>
+                            <form method="post" action="/logout" class="inline">
+                                <input type="hidden" name="csrf_token" value="fixture-csrf-token">
+                                <button type="submit" class="btn-danger">Logout</button>
+                            </form>
+                        
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="container-shell flex-1 py-10 sm:py-14">
+            
+            
+                
+                    <div class="mb-8 space-y-3">
+                    
+                        
+                        <div class="alert-banner animate-fade-up alert-banner-success" role="status">
+                            
+                            <svg class="mt-0.5 h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.707-9.293a1 1 0 0 0-1.414-1.414L9 10.586 7.707 9.293a1 1 0 0 0-1.414 1.414l2 2a1 1 0 0 0 1.414 0l4-4Z" clip-rule="evenodd"/>
+                            </svg>
+                            
+                            <span>Logged in successfully</span>
+                        </div>
+                    
+                    </div>
+                
+            
+
+            
+<div class="mx-auto max-w-2xl">
+    <div class="surface-card animate-zoom-in p-8 sm:p-10">
+        <div class="text-center">
+            <span class="relative mx-auto mb-6 block h-16 w-16">
+                <span class="absolute inset-0 animate-halo-pulse rounded-full bg-emerald-400/20 blur-xl" aria-hidden="true"></span>
+                <svg viewBox="0 0 64 64" class="relative h-16 w-16 text-emerald-300" fill="none" aria-hidden="true">
+                    <path d="M32 4 54 16.7v25.6L32 55 10 42.3V16.7z" stroke="currentColor" stroke-width="1.5" opacity=".4"/>
+                    <path d="M32 11 48 20.2v18.6L32 48l-16-9.2V20.2z" fill="currentColor" opacity=".08"/>
+                    <path class="animate-draw-in" d="m23 32 6.5 6.5L42 26" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="48"/>
+                </svg>
+            </span>
+
+            <span class="eyebrow">Drop secured</span>
+            <h1 class="mt-5 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                File is in the hive
+            </h1>
+            <p class="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-400">
+                Share the link below. The file is destroyed as soon as the recipient continues, before any password is checked.
+            </p>
+        </div>
+
+        <div class="mt-8 space-y-4">
+            
+            <section class="relative overflow-hidden rounded-2xl border border-honey-400/25 bg-gradient-to-br from-honey-400/[0.08] to-transparent p-5">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h2 class="text-sm font-semibold text-white">Link and password, separately</h2>
+                    <span class="status-badge status-badge-amber">Recommended</span>
+                </div>
+                <p class="mt-2 text-xs leading-5 text-slate-400">
+                    Send each through a different channel, so one intercepted message is not enough.
+                </p>
+
+                <div class="mt-4 space-y-3">
+                    <div>
+                        <label for="share-link" class="field-label">Link</label>
+                        <div class="copy-field">
+                            <input type="text" value="http://localhost/view/00000000-0000-4000-8000-0000000000f1" readonly class="field-input flex-1 border-transparent bg-transparent shadow-none" id="share-link">
+                            <button id="copy-link-btn" class="btn-primary shrink-0 px-4 py-2.5"><span class="sr-only">Link: </span><span class="copy-label">Copy</span></button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="password-display" class="field-label">Password</label>
+                        <div class="copy-field">
+                            <input type="password" id="password-display" readonly class="field-input flex-1 border-transparent bg-transparent font-mono shadow-none">
+                            <button id="toggle-password" class="btn-secondary shrink-0 px-4 py-2.5">Show</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5">
+                <h2 class="text-sm font-semibold text-white">One-click link</h2>
+                <p class="mt-2 text-xs leading-5 text-slate-400">
+                    The password rides along in the URL fragment. Convenient, but anyone holding the link holds
+                    the key — this trades away the two-channel separation recommended above.
+                </p>
+                <div class="copy-field mt-4">
+                    <input type="text" id="share-link-with-password" readonly aria-label="One-click link with password" class="field-input flex-1 border-transparent bg-transparent shadow-none" value="">
+                    <button id="copy-one-click-btn" class="btn-secondary shrink-0 px-4 py-2.5"><span class="sr-only">One-click link: </span><span class="copy-label">Copy</span></button>
+                </div>
+            </section>
+        </div>
+
+        <p id="copy-status" class="sr-only" role="status"></p>
+
+        <div class="mt-8 text-center">
+            <a href="/" class="btn-ghost">
+                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 0 1 1 1v5h5a1 1 0 1 1 0 2h-5v5a1 1 0 1 1-2 0v-5H4a1 1 0 1 1 0-2h5V4a1 1 0 0 1 1-1Z" clip-rule="evenodd"/>
+                </svg>
+                Create another drop
+            </a>
+        </div>
+    </div>
+</div>
+
+
+        </main>
+
+        <footer class="footer-shell">
+            <div class="container-shell flex flex-col gap-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                <p class="flex items-start gap-2 sm:items-center">
+                    <span class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-honey-400 sm:mt-0" aria-hidden="true"></span>
+                    <span>This drop self-destructs after opening. Share the key separately when trust matters most.</span>
+                </p>
+                <p class="text-slate-600">Proudly developed with vibe coding.</p>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

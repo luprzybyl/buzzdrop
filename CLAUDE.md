@@ -35,6 +35,10 @@ pytest tests/unit/test_db.py -v
 
 # Run specific test function
 pytest tests/unit/test_db.py::test_function_name -v
+
+# Regenerate the committed DOM-test fixtures after changing a template
+# or a page route (CI fails if they are stale)
+npm run fixtures
 ```
 
 ## Architecture
