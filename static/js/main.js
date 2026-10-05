@@ -1,6 +1,8 @@
 // Import CryptoService for encryption
 import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
-import { buildSharedFilesUrl, getSharedFilesPage } from './shared-files.mjs';
+import { buildSharedFilesUrl, getSharedFilesPage, rowSearchText, statusBadgeClass } from './shared-files.mjs';
+import { isAllowedFile } from './file-extensions.mjs';
+import { buildOneClickLink } from './fragment-password.mjs';
 import { assessPassword, generatePassphrase } from './passphrase.mjs';
 
 const cryptoService = new CryptoService();
@@ -282,7 +284,7 @@ function uploadWithProgress(formData, password, uiElements) {
             // the same in-memory-only channel as one-click links. It is
             // read once there and scrubbed; nothing is persisted.
             window.location.href =
-                `/success/${json.file_id}#${encodeURIComponent(password)}`;
+                buildOneClickLink(`/success/${json.file_id}`, password);
         } else {
             let msg = 'Upload failed';
             try {
@@ -309,10 +311,6 @@ function uploadWithProgress(formData, password, uiElements) {
 }
 
 // --- Dropzone Logic ---
-function isAllowedFile(name) {
-    return allowedExtensions.includes(name.split('.').pop().toLowerCase());
-}
-
 // Show (or clear) the chip naming the file that is queued for encryption.
 function showSelectedFile(file) {
     const chip = document.getElementById('file-selected');
@@ -361,7 +359,7 @@ if (dropzone) {
         setDragging(false);
         const file = e.dataTransfer && e.dataTransfer.files[0];
         if (!file) return;
-        if (!isAllowedFile(file.name)) {
+        if (!isAllowedFile(file.name, allowedExtensions)) {
             rejectFile(fileField);
             return;
         }
@@ -384,7 +382,7 @@ if (fileUploadForm) {
             showSelectedFile(null);
             return;
         }
-        if (!isAllowedFile(file.name)) {
+        if (!isAllowedFile(file.name, allowedExtensions)) {
             rejectFile(e.target);
             return;
         }
@@ -676,12 +674,8 @@ function initializeSharedFilesList() {
                 row.dataset.downloadedAt = file.downloaded_at || '';
                 statusBadge.textContent = file.status_display || 'Active';
                 statusBadge.classList.remove('status-badge-green', 'status-badge-red', 'status-badge-amber');
-                statusBadge.classList.add(file.downloaded_at
-                    ? 'status-badge-green'
-                    : file.status === 'expired'
-                        ? 'status-badge-red'
-                        : 'status-badge-amber');
-                row.dataset.searchText = `${row.dataset.searchBase} ${file.status} ${file.status_display} ${file.downloaded_by_ip || ''}`.toLowerCase();
+                statusBadge.classList.add(statusBadgeClass(file));
+                row.dataset.searchText = rowSearchText(row.dataset.searchBase, file);
                 updated = true;
             });
             if (updated) {

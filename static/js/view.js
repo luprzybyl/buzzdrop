@@ -8,6 +8,7 @@
 // 4. Save file to disk and notify server
 
 import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
+import { readFragmentPassword } from './fragment-password.mjs';
 
 const cryptoService = new CryptoService();
 
@@ -42,16 +43,10 @@ const {
     // One-click links carry the password in the URL fragment — read it
     // once and scrub it from the address bar and history entry; nothing is
     // persisted.
-    const fragmentHash = window.location.hash;
-    if (fragmentHash.length > 1) {
+    const fragmentPassword = readFragmentPassword(window.location.hash);
+    if (window.location.hash.length > 1) {
         window.history.replaceState(
             null, '', window.location.pathname + window.location.search);
-        let fragmentPassword = null;
-        try {
-            fragmentPassword = decodeURIComponent(fragmentHash.substring(1));
-        } catch (err) {
-            fragmentPassword = null;
-        }
         if (fragmentPassword) {
             passInput.value = fragmentPassword;
             // Show status message

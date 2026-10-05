@@ -32,3 +32,14 @@ export function buildSharedFilesUrl(currentUrl, page, searchTerm) {
 
     return url;
 }
+
+// Downloaded wins over expired, which wins over active.
+export function statusBadgeClass(file) {
+    if (file.downloaded_at) return 'status-badge-green';
+    if (file.status === 'expired') return 'status-badge-red';
+    return 'status-badge-amber';
+}
+
+export function rowSearchText(searchBase, file) {
+    return `${searchBase} ${file.status} ${file.status_display || ''} ${file.downloaded_by_ip || ''}`.toLowerCase();
+}
