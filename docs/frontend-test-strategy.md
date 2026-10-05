@@ -24,7 +24,7 @@ From [Choose the runner and DOM environment for DOM + JS-integration tests](http
 - **jsdom is rejected.** It puts byte arrays in two realms, so `TextEncoder`/`subtle` output fails `instanceof Uint8Array`, which breaks `crypto.js`. It also has no navigation, and `new Response(blob)` throws.
 - Real 600k-iteration PBKDF2 runs in happy-dom at acceptable cost. Tests don't stub the KDF.
 - **Node 24** via a committed `.nvmrc`.
-- **npm scripts:** `test:unit` (today's `test:js`, renamed), `test:dom` (`vitest run`), `test` (both), `fixtures` (regenerates the DOM fixtures and the protocol contract).
+- **npm scripts:** `test:unit` (today's `test:js`, renamed), `test:dom` (`vitest run --coverage`), `test` (both), `fixtures` (regenerates the DOM fixtures and the protocol contract).
 - **Coverage** is reported, not gated.
 
 ## 3. Testability refactor of page scripts
