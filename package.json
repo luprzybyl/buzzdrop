@@ -10,7 +10,7 @@
     "test:dom": "vitest run --coverage",
     "test": "npm run test:unit && npm run test:dom",
     "typecheck": "tsc -p jsconfig.json",
-    "fixtures": "python tests/fixtures/render_dom_fixtures.py",
+    "fixtures": "python tests/fixtures/render_dom_fixtures.py && python tests/fixtures/record_protocol_contract.py",
     "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {

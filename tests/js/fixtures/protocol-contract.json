@@ -1,0 +1,2823 @@
+{
+  "csrfToken": "fixture-csrf-token",
+  "defaultUser": "testuser",
+  "accountEmails": {
+    "notifyuser": "notify@example.test"
+  },
+  "scenarios": [
+    {
+      "name": "file-round-trip",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "download",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ]
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/octet-stream"
+            },
+            "bodyBase64": "QktWMyBkdW1teSBjaXBoZXJ0ZXh0"
+          }
+        },
+        {
+          "name": "release",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "report",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/report_decryption/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "success": true,
+              "receipt": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "status": "recorded"
+            }
+          }
+        },
+        {
+          "name": "download-again",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ]
+          },
+          "response": {
+            "status": 302,
+            "headers": {
+              "Content-Type": "text/html; charset=utf-8",
+              "Location": "/"
+            }
+          }
+        },
+        {
+          "name": "release-again",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 410,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Key already released"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "note-round-trip",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "note_text": "QktWMyBkdW1teSBub3RlIGNpcGhlcnRleHQ=",
+              "type": "text",
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "text"
+            }
+          }
+        },
+        {
+          "name": "download",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ]
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/octet-stream"
+            },
+            "bodyBase64": "QktWMyBkdW1teSBub3RlIGNpcGhlcnRleHQ="
+          }
+        },
+        {
+          "name": "release",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "report",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/report_decryption/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "success": true,
+              "receipt": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "status": "recorded"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "report-first-valid-wins",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "release",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "report",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/report_decryption/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "success": true,
+              "receipt": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "status": "recorded"
+            }
+          }
+        },
+        {
+          "name": "report-again",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/report_decryption/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "success": false,
+              "receipt": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "status": "recorded"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "release-wrong-v-then-right",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 3,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "wrong",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          },
+          "response": {
+            "status": 403,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "attempts_remaining": 2,
+              "error": "Incorrect password"
+            }
+          }
+        },
+        {
+          "name": "wrong-again",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          },
+          "response": {
+            "status": 403,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "attempts_remaining": 1,
+              "error": "Incorrect password"
+            }
+          }
+        },
+        {
+          "name": "release",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "h": "<hex64>"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "release-lockout-burn-off",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 2,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": false,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "wrong",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          },
+          "response": {
+            "status": 403,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "attempts_remaining": 1,
+              "error": "Incorrect password"
+            }
+          }
+        },
+        {
+          "name": "locking",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          },
+          "response": {
+            "status": 429,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Too many attempts"
+            }
+          }
+        },
+        {
+          "name": "right-after-lockout",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 429,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Too many attempts"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "release-lockout-burn-on",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "locking",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          },
+          "response": {
+            "status": 429,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Too many attempts"
+            }
+          }
+        },
+        {
+          "name": "right-after-burn",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Not found"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "release-expired",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+              "expiry": "2000-01-01T00:00"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "expired",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 410,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "File has expired"
+            }
+          }
+        },
+        {
+          "name": "expired-again",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Not found"
+            }
+          }
+        },
+        {
+          "name": "download",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ]
+          },
+          "response": {
+            "status": 302,
+            "headers": {
+              "Content-Type": "text/html; charset=utf-8",
+              "Location": "/"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "release-missing-or-pending",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "missing-file",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              "00000000-0000-4000-8000-00000000dead"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Not found"
+            }
+          }
+        },
+        {
+          "name": "begin-unfinished",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "pending",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin-unfinished.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Not found"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "release-invalid-verifier",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "short-v",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "abc"
+            }
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Invalid request"
+            }
+          }
+        },
+        {
+          "name": "no-body",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest"
+            },
+            "json": null
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Invalid request"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "upload-csrf",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin-no-csrf",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest"
+            }
+          },
+          "response": {
+            "status": 403,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "CSRF validation failed"
+            }
+          }
+        },
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 403,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "CSRF validation failed"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "upload-invalid-material",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "not-hex",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Invalid key-release upload"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "upload-refinish",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "refinish",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "note_text": "QktWMyBkdW1teSBub3RlIGNpcGhlcnRleHQ=",
+              "type": "text",
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            }
+          },
+          "response": {
+            "status": 409,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Unknown or already finalized key-release upload"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "upload-unknown-share",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": "00000000-0000-4000-8000-00000000dead",
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 409,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Unknown or already finalized key-release upload"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "upload-notify-on-open",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "no-account-email",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+              "notify_on_open": "true"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Configure an account email before enabling open notifications"
+            }
+          }
+        },
+        {
+          "name": "begin-notify",
+          "as": "notifyuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "other-email",
+          "as": "notifyuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin-notify.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+              "notify_on_open": "true",
+              "notification_email": "other@example.test"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Open notifications can only be sent to your configured account email"
+            }
+          }
+        },
+        {
+          "name": "own-email",
+          "as": "notifyuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin-notify.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+              "notify_on_open": "true",
+              "notification_email": "notify@example.test"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "upload-notify-unconfigured",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "SMTP_HOST": null,
+        "NOTIFICATIONS_CONFIGURED": false
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "notifyuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "notifyuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+              "notify_on_open": "true"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Open notifications are not configured on this server"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "upload-other-owner",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "adminuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 403,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Key-release share belongs to another user"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "download-missing",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "missing-file",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              "00000000-0000-4000-8000-00000000dead"
+            ]
+          },
+          "response": {
+            "status": 302,
+            "headers": {
+              "Content-Type": "text/html; charset=utf-8",
+              "Location": "/"
+            }
+          }
+        },
+        {
+          "name": "begin-unfinished",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "pending",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin-unfinished.file_id"
+              }
+            ]
+          },
+          "response": {
+            "status": 302,
+            "headers": {
+              "Content-Type": "text/html; charset=utf-8",
+              "Location": "/"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "report-enforcement",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "missing-file",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/report_decryption/",
+              "00000000-0000-4000-8000-00000000dead"
+            ],
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "success": true,
+              "receipt": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "File not found"
+            }
+          }
+        },
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "wrong-receipt",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/report_decryption/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "success": true,
+              "receipt": "4444444444444444444444444444444444444444444444444444444444444444"
+            }
+          },
+          "response": {
+            "status": 403,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Invalid receipt"
+            }
+          }
+        },
+        {
+          "name": "no-success",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/report_decryption/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "success": "yes",
+              "receipt": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Invalid request"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "upload-too-large",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "MAX_CONTENT_LENGTH": 64,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "injected": true,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 413,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "File too large"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rate-limit-upload-begin",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "UPLOAD_RATE_LIMIT": "1 per minute",
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "begin-limited",
+          "as": "testuser",
+          "injected": true,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 429,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Too many requests. Please try again later."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rate-limit-upload",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "UPLOAD_RATE_LIMIT": "1 per minute",
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "upload-limited",
+          "as": "testuser",
+          "injected": true,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 429,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Too many requests. Please try again later."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rate-limit-download",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "PUBLIC_FILE_RATE_LIMIT": "1 per minute",
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "download",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ]
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/octet-stream"
+            },
+            "bodyBase64": "QktWMyBkdW1teSBjaXBoZXJ0ZXh0"
+          }
+        },
+        {
+          "name": "download-limited",
+          "as": null,
+          "injected": true,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ]
+          },
+          "response": {
+            "status": 429,
+            "headers": {
+              "Content-Type": "text/html; charset=utf-8"
+            },
+            "bodyBase64": "VG9vIG1hbnkgcmVxdWVzdHMuIFBsZWFzZSB0cnkgYWdhaW4gbGF0ZXIu"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rate-limit-release",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 3,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_RATE_LIMIT": "1 per minute",
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "wrong",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          },
+          "response": {
+            "status": 403,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "attempts_remaining": 2,
+              "error": "Incorrect password"
+            }
+          }
+        },
+        {
+          "name": "release-limited",
+          "as": null,
+          "injected": true,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 429,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Too many requests. Please try again later."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "rate-limit-report",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "REPORT_DECRYPTION_RATE_LIMIT": "1 per minute",
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "report",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/report_decryption/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "success": true,
+              "receipt": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "status": "recorded"
+            }
+          }
+        },
+        {
+          "name": "report-limited",
+          "as": null,
+          "injected": true,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/report_decryption/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "success": true,
+              "receipt": "3333333333333333333333333333333333333333333333333333333333333333"
+            }
+          },
+          "response": {
+            "status": 429,
+            "headers": {
+              "Content-Type": "text/html; charset=utf-8"
+            },
+            "bodyBase64": "VG9vIG1hbnkgcmVxdWVzdHMuIFBsZWFzZSB0cnkgYWdhaW4gbGF0ZXIu"
+          }
+        }
+      ]
+    }
+  ]
+}

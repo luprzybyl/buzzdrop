@@ -1,14 +1,15 @@
 #!/bin/sh
-# Keep the committed DOM-test fixtures in sync with the templates.
+# Keep the committed DOM-test fixtures and protocol contract in sync with
+# the templates and app.py.
 #
-# When a commit touches anything the fixtures are rendered from
-# (templates/, the root Python modules, the generator itself), re-render
-# them and stage the result, so CI's drift check never trips.
+# When a commit touches anything they are generated from (templates/,
+# db/, the root Python modules, the generators and scenarios), regenerate
+# them and stage the result, so CI's drift checks never trip.
 # Activated by `npm install` (package.json "prepare" sets core.hooksPath).
 # Skip once with: git commit --no-verify
 
 if ! git diff --cached --name-only --diff-filter=ACMRD \
-    | grep -qE '^(templates/|[^/]+\.py$|\.env\.example$|tests/fixtures/)'; then
+    | grep -qE '^(templates/|db/|[^/]+\.py$|\.env\.example$|tests/fixtures/)'; then
     exit 0
 fi
 
@@ -24,4 +25,10 @@ if ! "$PYTHON" tests/fixtures/render_dom_fixtures.py >/dev/null; then
     exit 1
 fi
 
-git add -A tests/js/fixtures/html
+if ! "$PYTHON" tests/fixtures/record_protocol_contract.py >/dev/null; then
+    echo "pre-commit: recording the protocol contract failed (see above); commit aborted." >&2
+    echo "pre-commit: fix the error, or skip once with git commit --no-verify." >&2
+    exit 1
+fi
+
+git add -A tests/js/fixtures/html tests/js/fixtures/protocol-contract.json

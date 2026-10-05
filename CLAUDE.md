@@ -40,9 +40,12 @@ pytest tests/unit/test_db.py::test_function_name -v
 # step; config in jsconfig.json, run by the js-fast CI job)
 npm run typecheck
 
-# Regenerate the committed DOM-test fixtures (CI fails if they are stale).
-# The pre-commit hook in .githooks/ does this automatically for commits
-# touching templates/ or the root Python modules; npm install enables it.
+# Regenerate the committed DOM-test fixtures and the protocol contract the
+# JS protocol fake is held to (CI fails if either is stale). The pre-commit
+# hook in .githooks/ does this automatically for commits touching
+# templates/, db/ or the root Python modules; npm install enables it.
+# After changing a protocol response in app.py, update
+# tests/js/support/protocol-fake.js until js-fast is green again.
 npm run fixtures
 ```
 
@@ -176,6 +179,7 @@ Test structure:
 - `tests/unit/`: Unit tests for utilities, database functions, and SRI hash generation
 - `tests/integration/`: Integration tests for routes, workflows, and SRI HTML attributes
 - `tests/js/`: browser-JS tests. **`docs/frontend-test-strategy.md` is the locked spec for them** (layers, runners, page-script refactor, DOM fixtures, protocol fake, scenario catalogue, E2E, CI) — read it before adding or changing any JS test or test harness
+- **Protocol contract — keep it in step with the server.** The JS protocol fake (`tests/js/support/protocol-fake.js`) is held to responses recorded from `app.py`, but only for requests a scenario sends; a new server response nothing exercises passes every check silently. So when you add, change or remove a response of `/upload/begin`, `/upload`, `/download`, `/release` or `/report_decryption` (status, body or the condition that triggers it), add or adjust a scenario in `tests/fixtures/protocol_scenarios.py`, run `npm run fixtures`, and update the fake and its `EMITS` table until `npm run test:dom` passes. Remove a scenario only together with the server behaviour it records. A new route the browser calls in the upload/view flow is added to the fake the same way
 
 ### Environment Configuration
 
