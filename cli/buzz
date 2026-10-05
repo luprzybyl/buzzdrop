@@ -1655,6 +1655,8 @@ def main():
     print()
     print(f"One-click link: {share_link}#{password}")
     print("  (embeds the password — whoever holds the link holds the key;")
+    print("   convenient, but Slack history, previews and exports keep it too,")
+    print("   so anyone reading it decrypts without ever touching /release)")
     print("   sharing link and password separately is stronger)")
 
 
