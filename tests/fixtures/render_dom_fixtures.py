@@ -10,8 +10,9 @@ reruns this script and fails if the output changes (the drift check).
 Determinism comes from the source: fixed users, file IDs, timestamps
 and session CSRF token, and expiry dates far in the past or future so
 ``datetime.now()`` never changes a branch. Only the SRI/asset hashes are
-rewritten afterwards, and ``<script src>`` tags are stripped (tests
-import the page modules themselves; JSON config blocks are kept).
+rewritten afterwards, and ``<script src>`` tags and the import map are
+stripped (tests import the page modules themselves, and the map would
+churn whenever a JS file changes; JSON config blocks are kept).
 
 Usage: python tests/fixtures/render_dom_fixtures.py   (or: npm run fixtures)
 """
@@ -98,6 +99,7 @@ SHARE_FILE = _file('00000000-0000-4000-8000-0000000000f1', 'contract.pdf')
 SHARE_TEXT = _file('00000000-0000-4000-8000-0000000000f2', 'Secret Note', type='text')
 
 SCRIPT_SRC_TAG = re.compile(r'[ \t]*<script\b[^>]*\bsrc=[^>]*>\s*</script>[ \t]*\n?')
+IMPORT_MAP_TAG = re.compile(r'[ \t]*<script type="importmap">.*?</script>[ \t]*\n?', re.DOTALL)
 SRI_HASH = re.compile(r'sha384-[A-Za-z0-9+/=%]+')
 
 
@@ -126,6 +128,7 @@ def _client(username=None):
 
 def _clean(html):
     html = SCRIPT_SRC_TAG.sub('', html)
+    html = IMPORT_MAP_TAG.sub('', html)
     return SRI_HASH.sub('sha384-FIXTURE', html)
 
 

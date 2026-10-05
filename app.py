@@ -28,6 +28,7 @@ from db import create_backend
 from dotenv import load_dotenv
 import base64
 import hashlib
+import json
 
 # Load environment variables FIRST, before any other imports that read env vars
 env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
@@ -255,6 +256,36 @@ def csrf_token_processor():
     return {'csrf_token': _get_csrf_token}
 
 
+def _sri_digest(filepath):
+    """SHA-384 SRI value ('sha384-<base64>') of a file's bytes."""
+    with open(filepath, 'rb') as f:
+        hashed = hashlib.sha384(f.read()).digest()
+    return 'sha384-' + base64.b64encode(hashed).decode()
+
+
+def _module_import_map():
+    """
+    Import map JSON pinning every ES module under static/js (issue #166).
+
+    A <script integrity> attribute covers only the entry file; modules it
+    imports are fetched by the module loader, which takes their expected
+    hash from the import map's "integrity" section instead. Rendered
+    inline by base.html, so the exact string is kept on g and its SHA-256
+    is added to the CSP by set_security_headers.
+    """
+    js_dir = os.path.join(app.static_folder, 'js')
+    integrity = {}
+    for dirpath, _dirnames, filenames in os.walk(js_dir):
+        for name in filenames:
+            if not name.endswith('.js'):
+                continue
+            filepath = os.path.join(dirpath, name)
+            filename = os.path.relpath(filepath, app.static_folder).replace(os.sep, '/')
+            integrity[url_for('static', filename=filename)] = _sri_digest(filepath)
+    g.import_map = json.dumps({'integrity': integrity}, sort_keys=True, separators=(',', ':'))
+    return g.import_map
+
+
 @app.context_processor
 def sri_hash_processor():
     """Context processor to generate SRI hashes for static files."""
@@ -269,15 +300,7 @@ def sri_hash_processor():
             str: SRI hash in format 'sha384-<base64-hash>' or empty string if file not found
         """
         try:
-            # Construct the full path to the static file
-            filepath = os.path.join(app.static_folder, filename)
-            with open(filepath, 'rb') as f:
-                # Read the file content
-                file_content = f.read()
-                # Calculate SHA-384 hash
-                hashed = hashlib.sha384(file_content).digest()
-                # Encode it in Base64
-                return 'sha384-' + base64.b64encode(hashed).decode()
+            return _sri_digest(os.path.join(app.static_folder, filename))
         except FileNotFoundError:
             # In case the file doesn't exist, raise error in development or log warning in production
             import logging
@@ -287,7 +310,7 @@ def sri_hash_processor():
             else:
                 logging.warning(f"SRI hash requested for missing static file: {filename}")
                 return ""
-    return dict(sri_hash=sri_hash)
+    return dict(sri_hash=sri_hash, module_import_map=_module_import_map)
 
 # Ensure upload directory exists (for local storage)
 if app.config['STORAGE_BACKEND'] == 'local':
@@ -748,9 +771,11 @@ def no_store_key_release_responses(response):
 # Baseline CSP: same-origin everything, no inline script. All markup ships
 # scripts as static files under SRI (see sri_hash_processor); the only
 # non-static <script> blocks are type="application/json" data islands,
-# which CSP does not treat as script. Inline *styles* are still used on a
+# which CSP does not treat as script, and base.html's import map, which
+# set_security_headers allows by its SHA-256 on the pages that render it
+# (see _module_import_map). Inline *styles* are still used on a
 # few elements, so style-src keeps 'unsafe-inline'.
-CONTENT_SECURITY_POLICY = "; ".join([
+CSP_DIRECTIVES = [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
@@ -761,7 +786,15 @@ CONTENT_SECURITY_POLICY = "; ".join([
     "base-uri 'none'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-])
+]
+
+
+def _content_security_policy(script_hashes=()):
+    """The baseline CSP, with script-src extended by inline-block hashes."""
+    sources = ''.join(f" 'sha256-{digest}'" for digest in script_hashes)
+    return "; ".join(
+        directive + sources if directive.startswith('script-src ') else directive
+        for directive in CSP_DIRECTIVES)
 
 PERMISSIONS_POLICY = ", ".join([
     "accelerometer=()",
@@ -788,7 +821,12 @@ def set_security_headers(response):
       and the app has no ProxyFix, so request.is_secure is unreliable
       behind TLS-terminating proxies (Passenger/nginx).
     """
-    response.headers['Content-Security-Policy'] = CONTENT_SECURITY_POLICY
+    script_hashes = []
+    import_map = g.get('import_map')
+    if import_map is not None:
+        script_hashes.append(base64.b64encode(
+            hashlib.sha256(import_map.encode('utf-8')).digest()).decode())
+    response.headers['Content-Security-Policy'] = _content_security_policy(script_hashes)
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Referrer-Policy'] = 'no-referrer'
