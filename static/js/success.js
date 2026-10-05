@@ -4,6 +4,8 @@
 // - Toggling password visibility
 // - Auto-filling the password from the URL fragment
 
+import { buildOneClickLink, readFragmentPassword } from './fragment-password.mjs';
+
 // One region for the page announces every copy; the button flash is visual.
 function setCopyStatus(message) {
     const region = document.getElementById('copy-status');
@@ -77,14 +79,8 @@ document.getElementById('toggle-password').addEventListener('click', togglePassw
 // flow navigates here with it). Read it once, then scrub it from the
 // address bar and history entry — nothing is persisted.
 document.addEventListener('DOMContentLoaded', function() {
-    const hash = window.location.hash;
-    if (hash.length <= 1) return;
-    let pwd = null;
-    try {
-        pwd = decodeURIComponent(hash.substring(1));
-    } catch (e) {
-        pwd = null;
-    }
+    if (window.location.hash.length <= 1) return;
+    const pwd = readFragmentPassword(window.location.hash);
     window.history.replaceState(
         null, '', window.location.pathname + window.location.search);
     if (pwd) {
@@ -92,7 +88,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Generate link with password in URL fragment
         const shareLink = document.getElementById('share-link').value;
-        const linkWithPassword = shareLink + '#' + encodeURIComponent(pwd);
-        document.getElementById('share-link-with-password').value = linkWithPassword;
+        document.getElementById('share-link-with-password').value = buildOneClickLink(shareLink, pwd);
     }
 });

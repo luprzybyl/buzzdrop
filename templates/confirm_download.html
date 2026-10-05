@@ -40,7 +40,7 @@
             </button>
         </form>
 
-        <script src="{{ url_for('static', filename='js/confirm-download.js') }}" integrity="{{ sri_hash('js/confirm-download.js') }}" crossorigin="anonymous"></script>
+        <script type="module" src="{{ url_for('static', filename='js/confirm-download.js') }}" integrity="{{ sri_hash('js/confirm-download.js') }}" crossorigin="anonymous"></script>
 
         <p class="mt-5 text-xs leading-5 text-slate-500">
             This is a one-time {% if file_type == 'text' %}view{% else %}download{% endif %}. You will not be able to access this

@@ -78,5 +78,5 @@
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/success.js') }}" integrity="{{ sri_hash('js/success.js') }}" crossorigin="anonymous"></script>
+<script type="module" src="{{ url_for('static', filename='js/success.js') }}" integrity="{{ sri_hash('js/success.js') }}" crossorigin="anonymous"></script>
 {% endblock %}
