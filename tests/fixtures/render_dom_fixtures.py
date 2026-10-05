@@ -16,41 +16,16 @@ churn whenever a JS file changes; JSON config blocks are kept).
 
 Usage: python tests/fixtures/render_dom_fixtures.py   (or: npm run fixtures)
 """
-import os
 import re
 import sys
 import tempfile
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from fixture_env import CSRF_TOKEN, PASSWORDS, ROOT
+
 OUT_DIR = ROOT / 'tests' / 'js' / 'fixtures' / 'html'
-
-# The developer's .env must not leak into fixtures: keep app.py's
-# load_dotenv from reading it, and load only the committed example.
-import dotenv  # noqa: E402
-
-dotenv.load_dotenv(ROOT / '.env.example', override=False)
-dotenv.load_dotenv = lambda *args, **kwargs: False
-
-for key in [k for k in os.environ if k.startswith('FLASK_USER_')]:
-    del os.environ[key]
-os.environ.update({
-    'FLASK_ENV': 'testing',
-    'FLASK_SECRET_KEY': 'dom-fixture-secret-key',
-    'FLASK_USER_1': 'testuser:password:false',
-    'FLASK_USER_2': 'adminuser:adminpass:true',
-    'FLASK_USER_3': 'notifyuser:password:false:notify@example.test',
-    'EXPIRY_SWEEP_INTERVAL_SECONDS': '0',
-    'ALLOWED_EXTENSIONS': 'txt,pdf,png,jpg,jpeg,gif,doc,docx,xls,xlsx,mp4',
-    'MAX_CONTENT_LENGTH': '104857600',
-})
-
-sys.path.insert(0, str(ROOT))
 
 from app import app as flask_app, get_backend, limiter  # noqa: E402
 
-CSRF_TOKEN = 'fixture-csrf-token'
-PASSWORDS = {'testuser': 'password', 'adminuser': 'adminpass', 'notifyuser': 'password'}
 CREATED_AT = '2025-01-01T12:00:00'
 FUTURE = '2099-01-01T00:00:00'
 PAST = '2000-01-01T00:00:00'

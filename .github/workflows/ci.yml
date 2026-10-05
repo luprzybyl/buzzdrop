@@ -99,3 +99,10 @@ jobs:
           git status --porcelain tests/js/fixtures/
           git diff --exit-code tests/js/fixtures/
           test -z "$(git status --porcelain tests/js/fixtures/)" || { echo '::error::DOM fixtures are stale; run npm run fixtures and commit the result'; exit 1; }
+      # The contract is recorded from the checked-out app.py; a response
+      # change without a re-record fails here, and js-fast then holds the
+      # fake to the new recording.
+      - name: Check the protocol contract is up to date
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app buzzdrop-test python tests/fixtures/record_protocol_contract.py
+          git diff --exit-code tests/js/fixtures/protocol-contract.json || { echo '::error::The protocol contract is stale; run npm run fixtures and commit the result'; exit 1; }

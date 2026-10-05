@@ -1,0 +1,259 @@
+// Holds the protocol fake to the contract recorded from app.py
+// (docs/frontend-test-strategy.md §6). Every scenario in
+// tests/js/fixtures/protocol-contract.json is replayed against the fake's raw
+// core, handle(), and each response must match the recorded one. When app.py
+// changes a response, `npm run fixtures` re-records the contract and this test
+// stays red until the fake matches.
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, it, expect } from 'vitest';
+import { EMITS, makeProtocolFake, routeOf } from '../support/protocol-fake.js';
+
+/**
+ * @typedef {string | { $ref: string }} PathPart
+ * @typedef {{
+ *   method: string,
+ *   path: PathPart[],
+ *   headers?: Record<string, string>,
+ *   json?: unknown,
+ *   form?: Record<string, string | { $ref: string }>,
+ *   files?: Record<string, { filename: string, content: string }>,
+ * }} RecordedRequest
+ * @typedef {{
+ *   status: number,
+ *   headers: Record<string, string>,
+ *   json?: unknown,
+ *   bodyBase64?: string,
+ * }} RecordedResponse
+ * @typedef {{
+ *   name: string,
+ *   as: string | null,
+ *   injected?: boolean,
+ *   request: RecordedRequest,
+ *   response: RecordedResponse,
+ * }} RecordedStep
+ * @typedef {{
+ *   name: string,
+ *   config: { KEY_RELEASE_MAX_ATTEMPTS: number, KEY_RELEASE_BURN_ON_LOCKOUT: boolean },
+ *   steps: RecordedStep[],
+ * }} RecordedScenario
+ * @typedef {{ csrfToken: string, defaultUser: string, scenarios: RecordedScenario[] }} Contract
+ */
+
+// Paths, not URLs: under the happy-dom environment the global URL is happy-dom's.
+const CONTRACT_FILE = join(
+    dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'protocol-contract.json');
+/** @type {Contract} */
+const contract = JSON.parse(readFileSync(CONTRACT_FILE, 'utf8'));
+
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+const HEX64 = /\b[0-9a-f]{64}\b/g;
+
+/**
+ * The same normalisation record_protocol_contract.py applies.
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function normalise(value) {
+    if (typeof value === 'string') {
+        return value.replace(UUID, '<uuid>').replace(HEX64, '<hex64>');
+    }
+    if (Array.isArray(value)) {
+        return value.map(normalise);
+    }
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalise(v)]));
+    }
+    return value;
+}
+
+/**
+ * Replace `{"$ref": "<step>.<field>"}` with that step's response field, as the
+ * fake answered it.
+ * @param {unknown} value
+ * @param {Record<string, Record<string, unknown>>} responses
+ * @returns {unknown}
+ */
+function resolve(value, responses) {
+    if (Array.isArray(value)) {
+        return value.map((item) => resolve(item, responses));
+    }
+    if (value && typeof value === 'object') {
+        if ('$ref' in value && typeof value.$ref === 'string') {
+            const [step, field] = value.$ref.split('.');
+            return responses[step][field];
+        }
+        return Object.fromEntries(
+            Object.entries(value).map(([k, v]) => [k, resolve(v, responses)]));
+    }
+    return value;
+}
+
+/**
+ * Build the request the browser would send for a recorded one.
+ * @param {RecordedRequest} recorded - with every $ref already resolved
+ * @returns {import('../support/protocol-fake.js').FakeRequest}
+ */
+function toFakeRequest(recorded) {
+    /** @type {FormData | string | null} */
+    let body = null;
+    if (recorded.json != null) {
+        body = JSON.stringify(recorded.json);
+    }
+    if (recorded.form || recorded.files) {
+        const formData = new FormData();
+        for (const [field, value] of Object.entries(recorded.form ?? {})) {
+            formData.append(field, String(value));
+        }
+        for (const [field, upload] of Object.entries(recorded.files ?? {})) {
+            formData.append(field, new File([upload.content], upload.filename));
+        }
+        body = formData;
+    }
+    return {
+        method: recorded.method,
+        url: `http://localhost${recorded.path.join('')}`,
+        headers: recorded.headers ?? {},
+        body,
+    };
+}
+
+/**
+ * The fake's response in the contract's shape, as _record() builds it.
+ * @param {string} path
+ * @param {import('../support/protocol-fake.js').FakeResponse} response
+ * @returns {RecordedResponse}
+ */
+function toRecorded(path, response) {
+    /** @type {RecordedResponse} */
+    const recorded = {
+        status: response.status,
+        headers: { 'Content-Type': response.headers['Content-Type'] },
+    };
+    if ('Location' in response.headers) {
+        recorded.headers.Location = response.headers.Location;
+    }
+    if (path.startsWith('/release/')) {
+        recorded.headers['Cache-Control'] = response.headers['Cache-Control'];
+    }
+    const bytes = typeof response.body === 'string'
+        ? new TextEncoder().encode(response.body) : response.body;
+    if (response.headers['Content-Type'] === 'application/json') {
+        recorded.json = JSON.parse(new TextDecoder().decode(bytes));
+    } else if (response.status < 300 || response.status >= 400) {
+        recorded.bodyBase64 = Buffer.from(bytes).toString('base64');
+    }
+    return /** @type {RecordedResponse} */ (normalise(recorded));
+}
+
+describe('protocol fake replays the recorded contract', () => {
+    for (const scenario of contract.scenarios) {
+        it(scenario.name, async () => {
+            const fake = makeProtocolFake({
+                maxAttempts: scenario.config.KEY_RELEASE_MAX_ATTEMPTS,
+                burnOnLockout: scenario.config.KEY_RELEASE_BURN_ON_LOCKOUT,
+                owner: contract.defaultUser,
+                csrfToken: contract.csrfToken,
+            });
+            /** @type {Record<string, Record<string, unknown>>} */
+            const responses = {};
+            for (const step of scenario.steps) {
+                const request = /** @type {RecordedRequest} */ (resolve(step.request, responses));
+                const path = request.path.join('');
+                fake.state.user = step.as;
+                if (step.injected) {
+                    fake.failNext(routeOf(path), step.response.status);
+                }
+                const response = await fake.handle(toFakeRequest(request));
+                const recorded = toRecorded(path, response);
+
+                expect(recorded, `${scenario.name}/${step.name}`).toEqual(step.response);
+                expect(EMITS, `${scenario.name}/${step.name}: undeclared response`)
+                    .toContainEqual([routeOf(path), response.status]);
+                if (response.headers['Content-Type'] === 'application/json') {
+                    responses[step.name] = JSON.parse(String(response.body));
+                }
+            }
+        });
+    }
+});
+
+describe('the contract covers the fake', () => {
+    // The completeness rule: every response the fake can emit has a scenario.
+    const recorded = contract.scenarios.flatMap((scenario) => scenario.steps.map(
+        (step) => JSON.stringify([routeOf(String(step.request.path[0])), step.response.status])));
+    for (const [route, status] of EMITS) {
+        it(`${route} ${status} is recorded`, () => {
+            expect(recorded).toContain(JSON.stringify([route, status]));
+        });
+    }
+});
+
+describe('fetch adapter', () => {
+    it('follows the 302 a consumed download answers', async () => {
+        const fake = makeProtocolFake();
+        const fileId = await fake.seedShare({ password: 'pw', plaintext: 'hello' });
+
+        const first = await fake.fetch(`/download/${fileId}`);
+        expect(first.status).toBe(200);
+        expect(first.redirected).toBe(false);
+
+        const second = await fake.fetch(`/download/${fileId}`);
+        expect(second.status).toBe(200);
+        expect(second.redirected).toBe(true);
+        expect(second.url).toBe('http://localhost/');
+        expect(fake.log.map((r) => r.url)).toEqual([
+            `http://localhost/download/${fileId}`, `http://localhost/download/${fileId}`]);
+    });
+
+    it('rejects like a dropped connection on an injected network failure', async () => {
+        const fake = makeProtocolFake();
+        fake.failNext('/upload/begin', 'network');
+
+        await expect(fake.fetch('/upload/begin', { method: 'POST' })).rejects.toThrow(TypeError);
+        expect(fake.log).toHaveLength(1);
+    });
+});
+
+describe('XMLHttpRequest adapter', () => {
+    /**
+     * Send one request through the fake's XHR class.
+     * @param {ReturnType<typeof makeProtocolFake>} fake
+     * @param {FormData} body
+     */
+    function send(fake, body) {
+        const xhr = new fake.XMLHttpRequest();
+        /** @type {number[]} */
+        const progress = [];
+        const done = new Promise((resolve) => {
+            xhr.upload.onprogress = (e) => progress.push(e.loaded / e.total);
+            xhr.onload = () => resolve('load');
+            xhr.onerror = () => resolve('error');
+        });
+        xhr.open('POST', '/upload');
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.setRequestHeader('X-CSRF-Token', contract.csrfToken);
+        xhr.send(body);
+        return { xhr, progress, done };
+    }
+
+    it('fires upload.onprogress before onload', async () => {
+        const fake = makeProtocolFake();
+        const { xhr, progress, done } = send(fake, new FormData());
+
+        expect(await done).toBe('load');
+        expect(progress).toEqual([0.5, 1]);
+        expect(xhr.status).toBe(400);
+        expect(JSON.parse(xhr.responseText)).toEqual({ error: 'Invalid key-release upload' });
+    });
+
+    it('calls onerror on an injected network failure', async () => {
+        const fake = makeProtocolFake();
+        fake.failNext('/upload', 'network');
+        const { progress, done } = send(fake, new FormData());
+
+        expect(await done).toBe('error');
+        expect(progress).toEqual([]);
+    });
+});

@@ -40,9 +40,12 @@ pytest tests/unit/test_db.py::test_function_name -v
 # step; config in jsconfig.json, run by the js-fast CI job)
 npm run typecheck
 
-# Regenerate the committed DOM-test fixtures (CI fails if they are stale).
-# The pre-commit hook in .githooks/ does this automatically for commits
-# touching templates/ or the root Python modules; npm install enables it.
+# Regenerate the committed DOM-test fixtures and the protocol contract the
+# JS protocol fake is held to (CI fails if either is stale). The pre-commit
+# hook in .githooks/ does this automatically for commits touching
+# templates/, db/ or the root Python modules; npm install enables it.
+# After changing a protocol response in app.py, update
+# tests/js/support/protocol-fake.js until js-fast is green again.
 npm run fixtures
 ```
 
