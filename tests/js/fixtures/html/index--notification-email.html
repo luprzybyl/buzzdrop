@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="fixture-csrf-token">
+    <meta name="theme-color" content="#07080B">
+    <meta name="description" content="BuzzDrop: secure, one-time file sharing. Upload encrypted files or secret notes, send a link, and let them vanish as soon as the recipient downloads them.">
+    <title>BuzzDrop: Secure, One-Time File Sharing</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/css/app.css?v=sha384-FIXTURE">
+</head>
+<body class="min-h-full">
+    <!-- Ambient layers: warm light pooling at the top, drifting honeycomb lattice. -->
+    <div class="glow-field" aria-hidden="true"></div>
+    <div class="hex-veil" aria-hidden="true"></div>
+
+    <div class="relative z-10 flex min-h-screen flex-col">
+        <div class="topline" aria-hidden="true"></div>
+
+        <nav class="nav-shell">
+            <div class="container-shell">
+                <div class="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex flex-wrap items-center gap-3 sm:gap-5">
+                        <a href="/" class="group flex items-center gap-3">
+                            <span class="relative">
+                                <span class="absolute inset-0 animate-halo-pulse rounded-full bg-honey-400/30 blur-lg" aria-hidden="true"></span>
+                                <svg viewBox="0 0 40 40" class="relative h-10 w-10 transition-transform duration-500 group-hover:-rotate-6" role="img" aria-label="BuzzDrop">
+                                    <defs>
+                                        <linearGradient id="bd-honey" x1="0" y1="0" x2="1" y2="1">
+                                            <stop offset="0%" stop-color="#FFE49B"/>
+                                            <stop offset="55%" stop-color="#FFB627"/>
+                                            <stop offset="100%" stop-color="#D97706"/>
+                                        </linearGradient>
+                                        <clipPath id="bd-drop">
+                                            <path d="M20 9s8 8.6 8 13.4a8 8 0 0 1-16 0C12 17.6 20 9 20 9Z"/>
+                                        </clipPath>
+                                    </defs>
+                                    <path d="M20 1.5 35.5 10.4v19.2L20 38.5 4.5 29.6V10.4z" fill="url(#bd-honey)" opacity=".15"/>
+                                    <path d="M20 1.5 35.5 10.4v19.2L20 38.5 4.5 29.6V10.4z" fill="none" stroke="url(#bd-honey)" stroke-width="1.5"/>
+                                    <path d="M20 9s8 8.6 8 13.4a8 8 0 0 1-16 0C12 17.6 20 9 20 9Z" fill="url(#bd-honey)"/>
+                                    <g clip-path="url(#bd-drop)" fill="#0B0D12" opacity=".85">
+                                        <rect x="10" y="19.4" width="20" height="2.3" rx="1.15"/>
+                                        <rect x="10" y="24.2" width="20" height="2.3" rx="1.15"/>
+                                    </g>
+                                </svg>
+                            </span>
+                            <span>
+                                <span class="block text-lg font-semibold tracking-tight text-white">Buzz<span class="honey-text">drop</span></span>
+                                <span class="block text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-500">One-time buzz</span>
+                            </span>
+                        </a>
+                        
+                        
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        
+                            <span class="status-badge status-badge-amber">
+                                <span class="h-1.5 w-1.5 rounded-full bg-honey-400" aria-hidden="true"></span>
+                                notifyuser
+                            </span>
+                            <form method="post" action="/logout" class="inline">
+                                <input type="hidden" name="csrf_token" value="fixture-csrf-token">
+                                <button type="submit" class="btn-danger">Logout</button>
+                            </form>
+                        
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="container-shell flex-1 py-10 sm:py-14">
+            
+            
+                
+                    <div class="mb-8 space-y-3">
+                    
+                        
+                        <div class="alert-banner animate-fade-up alert-banner-success" role="status">
+                            
+                            <svg class="mt-0.5 h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.707-9.293a1 1 0 0 0-1.414-1.414L9 10.586 7.707 9.293a1 1 0 0 0-1.414 1.414l2 2a1 1 0 0 0 1.414 0l4-4Z" clip-rule="evenodd"/>
+                            </svg>
+                            
+                            <span>Logged in successfully</span>
+                        </div>
+                    
+                    </div>
+                
+            
+
+            
+
+
+<div class="mx-auto max-w-5xl space-y-8">
+    <header class="animate-fade-up space-y-4">
+        <span class="eyebrow">
+            <span class="h-1.5 w-1.5 rounded-full bg-honey-400" aria-hidden="true"></span>
+            Secure handoff
+        </span>
+        <h1 class="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            Make it <span class="honey-text">buzz</span>, then vanish.
+        </h1>
+        <h2 class="max-w-2xl text-sm leading-relaxed text-slate-400">
+            <strong>Encrypt a file or a secret note in your browser</strong>, send one link, and let the drop delete itself
+            the moment it is downloaded. The contents are ciphertext to the server; details like the filename and your private note are not.
+         </h2>
+    </header>
+
+    <div class="surface-card animate-fade-up delay-1 p-6 sm:p-8">
+        <span id="share-mode-label" class="field-label">What are you sending?</span>
+        <div class="tab-rail sm:inline-flex" role="tablist" aria-labelledby="share-mode-label">
+            <button id="file-tab" type="button" role="tab" aria-selected="true" aria-controls="file-upload-section" class="share-tab share-tab-active">
+                File
+            </button>
+            <button id="text-tab" type="button" role="tab" aria-selected="false" aria-controls="text-note-section" tabindex="-1" class="share-tab">
+                Text note
+            </button>
+        </div>
+
+        <div id="file-upload-section" class="mt-6" role="tabpanel" aria-labelledby="file-tab">
+            <form action="/upload" method="post" enctype="multipart/form-data">
+                <label id="dropzone" for="file" class="dropzone block">
+                    <div class="relative flex flex-col items-center gap-4">
+                        <svg viewBox="0 0 48 48" class="h-14 w-14 text-honey-300" fill="none" aria-hidden="true">
+                            <path d="M24 3 42 13.5v21L24 45 6 34.5v-21z" stroke="currentColor" stroke-width="1.4" opacity=".45"/>
+                            <path d="M24 32V17m0 0-6.5 6.5M24 17l6.5 6.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <div class="space-y-1">
+                            <p class="text-base font-semibold text-white">
+                                Drop a file here, or <span class="text-honey-300 underline decoration-honey-400/40 underline-offset-4">browse</span>
+                            </p>
+                            <p class="dropzone-hint text-sm text-slate-400">It is encrypted on this device before a single byte leaves it.</p>
+                        </div>
+                        <p id="file-selected" class="hidden">
+                            <span class="file-chip">
+                                <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm6 0v3a1 1 0 0 0 1 1h3l-4-4Z" clip-rule="evenodd"/>
+                                </svg>
+                                <span id="file-selected-name" class="truncate"></span>
+                            </span>
+                        </p>
+                        <div class="space-y-2 pt-1">
+                            <p><span class="stat-chip">Up to 100MB</span></p>
+                            <p class="mx-auto max-w-sm text-xs leading-5 text-slate-600">DOC · DOCX · GIF · JPEG · JPG · MP4 · PDF · PNG · TXT · XLS · XLSX</p>
+                        </div>
+                    </div>
+                    <input id="file" name="file" type="file" class="sr-only" required>
+                </label>
+                <p id="file-error" class="file-error" role="alert"></p>
+            </form>
+        </div>
+
+        <div id="text-note-section" style="display:none;" class="mt-6" role="tabpanel" aria-labelledby="text-tab">
+            <label for="note-text" class="field-label">Secret text</label>
+            <textarea id="note-text" rows="9" class="field-input min-h-[14rem] font-mono text-[0.8rem] leading-6" placeholder="Paste the note you want to protect with a one-time buzz..." required></textarea>
+            <p class="field-help">Encrypted in the browser before it reaches the server.</p>
+        </div>
+
+        <div class="mt-8 space-y-6 border-t border-white/[0.06] pt-8">
+            <div class="grid gap-5 md:grid-cols-2">
+                <div>
+                    <label for="shared-password" class="field-label">Password</label>
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                        <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" required autocomplete="new-password">
+                        <button id="generate-password-btn" type="button" class="btn-secondary shrink-0 whitespace-nowrap px-4 py-3 text-xs sm:w-auto" title="Generate a 6-word passphrase (about 77 bits of entropy)">
+                            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.451a.75.75 0 0 0 0-1.5H4.5a.75.75 0 0 0-.75.75v3.75a.75.75 0 0 0 1.5 0v-2.033l.364.363a7 7 0 0 0 11.712-3.15.75.75 0 0 0-1.449-.388 5.51 5.51 0 0 1-.435 1.063ZM8.858 8.576a5.5 5.5 0 0 1 9.201-2.466l.312.311H15.92a.75.75 0 0 0 0 1.5h3.75a.75.75 0 0 0 .75-.75V3.421a.75.75 0 0 0-1.5 0v2.033l-.364-.363A7 7 0 0 0 6.894 8.24a.75.75 0 0 0 1.449.388c.14-.021.28-.042.415-.052Z" clip-rule="evenodd"/>
+                            </svg>
+                            Generate
+                        </button>
+                    </div>
+                    <div id="password-strength" class="mt-2 hidden" aria-live="polite">
+                        <div class="honey-track">
+                            <div id="password-strength-bar" class="pw-fill" style="width: 0%"></div>
+                        </div>
+                        <p id="password-strength-text" class="field-help"></p>
+                    </div>
+                    <p class="field-help">Share it through a different channel than the link.</p>
+                    <p id="password-error" class="file-error" role="alert"></p>
+                </div>
+                <div>
+                    <label for="shared-expiry" class="field-label">Expiry date <span class="text-slate-600">(optional)</span></label>
+                    <input id="shared-expiry" name="expiry" type="datetime-local" class="field-input">
+                    <p class="field-help">For drops that should not outlive the week.</p>
+                </div>
+            </div>
+
+            <div>
+                <label for="shared-private-note" class="field-label">Private note <span class="text-slate-600">(optional)</span></label>
+                <textarea id="shared-private-note" name="private_note" rows="2" class="field-input" placeholder="Visible only to you, in your drop list"></textarea>
+            </div>
+
+            <div class="surface-card-soft space-y-4 p-5">
+                <label class="flex cursor-pointer items-start gap-3 text-sm">
+                    <input id="notify-on-open" name="notify_on_open" type="checkbox" class="field-check">
+                    <span>
+                        <span class="block font-semibold text-white">Notify me when this is opened</span>
+                        <span class="mt-1 block text-slate-500">One email after the recipient attempts decryption. Delivery failures are logged only.</span>
+                    </span>
+                </label>
+                <div>
+                    <label for="notification-email" class="field-label">Account email</label>
+                    <input
+                        id="notification-email"
+                        name="notification_email"
+                        type="email"
+                        class="field-input"
+                        placeholder="Configure this in FLASK_USER_N"
+                        value="notify@example.test"
+                        readonly
+                    >
+                    <p class="field-help">
+                        
+                            Open notifications are sent only to this account email.
+                        
+                    </p>
+                </div>
+            </div>
+
+            <div class="relative overflow-hidden rounded-2xl border border-honey-400/20 bg-gradient-to-br from-honey-400/[0.09] to-transparent p-5">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="text-sm">
+                        <p class="font-semibold text-white">One-time buzz</p>
+                        <p class="mt-1 text-slate-400">Stored as ciphertext only, destroyed the moment the recipient downloads it.</p>
+                    </div>
+                    <button id="share-action-btn" type="button" aria-label="Share file" class="btn-primary w-full shrink-0 sm:w-auto">
+                        <span id="share-action-label" class="relative z-10">Share file</span>
+                        <svg class="relative z-10 h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M3 10a1 1 0 0 1 1-1h9.586L9.293 4.707a1 1 0 0 1 1.414-1.414l6 6a1 1 0 0 1 0 1.414l-6 6a1 1 0 0 1-1.414-1.414L13.586 11H4a1 1 0 0 1-1-1Z" clip-rule="evenodd"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="share-progress-container" class="mt-4 w-full items-center gap-3" style="display:none;">
+                    <div class="honey-track">
+                        <div id="share-progress-bar" class="honey-bar" style="width: 0%"></div>
+                    </div>
+                    <span id="share-progress-text" class="shrink-0 text-sm font-semibold tabular-nums text-honey-300">0%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+<script id="allowed-extensions-json" type="application/json">["doc", "docx", "gif", "jpeg", "jpg", "mp4", "pdf", "png", "txt", "xls", "xlsx"]</script>
+<script id="upload-endpoints-json" type="application/json">{"uploadBeginUrl": "/upload/begin", "uploadUrl": "/upload"}</script>
+
+        </main>
+
+        <footer class="footer-shell">
+            <div class="container-shell flex flex-col gap-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                <p class="flex items-start gap-2 sm:items-center">
+                    <span class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-honey-400 sm:mt-0" aria-hidden="true"></span>
+                    <span>This drop self-destructs after opening. Share the key separately when trust matters most.</span>
+                </p>
+                <p class="text-slate-600">Proudly developed with vibe coding.</p>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="fixture-csrf-token">
+    <meta name="theme-color" content="#07080B">
+    <meta name="description" content="BuzzDrop: secure, one-time file sharing. Upload encrypted files or secret notes, send a link, and let them vanish as soon as the recipient downloads them.">
+    <title>BuzzDrop: Secure, One-Time File Sharing</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/css/app.css?v=sha384-FIXTURE">
+</head>
+<body class="min-h-full">
+    <!-- Ambient layers: warm light pooling at the top, drifting honeycomb lattice. -->
+    <div class="glow-field" aria-hidden="true"></div>
+    <div class="hex-veil" aria-hidden="true"></div>
+
+    <div class="relative z-10 flex min-h-screen flex-col">
+        <div class="topline" aria-hidden="true"></div>
+
+        <nav class="nav-shell">
+            <div class="container-shell">
+                <div class="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex flex-wrap items-center gap-3 sm:gap-5">
+                        <a href="/" class="group flex items-center gap-3">
+                            <span class="relative">
+                                <span class="absolute inset-0 animate-halo-pulse rounded-full bg-honey-400/30 blur-lg" aria-hidden="true"></span>
+                                <svg viewBox="0 0 40 40" class="relative h-10 w-10 transition-transform duration-500 group-hover:-rotate-6" role="img" aria-label="BuzzDrop">
+                                    <defs>
+                                        <linearGradient id="bd-honey" x1="0" y1="0" x2="1" y2="1">
+                                            <stop offset="0%" stop-color="#FFE49B"/>
+                                            <stop offset="55%" stop-color="#FFB627"/>
+                                            <stop offset="100%" stop-color="#D97706"/>
+                                        </linearGradient>
+                                        <clipPath id="bd-drop">
+                                            <path d="M20 9s8 8.6 8 13.4a8 8 0 0 1-16 0C12 17.6 20 9 20 9Z"/>
+                                        </clipPath>
+                                    </defs>
+                                    <path d="M20 1.5 35.5 10.4v19.2L20 38.5 4.5 29.6V10.4z" fill="url(#bd-honey)" opacity=".15"/>
+                                    <path d="M20 1.5 35.5 10.4v19.2L20 38.5 4.5 29.6V10.4z" fill="none" stroke="url(#bd-honey)" stroke-width="1.5"/>
+                                    <path d="M20 9s8 8.6 8 13.4a8 8 0 0 1-16 0C12 17.6 20 9 20 9Z" fill="url(#bd-honey)"/>
+                                    <g clip-path="url(#bd-drop)" fill="#0B0D12" opacity=".85">
+                                        <rect x="10" y="19.4" width="20" height="2.3" rx="1.15"/>
+                                        <rect x="10" y="24.2" width="20" height="2.3" rx="1.15"/>
+                                    </g>
+                                </svg>
+                            </span>
+                            <span>
+                                <span class="block text-lg font-semibold tracking-tight text-white">Buzz<span class="honey-text">drop</span></span>
+                                <span class="block text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-500">One-time buzz</span>
+                            </span>
+                        </a>
+                        
+                        
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        
+                            <a href="/login" class="btn-primary">Login</a>
+                        
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="container-shell flex-1 py-10 sm:py-14">
+            
+            
+                
+            
+
+            
+<div class="mx-auto max-w-xl">
+    <div class="surface-card animate-zoom-in p-8 sm:p-10">
+        <div class="text-center">
+            <span class="relative mx-auto mb-6 block h-16 w-16">
+                <span class="absolute inset-0 animate-halo-pulse rounded-full bg-honey-400/25 blur-xl" aria-hidden="true"></span>
+                <svg viewBox="0 0 64 64" class="relative h-16 w-16 text-honey-300" fill="none" aria-hidden="true">
+                    <path d="M32 4 54 16.7v25.6L32 55 10 42.3V16.7z" stroke="currentColor" stroke-width="1.5" opacity=".4"/>
+                    <path d="M32 11 48 20.2v18.6L32 48l-16-9.2V20.2z" fill="currentColor" opacity=".08"/>
+                    <rect x="24" y="30" width="16" height="13" rx="3" stroke="currentColor" stroke-width="2.2"/>
+                    <path d="M27.5 30v-4.5a4.5 4.5 0 0 1 8.8-1.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+                </svg>
+            </span>
+
+            <span class="eyebrow">Recipient step</span>
+            <h1 class="mt-5 break-words text-2xl font-semibold tracking-tight text-white">contract.pdf</h1>
+            <p id="status" class="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-400">
+                Enter the password to decrypt and download.
+            </p>
+        </div>
+
+        <div class="mt-7 space-y-3">
+            <input id="password-input" type="password" placeholder="Password" autocomplete="off" class="field-input text-center">
+            <button id="decrypt-btn" class="btn-primary w-full">
+                <span class="relative z-10">Decrypt and download</span>
+            </button>
+        </div>
+
+        <p id="password-status" class="mt-4 flex items-center justify-center gap-2 text-sm font-medium text-emerald-300" style="display: none;">
+            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 0 1 0 1.414l-8 8a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L8 12.586l7.293-7.293a1 1 0 0 1 1.414 0Z" clip-rule="evenodd"/>
+            </svg>
+            Password auto-filled — click to proceed.
+        </p>
+
+        <div id="text-display" class="mt-7 overflow-hidden rounded-2xl border border-white/[0.07] bg-hive-850/70" style="display: none;">
+            <div class="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+                <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Decrypted text</h2>
+                <button id="copy-text-btn" class="btn-secondary px-3 py-1.5 text-xs">Copy</button>
+            </div>
+            <pre id="text-content" class="max-h-96 overflow-y-auto whitespace-pre-wrap break-words px-4 py-4 font-mono text-sm leading-6 text-slate-200"></pre>
+        </div>
+    </div>
+
+    <p class="mt-6 text-center text-xs text-slate-600">
+        Decryption happens entirely in your browser. The password is never sent to the server.
+    </p>
+</div>
+<script id="view-config-json" type="application/json">{"downloadUrl": "/download/00000000-0000-4000-8000-0000000000f1", "fileType": "file", "originalName": "contract.pdf", "releaseUrl": "/release/00000000-0000-4000-8000-0000000000f1", "reportDecryptionUrl": "/report_decryption/00000000-0000-4000-8000-0000000000f1"}</script>
+
+        </main>
+
+        <footer class="footer-shell">
+            <div class="container-shell flex flex-col gap-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                <p class="flex items-start gap-2 sm:items-center">
+                    <span class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-honey-400 sm:mt-0" aria-hidden="true"></span>
+                    <span>This drop self-destructs after opening. Share the key separately when trust matters most.</span>
+                </p>
+                <p class="text-slate-600">Proudly developed with vibe coding.</p>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>
