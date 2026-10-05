@@ -142,6 +142,8 @@ From [How is the protocol fake kept honest against the real server?](https://git
 
 From [Which behaviours and journeys must each layer cover?](https://github.com/luprzybyl/buzzdrop/issues/161), amended by [Which page-script logic is extracted into pure, unit-tested modules?](https://github.com/luprzybyl/buzzdrop/issues/167). Each scenario gets one test.
 
+**Granularity.** A test earns its place by catching a mistake that would weaken security or break a journey; the mutation table below names those mistakes. File and note run as separate cases only where their code differs: they share `encryptForUpload` and `uploadWithProgress`, so the error paths run once, in file mode. Which message the UI shows for which status is a DOM concern, not an integration one.
+
 ### Unit (`node --test`)
 - Existing: `crypto`, `passphrase`, `shared-files` (the crypto fixtures are byte-identical to `tests/unit/test_cli_crypto.py`).
 - New: `fragment-password.test.js`, `file-extensions.test.js`; `shared-files.test.js` gains the badge and search-text cases (§3).
@@ -156,7 +158,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
   - Copy-to-clipboard status.
   - Delete confirmation via `data-confirm-message`.
   - Shared files: search, sort, pagination and their URL sync. Status refresh updates the row and re-renders (one row, stubbed `fetch`).
-- **View page (`view.js`):** the plaintext view for text notes, the copy-text button, error messages, the field filled from a well-formed fragment.
+- **View page (`view.js`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment.
 - **Success page (`success.js`):** copy link and one-click link, password visibility toggle, the field filled from a well-formed fragment.
 - **Confirm page (`confirm-download.js`):** the fragment password carried across the confirm POST (one well-formed case).
 - **Hero flow (`hero-flow.js`):** reduced motion means no autoplay; the toggle pauses it.
@@ -165,8 +167,8 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 ### JS integration (page modules + real `crypto.js` + protocol fake)
 - **Two-phase upload, for file and for note:** begin → encrypt under H → upload with `file_id`, verifier and `receipt_hash` → progress updates → redirect to success.
 - **Share options sent on upload, for file and for note:** expiry, private note, notify-on-open, notification email. Asserted on the request bodies.
-- **Upload error paths:** begin fails (abort), 403, 413, 429, server error. The UI recovers and can be retried, and no stale share is reused.
-- **View:** fetch the blob → release → decrypt → report the receipt. Status handling for 403 (`attempts_remaining`), 410, 429 and 404 (missing or burned share).
+- **Upload error paths, file mode only:** begin fails → the retry runs a fresh begin; upload fails → the retry finishes the newly issued share, not the stale one; 413 shows its message and the UI unlocks.
+- **View:** fetch the blob → release → decrypt → report the receipt, plus one upload → view round trip on one fake instance. 403 with `attempts_remaining`. The other `/release` statuses only pick a message and are DOM-tested.
 
 ### E2E journeys (Playwright, against the app container)
 1. File: upload → success → share link → confirm → decrypt → downloaded bytes equal the original.
@@ -179,15 +181,35 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 
 Hard-to-produce failures (410 edge cases, 429) are mocked per test with `page.route()`. There is no separate mocked-server E2E mode.
 
+**Always-on invariant fixture.** Every E2E test, in every browser, runs under a Playwright fixture that intercepts all requests and fails if the test's password appears in any URL, header or body, and that fails after the test if `localStorage` or `sessionStorage` holds anything. Journeys added later inherit it.
+
 ### Security invariants
 | Invariant | Layer |
 |---|---|
-| The password never reaches the server: no request body, header or URL contains it | Integration (request log) + once in E2E (request interception) |
+| The password never reaches the server: no request body, header or URL contains it | Integration (request log) + every E2E test (always-on fixture) |
 | Weak passwords are refused before any request is sent | Integration |
 | Password fragments are scrubbed from the URL and history on every page (index, view, success, confirm) | DOM |
 | The CSRF token is sent on every session-authed mutation | Integration |
-| H is never persisted client-side (localStorage/sessionStorage) | Integration |
+| H is never persisted client-side (localStorage/sessionStorage) | Integration + every E2E test (always-on fixture) |
 | Web Crypto is only available in a secure context | E2E (happy-dom doesn't model `isSecureContext`) |
+
+### Mutation table
+Each row is a small mistake and the layer that must catch it. A test that owns a row is checked by making that mistake in the code and watching the test fail; record the result in the PR. A test may move between layers as long as its rows are still caught. Issues point to the rows they own.
+
+| # | Mutation | Must be caught by |
+|---|---|---|
+| 1 | Password added to the upload body | Integration + E2E (always-on fixture) |
+| 2 | Password sent to `/release` instead of V | Integration (view) + E2E (always-on fixture) |
+| 3 | H written to localStorage/sessionStorage | Integration + E2E (always-on fixture) |
+| 4 | Weak-password check removed | Integration |
+| 5 | A cached begin response reused on retry | Integration |
+| 6 | CSRF header dropped from a session-authed mutation | Integration |
+| 7 | Share options dropped from the note upload | Integration |
+| 8 | Password fragment not scrubbed from the URL/history | DOM |
+| 9 | UI left locked after an upload error | Integration (413 case) |
+| 10 | Progress display removed | Integration |
+| 11 | Key derivation or envelope diverges between browser and CLI | Unit (byte-identical BKV3 fixtures) |
+| 12 | Server releases H twice, or skips the lockout | Python (`tests/integration/test_key_release.py`) |
 
 ## 8. E2E harness and test profile
 
@@ -220,6 +242,7 @@ From [Pin down E2E harness facts: Playwright against the Buzzdrop Docker image](
 - **Isolation:** one fresh container per `playwright test` run, shared by all browser projects and workers. **No test-only reset or seed hooks.** Each test uploads under a unique filename and finds its own row.
 - **Downloads:** `page.waitForEvent('download')` + `download.path()` captures the Blob save byte-exact. PBKDF2 costs about 40–90 ms per derivation, which is negligible.
 - **Config:** projects Chromium, Firefox and WebKit; `retries: 0`; `trace: 'retain-on-failure'`, `screenshot: 'only-on-failure'`, `video: 'off'`.
+- **Browser matrix:** every journey runs in all three browsers. After the first failure in Firefox or WebKit that has no real bug behind it, Chromium keeps every journey and the other two run only journeys 1, 2 and 5.
 
 ## 9. CI
 
