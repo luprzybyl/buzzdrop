@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initHeroFlow } from '../../../static/js/hero-flow-page.js';
+import { required } from '../../../static/js/required.js';
 import { browserView, loadFixture } from '../support/dom-fixture.js';
 
 // Longer than any stage's hold time, so an autoplaying flow must have advanced.
@@ -26,8 +27,8 @@ describe('hero flow', () => {
         initHeroFlow(window.document, {});
         return {
             window,
-            stage: /** @type {HTMLElement} */ (window.document.getElementById('flow-stage')),
-            toggle: /** @type {HTMLButtonElement} */ (window.document.getElementById('flow-toggle')),
+            stage: required(window.document, '#flow-stage', 'div'),
+            toggle: required(window.document, '#flow-toggle', 'button'),
         };
     };
 

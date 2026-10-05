@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initSuccess } from '../../../static/js/success-page.js';
+import { required } from '../../../static/js/required.js';
 import { browserView, loadFixture } from '../support/dom-fixture.js';
 
 const SHARE_LINK = 'http://localhost/view/00000000-0000-4000-8000-0000000000f1';
@@ -44,8 +45,7 @@ describe('success page', () => {
         initSuccess(window.document, {});
         // Every id the tests look up is in the fixture.
         const byId = (/** @type {string} */ id) => /** @type {HTMLElement} */ (window.document.getElementById(id));
-        // ...and these ones are <input>s.
-        const field = (/** @type {string} */ id) => /** @type {HTMLInputElement} */ (byId(id));
+        const field = (/** @type {string} */ id) => required(window.document, `#${id}`, 'input');
         return {
             window,
             copied,

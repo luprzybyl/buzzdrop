@@ -3,14 +3,17 @@
 // artwork in each stage is aria-hidden; the captions are real text in an
 // ordered list, so assistive tech reads the whole sequence regardless of which
 // stage happens to be on screen.
+import { requiredWindow } from './required.js';
 
 /**
  * @typedef {Record<string, never>} HeroFlowDeps
  */
 
-// The hero needs nothing beyond the DOM, which comes in as `root`; the
-// reduced-motion query is read from the root's own window.
-/** @returns {HeroFlowDeps} */
+/**
+ * The hero needs nothing beyond the DOM, which comes in as `root`; the
+ * reduced-motion query is read from the root's own window.
+ * @returns {HeroFlowDeps}
+ */
 export function browserDeps() {
     return {};
 }
@@ -29,8 +32,7 @@ export function initHeroFlow(root, deps) {
     const HOLD_MS = [4320, 3840, 3480, 3960, 3720, 5040];
     const DEFAULT_HOLD_MS = 3840;
 
-    // A document handed to a page module always belongs to a window.
-    const reduceMotion = /** @type {Window} */ (root.defaultView).matchMedia('(prefers-reduced-motion: reduce)');
+    const reduceMotion = requiredWindow(root).matchMedia('(prefers-reduced-motion: reduce)');
     let current = 0;
     /** @type {ReturnType<typeof setTimeout> | undefined} */
     let timer;

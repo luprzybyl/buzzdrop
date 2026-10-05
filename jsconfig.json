@@ -30,7 +30,10 @@
         "static/js/confirm-download.js",
         "static/js/users-page.js",
         "static/js/users.js",
+        "static/js/required.js",
         "tests/js/**/*.js"
     ],
+    // `exclude` only filters `include`: eff-wordlist.js (data) is still checked
+    // through passphrase.js's import, which a plain string array passes as is.
     "exclude": ["static/js/eff-wordlist.js", "tests/js/fixtures"]
 }

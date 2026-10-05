@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { initConfirmDownload } from '../../../static/js/confirm-download-page.js';
+import { required } from '../../../static/js/required.js';
 import { browserView, loadFixture } from '../support/dom-fixture.js';
 
 const PAGE_URL = 'http://localhost/view/00000000-0000-4000-8000-0000000000f1';
@@ -18,7 +19,7 @@ describe('confirm-download page', () => {
         page = loadFixture('confirm_download--file', {}, url);
         const window = browserView(page);
         initConfirmDownload(window.document, {});
-        const form = /** @type {HTMLFormElement} */ (window.document.getElementById('confirm-form'));
+        const form = required(window.document, '#confirm-form', 'form');
         return {
             window,
             form,

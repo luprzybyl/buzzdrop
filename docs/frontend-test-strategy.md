@@ -24,7 +24,9 @@ From [Choose the runner and DOM environment for DOM + JS-integration tests](http
 - **jsdom is rejected.** It puts byte arrays in two realms, so `TextEncoder`/`subtle` output fails `instanceof Uint8Array`, which breaks `crypto.js`. It also has no navigation, and `new Response(blob)` throws.
 - Real 600k-iteration PBKDF2 runs in happy-dom at acceptable cost. Tests don't stub the KDF.
 - **Node 24** via a committed `.nvmrc`.
-- **npm scripts:** `test:unit` (today's `test:js`, renamed), `test:dom` (`vitest run --coverage`), `test` (both), `fixtures` (regenerates the DOM fixtures and the protocol contract).
+- **npm scripts:** `test:unit` (today's `test:js`, renamed), `test:dom` (`vitest run --coverage`), `test` (both), `fixtures` (regenerates the DOM fixtures and the protocol contract), `typecheck` (`tsc -p jsconfig.json`).
+- **Type checking** (from [#203](https://github.com/luprzybyl/buzzdrop/issues/203)): `tsc --checkJs` under `strict` checks `static/js/` and `tests/js/` from their JSDoc, with no build step and no `.ts` files (`noEmit`; the browser loads the same `.js`). Config: root `jsconfig.json`; devDeps `typescript` and `@types/node`. Its `include` is a temporary allowlist until the index and view pages are split (§3). No `@ts-ignore`/`@ts-nocheck`; an `@ts-expect-error` carries a one-line reason.
+- **Typed DOM tests:** page modules are typed against lib.dom, happy-dom's window against its own classes. Tests drive the page through `browserView(window)` from `tests/js/support/dom-fixture.js`, the one bridge between the two.
 - **Coverage** is reported, not gated.
 
 ## 3. Testability refactor of page scripts
@@ -43,6 +45,7 @@ From [What shape should the testability refactor of page scripts take?](https://
 
   **Not passed in:** the DOM (it comes in as `root`), `history`, `clipboard`, and reads of `location`. happy-dom models these, and tests assert on them directly.
 - **`success.js` and `confirm-download.js` become ES modules** (`type="module"` in their templates).
+- **Template-guaranteed elements** are looked up with `required(parent, selector, tag)` / `requiredClosest(element, selector, tag)` from `static/js/required.js`: a missing element or wrong tag throws a named error, and the tag gives the element's type with no cast. Elements a template may really lack keep a plain null check.
 - **Upload `FormData`:** the file and note copies in the index page are merged into one local `appendShareOptions(formData, opts)`.
 
 ### Pure-module extraction
@@ -140,6 +143,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 ### Unit (`node --test`)
 - Existing: `crypto`, `passphrase`, `shared-files` (the crypto fixtures are byte-identical to `tests/unit/test_cli_crypto.py`).
 - New: `fragment-password.test.js`, `file-extensions.test.js`; `shared-files.test.js` gains the badge and search-text cases (§3).
+- `required.test.js`: the element lookups (§3) return the match, and throw on a missing element, a wrong tag or a windowless document.
 
 ### DOM (Vitest + happy-dom, against the template fixtures)
 - **Index page (`main.js`):**
@@ -223,7 +227,7 @@ All gating CI lives in `ci.yml`. **`build-test.yml` is deleted** (it duplicated 
 
 | Job | Needs | Does |
 |---|---|---|
-| `js-fast` | — | `setup-node` (`.nvmrc`, `cache: npm`) → `npm ci` → `npm run test:unit` → `npm run test:dom` |
+| `js-fast` | — | `setup-node` (`.nvmrc`, `cache: npm`) → `npm ci` → `npm run typecheck` → `npm run test:unit` → `npm run test:dom` |
 | `build` | — | `docker build -t buzzdrop-test .` → `docker save` → upload the image as an artifact |
 | `pytest` | `build` | `docker load` → pytest in the image → `db.json` migration smoke test → **DOM-fixture drift check** → **protocol-contract drift check** |
 | `e2e` | `build` | `docker load` → `setup-node` + `npm ci` → `npx playwright install --with-deps chromium firefox webkit` (no browser cache) → `E2E_IMAGE=buzzdrop-test npx playwright test` |

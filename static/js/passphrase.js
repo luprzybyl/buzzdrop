@@ -44,9 +44,11 @@ const COMMON_PASSWORDS = new Set([
     'buzzdrop', 'buzz', 'onedrive', 'dropbox',
 ]);
 
-// Map the classic substitutions back to letters so "P4ssw0rd!" still
-// hits the blocklist instead of slipping through on a technicality.
-/** @type {Record<string, string>} */
+/**
+ * Map the classic substitutions back to letters so "P4ssw0rd!" still
+ * hits the blocklist instead of slipping through on a technicality.
+ * @type {Record<string, string>}
+ */
 const LEET_MAP = {
     '0': 'o', '1': 'l', '3': 'e', '4': 'a', '5': 's', '7': 't',
     '8': 'b', '@': 'a', '$': 's', '!': 'i', '€': 'e', '£': 'l',
@@ -80,9 +82,9 @@ function characterPoolSize(password) {
     return pool || 1;
 }
 
-// True if the password is one short token repeated to fill space —
-// "abcabcabc", "xyxyxyxy", "!!!!". Work factor is the seed, not the length.
 /**
+ * True if the password is one short token repeated to fill space —
+ * "abcabcabc", "xyxyxyxy", "!!!!". Work factor is the seed, not the length.
  * @param {string} password
  * @returns {boolean}
  */
@@ -97,9 +99,9 @@ function isRepetition(password) {
     return false;
 }
 
-// Fraction of adjacent character pairs that walk a keyboard row or the
-// alphabet/digits by ±1. "qwerty", "abcd", "13579" score high.
 /**
+ * Fraction of adjacent character pairs that walk a keyboard row or the
+ * alphabet/digits by ±1. "qwerty", "abcd", "13579" score high.
  * @param {string} password
  * @returns {number}
  */

@@ -2,6 +2,7 @@
 // "Generate token" buttons on /users POST /api/token and render the raw token
 // inline. The token is returned exactly once and is never stored server-side,
 // so the result panel stays visible until the page is reloaded.
+import { required, requiredClosest } from './required.js';
 
 /**
  * @typedef {object} UsersDeps
@@ -17,9 +18,11 @@
  * @property {string} [error]
  */
 
-// `fetch` is bound to the window: called unbound, as deps.fetch(...), the
-// browser's fetch throws "Illegal invocation".
-/** @returns {UsersDeps} */
+/**
+ * `fetch` is bound to the window: called unbound, as deps.fetch(...), the
+ * browser's fetch throws "Illegal invocation".
+ * @returns {UsersDeps}
+ */
 export function browserDeps() {
     return { fetch: window.fetch.bind(window) };
 }
@@ -41,14 +44,13 @@ export function initUsers(root, deps) {
         }, 2000);
     }
 
-    // Every .token-card in the template carries all of these.
     /** @param {HTMLButtonElement} button */
     async function generateToken(button) {
-        const card = /** @type {HTMLElement} */ (button.closest('.token-card'));
-        const result = /** @type {HTMLElement} */ (card.querySelector('.token-result'));
-        const input = /** @type {HTMLInputElement} */ (card.querySelector('.generated-token-input'));
-        const expires = /** @type {HTMLElement} */ (card.querySelector('.token-expires'));
-        const error = /** @type {HTMLElement} */ (card.querySelector('.token-error'));
+        const card = requiredClosest(button, '.token-card', 'div');
+        const result = required(card, '.token-result', 'div');
+        const input = required(card, '.generated-token-input', 'input');
+        const expires = required(card, '.token-expires', 'p');
+        const error = required(card, '.token-error', 'p');
 
         button.disabled = true;
         error.hidden = true;
@@ -82,7 +84,7 @@ export function initUsers(root, deps) {
 
     /** @type {NodeListOf<HTMLButtonElement>} */ (root.querySelectorAll('.copy-token-btn')).forEach((button) => {
         button.addEventListener('click', () => {
-            const input = /** @type {HTMLInputElement} */ (/** @type {HTMLElement} */ (button.closest('.copy-field')).querySelector('input'));
+            const input = required(requiredClosest(button, '.copy-field', 'div'), 'input', 'input');
             input.select();
             root.execCommand('copy');
             flashCopied(button);

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { initUsers } from '../../../static/js/users-page.js';
+import { required } from '../../../static/js/required.js';
 import { browserView, loadFixture } from '../support/dom-fixture.js';
 
 const TOKEN = 'a'.repeat(64);
@@ -27,21 +28,19 @@ describe('users page', () => {
             headers: { 'Content-Type': 'application/json' },
         })));
         initUsers(window.document, { fetch });
-        // The first card is testuser's; every card carries all of these.
-        const card = /** @type {HTMLElement} */ (window.document.querySelector('.token-card'));
-        /** @param {string} selector */
-        const inCard = (selector) => /** @type {HTMLElement} */ (card.querySelector(selector));
-        const generate = /** @type {HTMLButtonElement} */ (inCard('.generate-token-btn'));
+        // The first card is testuser's.
+        const card = required(window.document, '.token-card', 'div');
+        const generate = required(card, '.generate-token-btn', 'button');
         return {
             window,
             fetch,
             card,
             generate,
-            result: inCard('.token-result'),
-            input: /** @type {HTMLInputElement} */ (inCard('.generated-token-input')),
-            expires: inCard('.token-expires'),
-            error: inCard('.token-error'),
-            copy: inCard('.copy-token-btn'),
+            result: required(card, '.token-result', 'div'),
+            input: required(card, '.generated-token-input', 'input'),
+            expires: required(card, '.token-expires', 'p'),
+            error: required(card, '.token-error', 'p'),
+            copy: required(card, '.copy-token-btn', 'button'),
             // Clicks Generate and waits for the request to finish.
             async clickGenerate() {
                 generate.click();
@@ -102,7 +101,7 @@ describe('users page', () => {
         /** @type {[string, string][]} */
         const copied = [];
         window.document.execCommand = vi.fn((/** @type {string} */ command) => {
-            const input = /** @type {HTMLInputElement} */ (window.document.querySelector('.generated-token-input'));
+            const input = required(window.document, '.generated-token-input', 'input');
             copied.push([command, input.value.substring(
                 /** @type {number} */ (input.selectionStart), /** @type {number} */ (input.selectionEnd))]);
             return true;
@@ -112,7 +111,7 @@ describe('users page', () => {
         copy.click();
 
         expect(copied).toEqual([['copy', TOKEN]]);
-        const label = /** @type {HTMLElement} */ (copy.querySelector('.copy-label'));
+        const label = required(copy, '.copy-label', 'span');
         expect(label.textContent).toBe('Copied!');
 
         vi.advanceTimersByTime(2000);

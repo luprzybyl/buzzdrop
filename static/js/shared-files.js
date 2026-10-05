@@ -62,8 +62,8 @@ export function buildSharedFilesUrl(currentUrl, page, searchTerm) {
     return url;
 }
 
-// Downloaded wins over expired, which wins over active.
 /**
+ * Downloaded wins over expired, which wins over active.
  * @param {FileStatus} file
  * @returns {string}
  */
