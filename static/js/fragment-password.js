@@ -4,6 +4,10 @@
 
 // The password in a `location.hash` value, or null when there is none or it
 // is not valid percent-encoding.
+/**
+ * @param {string} hash
+ * @returns {string | null}
+ */
 export function readFragmentPassword(hash) {
     if (hash.length <= 1) return null;
     try {
@@ -15,6 +19,11 @@ export function readFragmentPassword(hash) {
 
 // `shareUrl` with the password as its fragment, replacing any fragment the
 // URL already carries.
+/**
+ * @param {string} shareUrl
+ * @param {string} password
+ * @returns {string}
+ */
 export function buildOneClickLink(shareUrl, password) {
     return shareUrl.split('#')[0] + '#' + encodeURIComponent(password);
 }

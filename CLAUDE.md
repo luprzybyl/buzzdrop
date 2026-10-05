@@ -36,6 +36,10 @@ pytest tests/unit/test_db.py -v
 # Run specific test function
 pytest tests/unit/test_db.py::test_function_name -v
 
+# Type-check the browser JS and JS tests (JSDoc + tsc --checkJs, no build
+# step; config in jsconfig.json, run by the js-fast CI job)
+npm run typecheck
+
 # Regenerate the committed DOM-test fixtures (CI fails if they are stale).
 # The pre-commit hook in .githooks/ does this automatically for commits
 # touching templates/ or the root Python modules; npm install enables it.

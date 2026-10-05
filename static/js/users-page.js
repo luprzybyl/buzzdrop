@@ -3,15 +3,35 @@
 // inline. The token is returned exactly once and is never stored server-side,
 // so the result panel stays visible until the page is reloaded.
 
+/**
+ * @typedef {object} UsersDeps
+ * @property {typeof fetch} fetch
+ */
+
+/**
+ * What POST /api/token answers: the raw token (shown once) and its expiry on
+ * success, `{error}` otherwise.
+ * @typedef {object} TokenResponse
+ * @property {string} [token]
+ * @property {string} [expires_at]
+ * @property {string} [error]
+ */
+
 // `fetch` is bound to the window: called unbound, as deps.fetch(...), the
 // browser's fetch throws "Illegal invocation".
+/** @returns {UsersDeps} */
 export function browserDeps() {
     return { fetch: window.fetch.bind(window) };
 }
 
+/**
+ * @param {Document} root - the users.html document
+ * @param {UsersDeps} deps
+ */
 export function initUsers(root, deps) {
-    const csrfToken = root.querySelector('meta[name="csrf-token"]')?.content || '';
+    const csrfToken = /** @type {HTMLMetaElement | null} */ (root.querySelector('meta[name="csrf-token"]'))?.content || '';
 
+    /** @param {HTMLButtonElement} button */
     function flashCopied(button) {
         const label = button.querySelector('.copy-label');
         if (!label) return;
@@ -21,12 +41,14 @@ export function initUsers(root, deps) {
         }, 2000);
     }
 
+    // Every .token-card in the template carries all of these.
+    /** @param {HTMLButtonElement} button */
     async function generateToken(button) {
-        const card = button.closest('.token-card');
-        const result = card.querySelector('.token-result');
-        const input = card.querySelector('.generated-token-input');
-        const expires = card.querySelector('.token-expires');
-        const error = card.querySelector('.token-error');
+        const card = /** @type {HTMLElement} */ (button.closest('.token-card'));
+        const result = /** @type {HTMLElement} */ (card.querySelector('.token-result'));
+        const input = /** @type {HTMLInputElement} */ (card.querySelector('.generated-token-input'));
+        const expires = /** @type {HTMLElement} */ (card.querySelector('.token-expires'));
+        const error = /** @type {HTMLElement} */ (card.querySelector('.token-error'));
 
         button.disabled = true;
         error.hidden = true;
@@ -39,26 +61,28 @@ export function initUsers(root, deps) {
                 },
                 body: JSON.stringify({ username: button.dataset.username }),
             });
+            /** @type {TokenResponse} */
             const body = await resp.json().catch(() => ({}));
             if (!resp.ok) throw new Error(body.error || `Server returned ${resp.status}`);
-            input.value = body.token;
+            // A 2xx always carries the token.
+            input.value = /** @type {string} */ (body.token);
             expires.textContent = `Expires ${body.expires_at}. Reload to see it in the list below.`;
         } catch (err) {
             error.hidden = false;
-            error.textContent = err.message;
+            error.textContent = /** @type {Error} */ (err).message;
         } finally {
             result.hidden = false;
             button.disabled = false;
         }
     }
 
-    root.querySelectorAll('.generate-token-btn').forEach((button) => {
+    /** @type {NodeListOf<HTMLButtonElement>} */ (root.querySelectorAll('.generate-token-btn')).forEach((button) => {
         button.addEventListener('click', () => generateToken(button));
     });
 
-    root.querySelectorAll('.copy-token-btn').forEach((button) => {
+    /** @type {NodeListOf<HTMLButtonElement>} */ (root.querySelectorAll('.copy-token-btn')).forEach((button) => {
         button.addEventListener('click', () => {
-            const input = button.closest('.copy-field').querySelector('input');
+            const input = /** @type {HTMLInputElement} */ (/** @type {HTMLElement} */ (button.closest('.copy-field')).querySelector('input'));
             input.select();
             root.execCommand('copy');
             flashCopied(button);

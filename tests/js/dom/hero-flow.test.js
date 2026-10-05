@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initHeroFlow } from '../../../static/js/hero-flow-page.js';
-import { loadFixture } from '../support/dom-fixture.js';
+import { browserView, loadFixture } from '../support/dom-fixture.js';
 
 // Longer than any stage's hold time, so an autoplaying flow must have advanced.
 const LONGEST_HOLD_MS = 6000;
 
 describe('hero flow', () => {
+    /** @type {import('happy-dom').Window | undefined} */
     let page;
 
     beforeEach(() => {
@@ -18,12 +19,15 @@ describe('hero flow', () => {
         page = undefined;
     });
 
+    /** @param {import('happy-dom').IOptionalBrowserSettings} [settings] */
     const start = (settings) => {
         page = loadFixture('index--anonymous', settings);
-        initHeroFlow(page.document, {});
+        const window = browserView(page);
+        initHeroFlow(window.document, {});
         return {
-            stage: page.document.getElementById('flow-stage'),
-            toggle: page.document.getElementById('flow-toggle'),
+            window,
+            stage: /** @type {HTMLElement} */ (window.document.getElementById('flow-stage')),
+            toggle: /** @type {HTMLButtonElement} */ (window.document.getElementById('flow-toggle')),
         };
     };
 
@@ -46,18 +50,18 @@ describe('hero flow', () => {
     });
 
     it('the toggle pauses the walkthrough and plays it again', () => {
-        const { stage, toggle } = start();
+        const { window, stage, toggle } = start();
 
         toggle.click();
         // A deliberate pause outlasts the pointer leaving the stage.
-        stage.dispatchEvent(new page.MouseEvent('mouseenter'));
-        stage.dispatchEvent(new page.MouseEvent('mouseleave'));
+        stage.dispatchEvent(new window.MouseEvent('mouseenter'));
+        stage.dispatchEvent(new window.MouseEvent('mouseleave'));
         vi.advanceTimersByTime(LONGEST_HOLD_MS * 3);
 
         expect(stage.dataset.step).toBe('0');
         expect(toggle.getAttribute('aria-label')).toBe('Play walkthrough');
-        expect(toggle.querySelector('[data-flow-icon="play"]').classList.contains('hidden')).toBe(false);
-        expect(toggle.querySelector('[data-flow-icon="pause"]').classList.contains('hidden')).toBe(true);
+        expect(toggle.querySelector('[data-flow-icon="play"]')?.classList.contains('hidden')).toBe(false);
+        expect(toggle.querySelector('[data-flow-icon="pause"]')?.classList.contains('hidden')).toBe(true);
 
         toggle.click();
         vi.advanceTimersByTime(LONGEST_HOLD_MS);

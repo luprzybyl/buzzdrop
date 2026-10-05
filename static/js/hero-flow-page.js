@@ -4,12 +4,21 @@
 // ordered list, so assistive tech reads the whole sequence regardless of which
 // stage happens to be on screen.
 
+/**
+ * @typedef {Record<string, never>} HeroFlowDeps
+ */
+
 // The hero needs nothing beyond the DOM, which comes in as `root`; the
 // reduced-motion query is read from the root's own window.
+/** @returns {HeroFlowDeps} */
 export function browserDeps() {
     return {};
 }
 
+/**
+ * @param {Document} root - the index.html document; pages without the hero are a no-op
+ * @param {HeroFlowDeps} deps
+ */
 export function initHeroFlow(root, deps) {
     const stage = root.getElementById('flow-stage');
     if (!stage) return;
@@ -20,13 +29,16 @@ export function initHeroFlow(root, deps) {
     const HOLD_MS = [4320, 3840, 3480, 3960, 3720, 5040];
     const DEFAULT_HOLD_MS = 3840;
 
-    const reduceMotion = root.defaultView.matchMedia('(prefers-reduced-motion: reduce)');
+    // A document handed to a page module always belongs to a window.
+    const reduceMotion = /** @type {Window} */ (root.defaultView).matchMedia('(prefers-reduced-motion: reduce)');
     let current = 0;
-    let timer = null;
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let timer;
     // A deliberate pause has to outlast hovering and tab switches, so it is
     // tracked apart from the transient reasons to hold still.
     let paused = false;
 
+    /** @param {number} index */
     const render = (index) => {
         current = index;
         stage.dataset.step = String(index);
@@ -39,7 +51,7 @@ export function initHeroFlow(root, deps) {
 
     const stop = () => {
         clearTimeout(timer);
-        timer = null;
+        timer = undefined;
     };
 
     const play = () => {
@@ -63,6 +75,7 @@ export function initHeroFlow(root, deps) {
         const pauseIcon = toggle.querySelector('[data-flow-icon="pause"]');
         const playIcon = toggle.querySelector('[data-flow-icon="play"]');
 
+        /** @param {boolean} value */
         const setPaused = (value) => {
             paused = value;
             toggle.setAttribute('aria-label', paused ? 'Play walkthrough' : 'Pause walkthrough');

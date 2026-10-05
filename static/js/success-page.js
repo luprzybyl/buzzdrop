@@ -6,26 +6,42 @@
 
 import { buildOneClickLink, readFragmentPassword } from './fragment-password.js';
 
+/**
+ * @typedef {Record<string, never>} SuccessDeps
+ */
+
 // The page needs nothing beyond the DOM, which comes in as `root`; the URL and
 // history are read from the root's own window.
+/** @returns {SuccessDeps} */
 export function browserDeps() {
     return {};
 }
 
+/**
+ * @param {Document} root - the success.html document
+ * @param {SuccessDeps} deps
+ */
 export function initSuccess(root, deps) {
-    const window = root.defaultView;
+    // A document handed to a page module always belongs to a window.
+    const window = /** @type {Window} */ (root.defaultView);
 
     // One region for the page announces every copy; the button flash is visual.
+    /** @param {string} message */
     function setCopyStatus(message) {
         const region = root.getElementById('copy-status');
         if (region) region.textContent = message;
     }
 
+    /** @type {WeakMap<Element, {timer: ReturnType<typeof setTimeout>, originalText: string | null}>} */
     const copyFlashes = new WeakMap();
 
     // Flash confirmation on the button and announce it. Only the visible label is
     // rewritten: the button also carries a screen-reader-only prefix naming which
     // link it copies, and setting textContent on the button itself would destroy it.
+    /**
+     * @param {Element} button
+     * @param {string} message
+     */
     function flashCopied(button, message) {
         setCopyStatus(message);
         const label = button.querySelector('.copy-label');
@@ -48,28 +64,30 @@ export function initSuccess(root, deps) {
 
     // Copy the share link to clipboard and show a temporary message
     function copyLink() {
-        const shareLink = root.getElementById('share-link');
+        const shareLink = /** @type {HTMLInputElement} */ (root.getElementById('share-link'));
         shareLink.select();
         root.execCommand('copy');
-        flashCopied(shareLink.nextElementSibling, 'Link copied to clipboard.');
+        // The template puts each copy button right after its input.
+        flashCopied(/** @type {Element} */ (shareLink.nextElementSibling), 'Link copied to clipboard.');
     }
 
     // Copy the share link with password to clipboard
     function copyLinkWithPassword() {
-        const shareLinkWithPassword = root.getElementById('share-link-with-password');
+        const shareLinkWithPassword = /** @type {HTMLInputElement} */ (root.getElementById('share-link-with-password'));
         shareLinkWithPassword.select();
         root.execCommand('copy');
-        flashCopied(shareLinkWithPassword.nextElementSibling, 'One-click link copied to clipboard.');
+        flashCopied(/** @type {Element} */ (shareLinkWithPassword.nextElementSibling), 'One-click link copied to clipboard.');
     }
 
     // A reveal's auto-hide; a manual Hide cancels it, so it can't cut a later
     // reveal short.
-    let hideTimer = null;
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let hideTimer;
 
     // Toggle password field between 'password' and 'text' for user convenience
     function togglePasswordVisibility() {
-        const pwdInput = root.getElementById('password-display');
-        const toggleBtn = root.getElementById('toggle-password');
+        const pwdInput = /** @type {HTMLInputElement} */ (root.getElementById('password-display'));
+        const toggleBtn = /** @type {HTMLButtonElement} */ (root.getElementById('toggle-password'));
         clearTimeout(hideTimer);
         if (pwdInput.type === 'password') {
             pwdInput.type = 'text';
@@ -85,9 +103,9 @@ export function initSuccess(root, deps) {
     }
 
     // Buttons wire up here, not via inline onclick — CSP forbids inline handlers.
-    root.getElementById('copy-link-btn').addEventListener('click', copyLink);
-    root.getElementById('copy-one-click-btn').addEventListener('click', copyLinkWithPassword);
-    root.getElementById('toggle-password').addEventListener('click', togglePasswordVisibility);
+    /** @type {HTMLButtonElement} */ (root.getElementById('copy-link-btn')).addEventListener('click', copyLink);
+    /** @type {HTMLButtonElement} */ (root.getElementById('copy-one-click-btn')).addEventListener('click', copyLinkWithPassword);
+    /** @type {HTMLButtonElement} */ (root.getElementById('toggle-password')).addEventListener('click', togglePasswordVisibility);
 
     // Auto-fill the password from the URL fragment (the upload flow navigates
     // here with it). Read it once, then scrub it from the address bar and
@@ -98,10 +116,10 @@ export function initSuccess(root, deps) {
     window.history.replaceState(
         null, '', window.location.pathname + window.location.search);
     if (pwd) {
-        root.getElementById('password-display').value = pwd;
+        /** @type {HTMLInputElement} */ (root.getElementById('password-display')).value = pwd;
 
         // Generate link with password in URL fragment
-        const shareLink = root.getElementById('share-link').value;
-        root.getElementById('share-link-with-password').value = buildOneClickLink(shareLink, pwd);
+        const shareLink = /** @type {HTMLInputElement} */ (root.getElementById('share-link')).value;
+        /** @type {HTMLInputElement} */ (root.getElementById('share-link-with-password')).value = buildOneClickLink(shareLink, pwd);
     }
 }

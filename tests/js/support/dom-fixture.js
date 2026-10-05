@@ -11,8 +11,26 @@ const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixture
 // the next. `settings` are happy-dom browser settings, e.g.
 // { device: { prefersReducedMotion: 'reduce' } }; `url` is the page's address,
 // for pages that read it (a password fragment, say).
+/**
+ * @param {string} name
+ * @param {import('happy-dom').IOptionalBrowserSettings} [settings]
+ * @param {string} [url]
+ * @returns {Window}
+ */
 export function loadFixture(name, settings = {}, url = 'http://localhost/') {
     const window = new Window({ url, settings });
     window.document.write(readFileSync(join(FIXTURE_DIR, `${name}.html`), 'utf8'));
     return window;
+}
+
+// The page modules are typed against the browser's DOM (lib.dom); happy-dom
+// implements that same DOM, but under its own class types, which TypeScript
+// can't relate to lib.dom's. This is the one place the two are bridged: tests
+// drive the page through the returned lib.dom view of the fixture's window.
+/**
+ * @param {Window} window - a window from loadFixture
+ * @returns {globalThis.Window & typeof globalThis}
+ */
+export function browserView(window) {
+    return /** @type {globalThis.Window & typeof globalThis} */ (/** @type {unknown} */ (window));
 }
