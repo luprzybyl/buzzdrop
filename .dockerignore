@@ -1,0 +1,34 @@
+# The Dockerfile copies the whole build context, so anything not listed
+# here ends up in the image layers, where anyone who pulls the image can
+# read it (#163). The image keeps tests/, docs/ and cli/: CI runs pytest
+# inside it. The CI build job plants a decoy for each secret/state pattern
+# (its DECOYS list) and fails if one leaks: add new patterns to both.
+
+# Secrets and local state
+# .env.example holds only placeholders, and the tests load it.
+**/.env*
+!.env.example
+**/*.db*
+**/*.sqlite3
+**/db.json
+data/
+uploads/
+instance/
+**/*.pem
+**/*.key
+
+# Development clutter
+.git/
+.venv/
+venv/
+node_modules/
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+coverage/
+htmlcov/
+.coverage
+.claude/
+.idea/
+.vscode/
+**/.DS_Store

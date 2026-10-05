@@ -214,7 +214,7 @@ From [Pin down E2E harness facts: Playwright against the Buzzdrop Docker image](
   | `SMTP_*` | empty | No notification mail |
 
   Lockout keeps its defaults (`KEY_RELEASE_MAX_ATTEMPTS=1`, burn on), so journey 4 tests it for real.
-- **`.dockerignore`:** `.env`, `buzzdrop.db*`, `uploads/`, `node_modules/`, `.venv/`, `__pycache__/`. Without it, `COPY . .` bakes a developer's `.env` and DB into the image, and `load_dotenv` fills in anything the profile leaves unset.
+- **`.dockerignore`:** at least `.env`, `buzzdrop.db*`, `uploads/`, `node_modules/`, `.venv/`, `__pycache__/`; the file itself is the full list ([#163](https://github.com/luprzybyl/buzzdrop/issues/163)). Without it, `COPY . .` bakes a developer's `.env` and DB into the image, and `load_dotenv` fills in anything the profile leaves unset.
 - **Isolation:** one fresh container per `playwright test` run, shared by all browser projects and workers. **No test-only reset or seed hooks.** Each test uploads under a unique filename and finds its own row.
 - **Downloads:** `page.waitForEvent('download')` + `download.path()` captures the Blob save byte-exact. PBKDF2 costs about 40–90 ms per derivation, which is negligible.
 - **Config:** projects Chromium, Firefox and WebKit; `retries: 0`; `trace: 'retain-on-failure'`, `screenshot: 'only-on-failure'`, `video: 'off'`.
@@ -228,7 +228,7 @@ All gating CI lives in `ci.yml`. **`build-test.yml` is deleted** (it duplicated 
 | Job | Needs | Does |
 |---|---|---|
 | `js-fast` | — | `setup-node` (`.nvmrc`, `cache: npm`) → `npm ci` → `npm run typecheck` → `npm run test:unit` → `npm run test:dom` |
-| `build` | — | `docker build -t buzzdrop-test .` → `docker save` → upload the image as an artifact |
+| `build` | — | plant decoy `.env`/DB/upload files → `docker build -t buzzdrop-test .` → fail if a decoy is in the image (`.dockerignore`, #163) → `docker save` → upload the image as an artifact |
 | `pytest` | `build` | `docker load` → pytest in the image → `db.json` migration smoke test → **DOM-fixture drift check** → **protocol-contract drift check** |
 | `e2e` | `build` | `docker load` → `setup-node` + `npm ci` → `npx playwright install --with-deps chromium firefox webkit` (no browser cache) → `E2E_IMAGE=buzzdrop-test npx playwright test` |
 
