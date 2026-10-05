@@ -60,7 +60,7 @@ npm install
 npm run build:css
 ```
 
-The editable source lives in `static/css/tailwind.css`, and the compiled output is committed so production deployments do not need Node installed at runtime.
+The styling uses Tailwind CSS v4, which is configured in CSS: theme tokens (colours, fonts, shadows, animations) live in the `@theme` block of `static/css/tailwind.css`, and there is no `tailwind.config.js`. The editable source lives in `static/css/tailwind.css`, and the compiled output is committed so production deployments do not need Node installed at runtime.
 
 ---
 

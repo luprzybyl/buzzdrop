@@ -15,7 +15,7 @@
             </span>
 
             <span class="eyebrow">Recipient step</span>
-            <h1 class="mt-5 break-words text-2xl font-semibold tracking-tight text-white">{{ original_name }}</h1>
+            <h1 class="mt-5 wrap-break-word text-2xl font-semibold tracking-tight text-white">{{ original_name }}</h1>
             <p id="status" class="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-400">
                 Enter the password to {% if file_type == 'text' %}reveal this note{% else %}decrypt and download{% endif %}.
             </p>
@@ -36,11 +36,11 @@
         </p>
 
         <div id="text-display" class="mt-7 overflow-hidden rounded-2xl border border-white/[0.07] bg-hive-850/70" style="display: none;">
-            <div class="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+            <div class="flex items-center justify-between gap-3 border-b border-white/6 px-4 py-3">
                 <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Decrypted text</h2>
                 <button id="copy-text-btn" class="btn-secondary px-3 py-1.5 text-xs">Copy</button>
             </div>
-            <pre id="text-content" class="max-h-96 overflow-y-auto whitespace-pre-wrap break-words px-4 py-4 font-mono text-sm leading-6 text-slate-200"></pre>
+            <pre id="text-content" class="max-h-96 overflow-y-auto whitespace-pre-wrap wrap-break-word px-4 py-4 font-mono text-sm leading-6 text-slate-200"></pre>
         </div>
     </div>
 

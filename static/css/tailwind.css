@@ -1,6 +1,128 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss' source(none);
+
+/* Same sources the v3 content globs scanned. */
+@source '../../templates';
+@source '../js';
+
+@theme {
+  --color-hive-500: #3c4352;
+  --color-hive-600: #2a303c;
+  --color-hive-700: #1c2029;
+  --color-hive-800: #151922;
+  --color-hive-850: #101319;
+  --color-hive-900: #0b0d12;
+  --color-hive-950: #07080b;
+
+  --color-honey-50: #fffbeb;
+  --color-honey-100: #fff3c9;
+  --color-honey-200: #ffe49b;
+  --color-honey-300: #ffd166;
+  --color-honey-400: #ffb627;
+  --color-honey-500: #f59e0b;
+  --color-honey-600: #d97706;
+  --color-honey-700: #a55a05;
+
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Apple Color Emoji', sans-serif;
+
+  --container-shell: 78rem;
+
+  --shadow-buzz: 0 40px 100px -60px rgba(0, 0, 0, 0.95);
+  --shadow-honey: 0 10px 30px -12px rgba(255, 182, 39, 0.45);
+  --shadow-honey-lg: 0 24px 70px -24px rgba(255, 182, 39, 0.5);
+  --shadow-hairline: inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+
+  --animate-fade-up: fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-zoom-in: zoom-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-drift: drift 70s linear infinite;
+  --animate-stripes: stripes 0.9s linear infinite;
+  --animate-draw-in: draw-in 0.8s ease-out 0.25s both;
+  --animate-halo-pulse: halo-pulse 5s ease-in-out infinite;
+
+  @keyframes fade-up {
+    0% {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes zoom-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.94);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes drift {
+    0% {
+      transform: translate3d(0, 0, 0);
+    }
+    100% {
+      transform: translate3d(-48px, -83.14px, 0);
+    }
+  }
+  @keyframes stripes {
+    0% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: 32px 0;
+    }
+  }
+  @keyframes draw-in {
+    0% {
+      stroke-dashoffset: 48;
+    }
+    100% {
+      stroke-dashoffset: 0;
+    }
+  }
+  @keyframes halo-pulse {
+    0%,
+    100% {
+      opacity: 0.35;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.7;
+      transform: scale(1.06);
+    }
+  }
+}
+
+/*
+  v3 compatibility: v4 changed these defaults. Restore the v3 behaviour so
+  the UI looks the same; drop a rule once nothing depends on it.
+*/
+@layer base {
+  /* Borders default to currentColor in v4 (gray-200 in v3). */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+
+  /* Buttons default to cursor: default in v4. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /* v4 preflight zeroes the date/time wrapper padding, making the expiry
+     input 2px shorter than the fields beside it. */
+  ::-webkit-datetime-edit-fields-wrapper {
+    padding: revert;
+  }
+}
 
 @layer base {
   :root {
@@ -27,7 +149,7 @@
   }
 
   :focus-visible {
-    @apply outline-none ring-2 ring-honey-400/80 ring-offset-2 ring-offset-hive-950;
+    @apply outline-hidden ring-2 ring-honey-400/80 ring-offset-2 ring-offset-hive-950;
   }
 
   ::-webkit-scrollbar {
@@ -68,7 +190,7 @@
 
   /* Hairline of honey across the very top of the page. */
   .topline {
-    @apply h-px w-full bg-gradient-to-r from-transparent via-honey-400/70 to-transparent;
+    @apply h-px w-full bg-linear-to-r from-transparent via-honey-400/70 to-transparent;
   }
 
   /* Fixed honeycomb lattice, slowly drifting behind everything. */
@@ -95,12 +217,13 @@
   }
 
   .footer-shell {
-    @apply relative z-10 mt-16 border-t border-white/5 bg-hive-950/60 backdrop-blur;
+    @apply relative z-10 mt-16 border-t border-white/5 bg-hive-950/60 backdrop-blur-sm;
   }
 
   /* --------------------------------------------------------------- Shapes */
 
-  .hex {
+  .hex,
+  .hex-step {
     clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
   }
 
@@ -113,7 +236,7 @@
   /* Lit top edge — reads as light catching the rim of the card. */
   .surface-card::before {
     content: '';
-    @apply pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-honey-400/60 to-transparent;
+    @apply pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-honey-400/60 to-transparent;
   }
 
   .surface-card-soft {
@@ -147,7 +270,7 @@
   }
 
   .honey-text {
-    @apply bg-gradient-to-br from-honey-200 via-honey-300 to-honey-500 bg-clip-text text-transparent;
+    @apply bg-linear-to-br from-honey-200 via-honey-300 to-honey-500 bg-clip-text text-transparent;
   }
 
   /* ---------------------------------------------------------------- Forms */
@@ -157,7 +280,7 @@
   }
 
   .field-input {
-    @apply block w-full rounded-xl border border-white/10 bg-hive-850/80 px-4 py-3 text-sm text-slate-100 shadow-hairline outline-none transition duration-200 placeholder:text-slate-600 hover:border-white/20 focus:border-honey-400/70 focus:bg-hive-850 focus:ring-4 focus:ring-honey-400/15;
+    @apply block w-full rounded-xl border border-white/10 bg-hive-850/80 px-4 py-3 text-sm text-slate-100 shadow-hairline outline-hidden transition duration-200 placeholder:text-slate-600 hover:border-white/20 focus:border-honey-400/70 focus:bg-hive-850 focus:ring-4 focus:ring-honey-400/15;
   }
 
   .field-input:read-only {
@@ -175,13 +298,13 @@
   /* -------------------------------------------------------------- Buttons */
 
   .btn-primary {
-    @apply relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-br from-honey-300 via-honey-400 to-honey-500 px-5 py-3 text-sm font-semibold text-hive-950 shadow-honey transition duration-200 hover:-translate-y-0.5 hover:shadow-honey-lg active:translate-y-0 disabled:pointer-events-none disabled:opacity-50;
+    @apply relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-linear-to-br from-honey-300 via-honey-400 to-honey-500 px-5 py-3 text-sm font-semibold text-hive-950 shadow-honey transition duration-200 hover:-translate-y-0.5 hover:shadow-honey-lg active:translate-y-0 disabled:pointer-events-none disabled:opacity-50;
   }
 
   /* Light sweeps across the button on hover. */
   .btn-primary::after {
     content: '';
-    @apply pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/45 to-transparent transition-transform duration-700;
+    @apply pointer-events-none absolute inset-0 -translate-x-full bg-linear-to-r from-transparent via-white/45 to-transparent transition-transform duration-700;
   }
 
   .btn-primary:hover::after {
@@ -209,7 +332,7 @@
 
   /* Applied together with .share-tab, so it has to win the hover colour too. */
   .share-tab-active {
-    @apply relative z-10 flex-1 rounded-lg bg-gradient-to-br from-honey-300 to-honey-500 px-4 py-2.5 text-sm font-semibold text-hive-950 shadow-honey transition duration-200 hover:text-hive-950 sm:flex-none;
+    @apply relative z-10 flex-1 rounded-lg bg-linear-to-br from-honey-300 to-honey-500 px-4 py-2.5 text-sm font-semibold text-hive-950 shadow-honey transition duration-200 hover:text-hive-950 sm:flex-none;
   }
 
   .tab-rail {
@@ -329,7 +452,7 @@
   }
 
   .copy-flash {
-    @apply shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-emerald-300;
+    @apply shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[0.65rem] leading-6 font-semibold uppercase tracking-wider text-emerald-300;
   }
 
   .copy-flash-error {
@@ -372,7 +495,7 @@
 
   /* Numbered hexagon used by the "how it works" rail. */
   .hex-step {
-    @apply hex grid h-11 w-11 shrink-0 place-items-center bg-gradient-to-br from-honey-300 to-honey-600 text-sm font-bold text-hive-950;
+    @apply grid h-11 w-11 shrink-0 place-items-center bg-linear-to-br from-honey-300 to-honey-600 text-sm font-bold text-hive-950;
   }
 
   /* ------------------------------------------------- Hero flow walkthrough */
@@ -387,7 +510,7 @@
 
   .flow-window::before {
     content: '';
-    @apply pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-honey-400/70 to-transparent;
+    @apply pointer-events-none absolute inset-x-10 top-0 h-px bg-linear-to-r from-transparent via-honey-400/70 to-transparent;
   }
 
   /* Faint comb behind the mock UI, tying the panel to the rest of the page. */
@@ -430,7 +553,7 @@
   /* Bottom-right of the mock window, quiet until hovered or focused. The
      global focus-visible ring covers keyboard focus. */
   .flow-toggle {
-    @apply absolute bottom-4 right-4 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-hive-950/70 text-slate-500 backdrop-blur transition duration-200 hover:border-honey-400/40 hover:text-honey-300;
+    @apply absolute bottom-4 right-4 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-hive-950/70 text-slate-500 backdrop-blur-sm transition duration-200 hover:border-honey-400/40 hover:text-honey-300;
   }
 
   /* Only opacity is transitioned. The lift is a one-shot animation on entry,
@@ -468,7 +591,7 @@
   }
 
   .flow-seg-thumb {
-    @apply absolute bottom-1 left-1 top-1 rounded-full bg-gradient-to-br from-honey-300 to-honey-500;
+    @apply absolute bottom-1 left-1 top-1 rounded-full bg-linear-to-br from-honey-300 to-honey-500;
     width: calc(50% - 0.25rem);
   }
 
@@ -585,7 +708,7 @@
   }
 
   .flow-copy {
-    @apply relative grid shrink-0 rounded-lg bg-gradient-to-br from-honey-300 to-honey-500 px-2.5 py-1 text-[0.68rem] font-semibold text-hive-950;
+    @apply relative grid shrink-0 rounded-lg bg-linear-to-br from-honey-300 to-honey-500 px-2.5 py-1 text-[0.68rem] font-semibold text-hive-950;
   }
 
   .flow-copy > * {
@@ -626,7 +749,7 @@
   }
 
   .flow-parcel {
-    @apply absolute top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full bg-gradient-to-br from-honey-300 to-honey-500 text-hive-950 shadow-honey;
+    @apply absolute top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full bg-linear-to-br from-honey-300 to-honey-500 text-hive-950 shadow-honey;
   }
 
   .flow-parcel svg {
