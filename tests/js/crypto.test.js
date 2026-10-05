@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 // crypto.js uses `window.crypto`; Node exposes Web Crypto on globalThis.
-globalThis.window = globalThis;
+// Only `crypto` is ever read through it, so Node's globalThis stands in.
+globalThis.window = /** @type {Window & typeof globalThis} */ (globalThis);
 
 const { CryptoService, bytesToHex, hexToBytes } = await import('../../static/js/crypto.js');
 
@@ -70,6 +71,7 @@ test('encrypt/decrypt reject a malformed server share', async () => {
     const { blob } = await service.encrypt(encoder.encode('x'), 'pw', h);
     await assert.rejects(service.encrypt(encoder.encode('x'), 'pw', h.slice(0, 8)));
     await assert.rejects(service.decrypt(blob, 'pw', h.slice(0, 8)));
+    // @ts-expect-error -- a non-bytes H must be rejected by the runtime guard
     await assert.rejects(service.decrypt(blob, 'pw', 'not-bytes'));
 });
 

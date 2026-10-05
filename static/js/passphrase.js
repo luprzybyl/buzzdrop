@@ -44,8 +44,11 @@ const COMMON_PASSWORDS = new Set([
     'buzzdrop', 'buzz', 'onedrive', 'dropbox',
 ]);
 
-// Map the classic substitutions back to letters so "P4ssw0rd!" still
-// hits the blocklist instead of slipping through on a technicality.
+/**
+ * Map the classic substitutions back to letters so "P4ssw0rd!" still
+ * hits the blocklist instead of slipping through on a technicality.
+ * @type {Record<string, string>}
+ */
 const LEET_MAP = {
     '0': 'o', '1': 'l', '3': 'e', '4': 'a', '5': 's', '7': 't',
     '8': 'b', '@': 'a', '$': 's', '!': 'i', '€': 'e', '£': 'l',
@@ -53,6 +56,10 @@ const LEET_MAP = {
 
 const KEYBOARD_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm', '0123456789'];
 
+/**
+ * @param {string} password
+ * @returns {string}
+ */
 function normalizeLeet(password) {
     return password
         .toLowerCase()
@@ -61,6 +68,10 @@ function normalizeLeet(password) {
         .join('');
 }
 
+/**
+ * @param {string} password
+ * @returns {number}
+ */
 function characterPoolSize(password) {
     let pool = 0;
     if (/[a-z]/.test(password)) pool += 26;
@@ -71,8 +82,12 @@ function characterPoolSize(password) {
     return pool || 1;
 }
 
-// True if the password is one short token repeated to fill space —
-// "abcabcabc", "xyxyxyxy", "!!!!". Work factor is the seed, not the length.
+/**
+ * True if the password is one short token repeated to fill space —
+ * "abcabcabc", "xyxyxyxy", "!!!!". Work factor is the seed, not the length.
+ * @param {string} password
+ * @returns {boolean}
+ */
 function isRepetition(password) {
     for (let period = 1; period <= Math.floor(password.length / 2); period++) {
         if (password.length % period !== 0) continue;
@@ -84,8 +99,12 @@ function isRepetition(password) {
     return false;
 }
 
-// Fraction of adjacent character pairs that walk a keyboard row or the
-// alphabet/digits by ±1. "qwerty", "abcd", "13579" score high.
+/**
+ * Fraction of adjacent character pairs that walk a keyboard row or the
+ * alphabet/digits by ±1. "qwerty", "abcd", "13579" score high.
+ * @param {string} password
+ * @returns {number}
+ */
 function sequentialFraction(password) {
     if (password.length < 2) return 0;
     const lower = password.toLowerCase();
@@ -109,6 +128,10 @@ function sequentialFraction(password) {
     return sequential / (lower.length - 1);
 }
 
+/**
+ * @param {string} password
+ * @returns {number}
+ */
 function isEffPassphrase(password) {
     const raw = password
         .toLowerCase()
@@ -221,6 +244,8 @@ export function assessPassword(password) {
  * Return a `wordCount`-word passphrase from the EFF large wordlist using
  * crypto.getRandomValues. Rejection sampling keeps the index uniform —
  * a plain `% 7776` would slightly favour the first words.
+ * @param {number} [wordCount]
+ * @returns {string}
  */
 export function generatePassphrase(wordCount = PASSPHRASE_WORDS) {
     const limit = Math.floor(0x100000000 / EFF_WORDLIST.length) * EFF_WORDLIST.length;

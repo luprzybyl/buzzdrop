@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { initConfirmDownload } from '../../../static/js/confirm-download-page.js';
-import { loadFixture } from '../support/dom-fixture.js';
+import { required } from '../../../static/js/required.js';
+import { browserView, loadFixture } from '../support/dom-fixture.js';
 
 const PAGE_URL = 'http://localhost/view/00000000-0000-4000-8000-0000000000f1';
 const CONFIRM_URL = `${PAGE_URL}/confirm`;
 
 describe('confirm-download page', () => {
+    /** @type {import('happy-dom').Window | undefined} */
     let page;
 
     afterEach(async () => {
@@ -15,9 +17,11 @@ describe('confirm-download page', () => {
 
     const start = (url = PAGE_URL) => {
         page = loadFixture('confirm_download--file', {}, url);
-        initConfirmDownload(page.document, {});
-        const form = page.document.getElementById('confirm-form');
+        const window = browserView(page);
+        initConfirmDownload(window.document, {});
+        const form = required(window.document, '#confirm-form', 'form');
         return {
+            window,
             form,
             // Submits the way the button does, but stops the navigation itself:
             // the page's listener runs first and the test only reads the action
@@ -43,9 +47,9 @@ describe('confirm-download page', () => {
     });
 
     it('scrubs the fragment from the URL without adding a history entry', () => {
-        start(`${PAGE_URL}?x=1#correct%20horse`);
+        const { window } = start(`${PAGE_URL}?x=1#correct%20horse`);
 
-        expect(page.location.href).toBe(`${PAGE_URL}?x=1`);
-        expect(page.history.length).toBe(1);
+        expect(window.location.href).toBe(`${PAGE_URL}?x=1`);
+        expect(window.history.length).toBe(1);
     });
 });

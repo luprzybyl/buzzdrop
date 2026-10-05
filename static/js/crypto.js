@@ -21,6 +21,13 @@
  */
 
 /**
+ * Bytes backed by a plain ArrayBuffer, which is what Web Crypto accepts.
+ * Every array this module creates (`new Uint8Array(n)`, `slice()`,
+ * `TextEncoder`) is one.
+ * @typedef {Uint8Array<ArrayBuffer>} Bytes
+ */
+
+/**
  * Convert bytes to a lowercase hex string (H/V travel the wire as hex).
  * @param {Uint8Array} bytes
  * @returns {string}
@@ -32,7 +39,7 @@ export function bytesToHex(bytes) {
 /**
  * Parse a hex string into bytes. Throws on malformed input.
  * @param {string} hex
- * @returns {Uint8Array}
+ * @returns {Bytes}
  */
 export function hexToBytes(hex) {
     if (typeof hex !== 'string' || hex.length % 2 !== 0 || /[^0-9a-f]/i.test(hex)) {
@@ -75,7 +82,7 @@ export class CryptoService {
     /**
      * Assert the server share is exactly 32 bytes — a short/missing H
      * must fail loudly before any crypto runs.
-     * @param {Uint8Array} h
+     * @param {Bytes} h
      */
     _checkServerShare(h) {
         if (!(h instanceof Uint8Array) || h.length !== this.SHARE_LENGTH) {
@@ -85,7 +92,7 @@ export class CryptoService {
 
     /**
      * Generate random salt (16 bytes)
-     * @returns {Uint8Array} Random salt
+     * @returns {Bytes} Random salt
      */
     generateSalt() {
         return window.crypto.getRandomValues(new Uint8Array(this.SALT_LENGTH));
@@ -93,7 +100,7 @@ export class CryptoService {
 
     /**
      * Generate random IV (12 bytes)
-     * @returns {Uint8Array} Random initialization vector
+     * @returns {Bytes} Random initialization vector
      */
     generateIV() {
         return window.crypto.getRandomValues(new Uint8Array(this.IV_LENGTH));
@@ -102,8 +109,8 @@ export class CryptoService {
     /**
      * Derive the raw 32-byte master key from a password.
      * @param {string} password
-     * @param {Uint8Array} salt
-     * @returns {Promise<Uint8Array>}
+     * @param {Bytes} salt
+     * @returns {Promise<Bytes>}
      */
     async deriveMaster(password, salt) {
         const keyMaterial = await window.crypto.subtle.importKey(
@@ -129,10 +136,10 @@ export class CryptoService {
     /**
      * HKDF-SHA256 → 32 bytes. The blob's salt doubles as the HKDF salt:
      * it is random, non-secret, and known to both parties.
-     * @param {Uint8Array} ikm - Input key material
-     * @param {Uint8Array} salt - HKDF salt
-     * @param {Uint8Array} info - Domain separation label
-     * @returns {Promise<Uint8Array>}
+     * @param {Bytes} ikm - Input key material
+     * @param {Bytes} salt - HKDF salt
+     * @param {Bytes} info - Domain separation label
+     * @returns {Promise<Bytes>}
      */
     async hkdf(ikm, salt, info) {
         const key = await window.crypto.subtle.importKey(
@@ -153,8 +160,8 @@ export class CryptoService {
     /**
      * Derive the client half Kp and the verifier V for a share.
      * @param {string} password
-     * @param {Uint8Array} salt - The blob's PBKDF2 salt
-     * @returns {Promise<{kp: Uint8Array, v: Uint8Array}>}
+     * @param {Bytes} salt - The blob's PBKDF2 salt
+     * @returns {Promise<{kp: Bytes, v: Bytes}>}
      */
     async deriveKeyReleaseKeys(password, salt) {
         const master = await this.deriveMaster(password, salt);
@@ -166,8 +173,8 @@ export class CryptoService {
     /**
      * Derive just the verifier V — what /release checks.
      * @param {string} password
-     * @param {Uint8Array} salt - The blob's PBKDF2 salt
-     * @returns {Promise<Uint8Array>} V (32 bytes)
+     * @param {Bytes} salt - The blob's PBKDF2 salt
+     * @returns {Promise<Bytes>} V (32 bytes)
      */
     async deriveVerifier(password, salt) {
         const master = await this.deriveMaster(password, salt);
@@ -176,10 +183,10 @@ export class CryptoService {
 
     /**
      * Assemble the file key from both halves: HKDF(Kp ‖ H).
-     * @param {Uint8Array} kp - Client half (from the password)
-     * @param {Uint8Array} h - Server half (released once by /release)
-     * @param {Uint8Array} salt - The blob's salt, reused as HKDF salt
-     * @returns {Promise<Uint8Array>} file_key (32 bytes)
+     * @param {Bytes} kp - Client half (from the password)
+     * @param {Bytes} h - Server half (released once by /release)
+     * @param {Bytes} salt - The blob's salt, reused as HKDF salt
+     * @returns {Promise<Bytes>} file_key (32 bytes)
      */
     async deriveFileKey(kp, h, salt) {
         const ikm = new Uint8Array(kp.length + h.length);
@@ -190,8 +197,8 @@ export class CryptoService {
 
     /**
      * Parse a BKV3 envelope into its components.
-     * @param {Uint8Array} blob - 'BKV3' + salt + iv + ciphertext
-     * @returns {{version: number, salt: Uint8Array, iv: Uint8Array, ciphertext: Uint8Array}}
+     * @param {Bytes} blob - 'BKV3' + salt + iv + ciphertext
+     * @returns {{version: number, salt: Bytes, iv: Bytes, ciphertext: Bytes}}
      * @throws {Error} If the magic is not 'BKV3'
      */
     parseBlob(blob) {
@@ -216,10 +223,10 @@ export class CryptoService {
 
     /**
      * Encrypt data for a share.
-     * @param {Uint8Array} data - Raw data to encrypt
+     * @param {Bytes} data - Raw data to encrypt
      * @param {string} password - Encryption password
-     * @param {Uint8Array} h - Server share from /upload/begin (32 bytes)
-     * @returns {Promise<{blob: Uint8Array, verifier: Uint8Array, receipt: Uint8Array}>}
+     * @param {Bytes} h - Server share from /upload/begin (32 bytes)
+     * @returns {Promise<{blob: Bytes, verifier: Bytes, receipt: Bytes}>}
      *   blob = 'BKV3' + salt + iv + ciphertext; verifier = V to bind on
      *   finish; receipt = the in-plaintext decryption proof (report back
      *   to /report_decryption; the server stores only its SHA-256)
@@ -263,7 +270,7 @@ export class CryptoService {
 
     /**
      * Compute the upload-time receipt hash: hex SHA-256(receipt).
-     * @param {Uint8Array} receipt
+     * @param {Bytes} receipt
      * @returns {Promise<string>}
      */
     async receiptHash(receipt) {
@@ -273,10 +280,10 @@ export class CryptoService {
 
     /**
      * Decrypt a blob once the server has released H.
-     * @param {Uint8Array} encryptedData - 'BKV3' + salt + iv + ciphertext
+     * @param {Bytes} encryptedData - 'BKV3' + salt + iv + ciphertext
      * @param {string} password - Decryption password
-     * @param {Uint8Array} h - Server share released by /release (32 bytes)
-     * @returns {Promise<{data: Uint8Array, receipt: Uint8Array}>}
+     * @param {Bytes} h - Server share released by /release (32 bytes)
+     * @returns {Promise<{data: Bytes, receipt: Bytes}>}
      *   data = payload without header/receipt; receipt = decryption proof
      * @throws {Error} If password/H is wrong or data is corrupted
      */
@@ -313,7 +320,7 @@ export class CryptoService {
 
     /**
      * Validate magic header in decrypted data
-     * @param {Uint8Array} data - Decrypted data to validate
+     * @param {Bytes} data - Decrypted data to validate
      * @returns {boolean} True if header is valid
      */
     validateHeader(data) {

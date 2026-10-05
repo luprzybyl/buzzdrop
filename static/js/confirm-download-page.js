@@ -5,15 +5,27 @@
 // POST navigation lands the next page on the same fragment, which
 // view.js reads and clears. Nothing is persisted (no sessionStorage).
 import { buildOneClickLink, readFragmentPassword } from './fragment-password.js';
+import { required, requiredWindow } from './required.js';
 
-// The page needs nothing beyond the DOM, which comes in as `root`; the URL and
-// history are read from the root's own window.
+/**
+ * @typedef {Record<string, never>} ConfirmDownloadDeps
+ */
+
+/**
+ * The page needs nothing beyond the DOM, which comes in as `root`; the URL and
+ * history are read from the root's own window.
+ * @returns {ConfirmDownloadDeps}
+ */
 export function browserDeps() {
     return {};
 }
 
+/**
+ * @param {Document} root - the confirm_download.html document
+ * @param {ConfirmDownloadDeps} deps
+ */
 export function initConfirmDownload(root, deps) {
-    const window = root.defaultView;
+    const window = requiredWindow(root);
 
     var fragmentPassword = readFragmentPassword(window.location.hash);
     if (window.location.hash.length > 1) {
@@ -26,8 +38,9 @@ export function initConfirmDownload(root, deps) {
             hint.textContent =
                 'This link already carries the key — continue and the drop goes BZZT.';
         }
-        root.getElementById('confirm-form').addEventListener('submit', function () {
-            this.action = buildOneClickLink(this.action, fragmentPassword);
+        required(root, '#confirm-form', 'form').addEventListener('submit', function () {
+            // Only wired up when there is a fragment password.
+            this.action = buildOneClickLink(this.action, /** @type {string} */ (fragmentPassword));
         });
     }
 }

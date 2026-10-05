@@ -27,6 +27,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Type-check JS
+        run: npm run typecheck
       - name: Run JS unit tests
         run: npm run test:unit
       - name: Run JS DOM tests

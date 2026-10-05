@@ -1,0 +1,39 @@
+{
+    // Type-checks the browser JS and its tests from JSDoc, with no build step:
+    // tsc only checks (noEmit); the browser keeps loading the same .js files.
+    "compilerOptions": {
+        "allowJs": true,
+        "checkJs": true,
+        "noEmit": true,
+        "strict": true,
+        "target": "ES2022",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
+        "types": ["node"],
+        "skipLibCheck": true
+    },
+    // Temporary allowlist: main.js and view.js join (or are replaced by their
+    // *-page.js modules) as the index (#177) and view (#176) refactors merge.
+    // The end state is "static/js/**/*.js" and "tests/js/**/*.js".
+    "include": [
+        "static/js/crypto.js",
+        "static/js/passphrase.js",
+        "static/js/fragment-password.js",
+        "static/js/file-extensions.js",
+        "static/js/shared-files.js",
+        "static/js/success-page.js",
+        "static/js/success.js",
+        "static/js/hero-flow-page.js",
+        "static/js/hero-flow.js",
+        "static/js/confirm-download-page.js",
+        "static/js/confirm-download.js",
+        "static/js/users-page.js",
+        "static/js/users.js",
+        "static/js/required.js",
+        "tests/js/**/*.js"
+    ],
+    // `exclude` only filters `include`: eff-wordlist.js (data) is still checked
+    // through passphrase.js's import, which a plain string array passes as is.
+    "exclude": ["static/js/eff-wordlist.js", "tests/js/fixtures"]
+}
