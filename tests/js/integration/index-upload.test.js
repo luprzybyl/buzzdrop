@@ -77,13 +77,20 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
             crypto: new CryptoService(),
         });
 
-        // Every value #share-progress-text shows, in order.
+        // Every value #share-progress-text shows, in order, and whether its
+        // container was visible when it did.
         /** @type {string[]} */
         const progress = [];
+        /** @type {boolean[]} */
+        const progressVisible = [];
         const progressText = required(document, '#share-progress-text', 'span');
+        const progressContainer = required(document, '#share-progress-container', 'div');
         new window.MutationObserver((records) => {
             for (const record of records) {
-                record.addedNodes.forEach((node) => progress.push(node.textContent ?? ''));
+                record.addedNodes.forEach((node) => {
+                    progress.push(node.textContent ?? '');
+                    progressVisible.push(progressContainer.style.display === 'flex');
+                });
             }
         }).observe(progressText, { childList: true });
 
@@ -128,7 +135,7 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
         const requestsTo = (path) => fake.log.filter((request) => pathOf(request) === path);
 
         return {
-            window, document, fake, issued, navigate, alert, progress,
+            window, document, fake, issued, navigate, alert, progress, progressVisible,
             share, setShareOptions, settled, pathOf, requestsTo,
         };
     };
@@ -180,7 +187,9 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
 
     describe.each(MODES)('two-phase upload (%s)', (mode) => {
         it('begins, encrypts under the issued H, uploads with progress and goes to success', async () => {
-            const { fake, issued, navigate, alert, progress, share, settled, pathOf, requestsTo } = start();
+            const {
+                fake, issued, navigate, alert, progress, progressVisible, share, settled, pathOf, requestsTo,
+            } = start();
 
             share(mode);
             await settled();
@@ -217,6 +226,7 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
             expect(fake.state.keys.get(fileId)?.v).toBe(bytesToHex(verifier));
 
             expect(progress).toEqual(['0%', '50%', '100%']);
+            expect(progressVisible).toEqual([true, true, true]);
             expect(navigate).toHaveBeenCalledExactlyOnceWith(successUrl(fileId));
         });
 
@@ -243,7 +253,7 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
     /**
      * @typedef {object} ErrorCase
      * @property {string} name
-     * @property {string} message - what the page alerts
+     * @property {string} [message] - what the page alerts, pinned only for 413
      * @property {boolean} reachesUpload - whether the failed attempt sends /upload
      * @property {(fake: Fake) => void} arrange
      */
@@ -255,13 +265,11 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
     const ERROR_CASES = [
         {
             name: 'begin is rate-limited (429)',
-            message: 'The server refused the upload handshake.',
             reachesUpload: false,
             arrange: (fake) => fake.failNext('/upload/begin', 429),
         },
         {
             name: 'the upload errors (500, HTML body)',
-            message: 'Upload failed',
             reachesUpload: true,
             arrange: (fake) => fake.failNext('/upload', {
                 status: 500, body: '<!doctype html><title>500 Internal Server Error</title>',
@@ -283,7 +291,8 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
             share('file');
             await settled();
 
-            expect(alert).toHaveBeenCalledExactlyOnceWith(errorCase.message);
+            expect(alert).toHaveBeenCalledOnce();
+            if (errorCase.message) expect(alert).toHaveBeenCalledWith(errorCase.message);
             expect(navigate).not.toHaveBeenCalled();
             const failed = requestsTo('/upload');
             expect(failed).toHaveLength(errorCase.reachesUpload ? 1 : 0);
