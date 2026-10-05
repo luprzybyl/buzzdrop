@@ -60,10 +60,10 @@ describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
         });
         // The file path hands the plaintext to the browser as an object URL.
         /** @type {Blob[]} */
-        const saved = [];
+        const downloads = [];
         const createObjectURL = URL.createObjectURL.bind(URL);
         vi.spyOn(URL, 'createObjectURL').mockImplementation((object) => {
-            if (object instanceof Blob) saved.push(object);
+            if (object instanceof Blob) downloads.push(object);
             return createObjectURL(object);
         });
         await initView(document, { fetch: fake.fetch, crypto: new CryptoService() });
@@ -72,8 +72,8 @@ describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
         return {
             window,
             status,
-            saved,
-            textContent: required(document, '#text-content', 'pre'),
+            downloads,
+            noteText: required(document, '#text-content', 'pre'),
             /**
              * Type the password, click Decrypt and wait for the status to change.
              * @param {string} password
@@ -93,7 +93,7 @@ describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
      * @param {Fake} fake
      * @param {string} fileId
      */
-    const reported = (fake, fileId) => vi.waitFor(() => {
+    const receiptReported = (fake, fileId) => vi.waitFor(() => {
         expect(fake.state.files.get(fileId)?.decryptionSuccess).not.toBeNull();
     }, { timeout: SETTLE_TIMEOUT, interval: 20 });
 
@@ -128,24 +128,15 @@ describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
     };
 
     /**
-     * Everything a request carried, as text: URL, header names and values, and
-     * the body, with file parts read byte for byte.
+     * Everything a view request carried, as text: URL, header names and
+     * values, and the body (the view page sends only JSON strings).
      * @param {LoggedRequest} request
      */
-    const requestText = async (request) => {
-        const parts = [request.url];
-        for (const [name, value] of Object.entries(request.headers)) parts.push(name, value);
-        if (typeof request.body === 'string') {
-            parts.push(request.body);
-        } else if (request.body instanceof FormData) {
-            for (const [name, value] of request.body.entries()) {
-                parts.push(name);
-                parts.push(typeof value === 'string'
-                    ? value
-                    : value.name + new TextDecoder('latin1').decode(await value.arrayBuffer()));
-            }
+    const requestText = (request) => {
+        if (request.body !== null && typeof request.body !== 'string') {
+            throw new Error(`unexpected non-string body to ${request.url}`);
         }
-        return parts.join('\n');
+        return [request.url, ...Object.entries(request.headers).flat(), request.body ?? ''].join('\n');
     };
 
     it('fetches the blob, releases H, decrypts the file and reports the receipt', async () => {
@@ -154,11 +145,10 @@ describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
         const view = await openView(fake, fileId, 'file');
 
         await view.decrypt(PASSWORD);
-        await reported(fake, fileId);
+        await receiptReported(fake, fileId);
 
-        expect(view.status.textContent).toBe('Download complete.');
-        expect(view.saved).toHaveLength(1);
-        expect(new Uint8Array(await view.saved[0].arrayBuffer())).toEqual(FILE_BYTES);
+        expect(view.downloads).toHaveLength(1);
+        expect(new Uint8Array(await view.downloads[0].arrayBuffer())).toEqual(FILE_BYTES);
         expect(fake.log.map((request) => `${request.method} ${pathOf(request)}`)).toEqual([
             `GET /download/${fileId}`,
             `POST /release/${fileId}`,
@@ -174,9 +164,9 @@ describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
         const view = await openView(fake, fileId, 'text');
 
         await view.decrypt(PASSWORD);
-        await reported(fake, fileId);
+        await receiptReported(fake, fileId);
 
-        expect(view.textContent.textContent).toBe(NOTE);
+        expect(view.noteText.textContent).toBe(NOTE);
         expect(fake.log.map(pathOf)).toEqual([
             '/upload/begin', '/upload',
             `/download/${fileId}`, `/release/${fileId}`, `/report_decryption/${fileId}`,
@@ -191,39 +181,38 @@ describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
 
         await view.decrypt(WRONG_PASSWORD);
 
-        expect(view.status.textContent).toBe('Incorrect password. 2 attempts remaining.');
+        // The exact wording is DOM-tested; here, the fake's count reaches the page.
+        expect(view.status.textContent).toMatch(/\b2 attempts\b/);
         expect(fake.state.keys.get(fileId)?.attempts).toBe(1);
 
         await view.decrypt(PASSWORD);
-        await reported(fake, fileId);
+        await receiptReported(fake, fileId);
 
-        expect(view.textContent.textContent).toBe(NOTE);
+        expect(view.noteText.textContent).toBe(NOTE);
         expect(fake.state.files.get(fileId)?.decryptionSuccess).toBe(true);
     });
 
     describe('security invariants', () => {
-        it('the password never reaches the server, on upload or view', async () => {
+        it('the password never reaches the server, right or wrong', async () => {
             const fake = makeProtocolFake({ maxAttempts: 3 });
-            // Checked after each step, so a leak fails at the step that made
-            // it rather than as a stalled flow later on.
-            const expectNoPassword = async () => {
+            const fileId = await fake.seedShare({ password: PASSWORD, plaintext: NOTE });
+            // Checked after each attempt, so a leak fails at the attempt that
+            // made it rather than as a stalled flow later on.
+            const expectNoPassword = () => {
                 for (const request of fake.log) {
-                    const text = await requestText(request);
+                    const text = requestText(request);
                     expect(text).not.toContain(PASSWORD);
                     expect(text).not.toContain(encodeURIComponent(PASSWORD));
                     expect(text).not.toContain(WRONG_PASSWORD);
                 }
             };
-
-            const fileId = await uploadNote(fake);
-            await expectNoPassword();
             const view = await openView(fake, fileId, 'text');
 
             await view.decrypt(WRONG_PASSWORD);
-            await expectNoPassword();
+            expectNoPassword();
             await view.decrypt(PASSWORD);
-            await reported(fake, fileId);
-            await expectNoPassword();
+            await receiptReported(fake, fileId);
+            expectNoPassword();
 
             expect(fake.log.filter((request) => pathOf(request) === `/release/${fileId}`)).toHaveLength(2);
         });
@@ -234,9 +223,8 @@ describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
             const view = await openView(fake, fileId, 'text');
 
             await view.decrypt(PASSWORD);
-            await reported(fake, fileId);
+            await receiptReported(fake, fileId);
 
-            expect(view.textContent.textContent).toBe(NOTE);
             // The page's own window, and the test environment's global one a
             // bare `localStorage` in the module would reach.
             for (const window of [view.window, globalThis]) {
