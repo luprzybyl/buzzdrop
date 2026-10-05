@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { initHeroFlow } from '../../../static/js/hero-flow-page.mjs';
-import { loadFixture } from '../support/dom-fixture.mjs';
+import { initHeroFlow } from '../../../static/js/hero-flow-page.js';
+import { loadFixture } from '../support/dom-fixture.js';
 
 // Longer than any stage's hold time, so an autoplaying flow must have advanced.
 const LONGEST_HOLD_MS = 6000;

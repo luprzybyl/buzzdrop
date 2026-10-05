@@ -19,7 +19,7 @@ Each behaviour is tested **once**, at the **lowest layer that can show it**.
 
 From [Choose the runner and DOM environment for DOM + JS-integration tests](https://github.com/luprzybyl/buzzdrop/issues/155).
 
-- **Unit:** keep `node --test` for `tests/js/*.test.mjs`. These files don't run under Vitest.
+- **Unit:** keep `node --test` for `tests/js/*.test.js`. These files don't run under Vitest.
 - **DOM + integration:** Vitest with happy-dom, pinned at **>= 20.8.9** (security advisories). Vitest's `include` covers only `tests/js/dom/**` and `tests/js/integration/**`.
 - **jsdom is rejected.** It puts byte arrays in two realms, so `TextEncoder`/`subtle` output fails `instanceof Uint8Array`, which breaks `crypto.js`. It also has no navigation, and `new Response(blob)` throws.
 - Real 600k-iteration PBKDF2 runs in happy-dom at acceptable cost. Tests don't stub the KDF.
@@ -31,7 +31,7 @@ From [Choose the runner and DOM environment for DOM + JS-integration tests](http
 
 From [What shape should the testability refactor of page scripts take?](https://github.com/luprzybyl/buzzdrop/issues/158). Production JS may be refactored to make it testable, as long as behaviour doesn't change.
 
-- **Split:** each page gets a side-effect-free module (`index-page.mjs`, `view-page.mjs`, `success-page.mjs`, `confirm-download-page.mjs`, `hero-flow-page.mjs`, `users-page.mjs`) exporting `init<Page>(root, deps)` and `browserDeps()`. The existing entry files (`main.js`, `view.js`, `success.js`, `confirm-download.js`, `hero-flow.js`, `users.js`) shrink to `init<Page>(document, browserDeps())`. Template `<script>` tags, SRI attributes and JSON config blocks stay as they are. **Tests import the page module, never the entry.**
+- **Split:** each page gets a side-effect-free module (`index-page.js`, `view-page.js`, `success-page.js`, `confirm-download-page.js`, `hero-flow-page.js`, `users-page.js`) exporting `init<Page>(root, deps)` and `browserDeps()`. The existing entry files (`main.js`, `view.js`, `success.js`, `confirm-download.js`, `hero-flow.js`, `users.js`) shrink to `init<Page>(document, browserDeps())`. Template `<script>` tags, SRI attributes and JSON config blocks stay as they are. **Tests import the page module, never the entry.**
 - **State lives in the `init` closure** (e.g. `uploadInProgress`, `activeShareMode`, parsed config, CSRF token). Every `init()` is a fresh page, and no `vi.resetModules()` is needed.
 - **Dependencies (`deps`):**
 
@@ -53,11 +53,11 @@ From [Which page-script logic is extracted into pure, unit-tested modules?](http
 
 | Module | Exports | Unit cases |
 |---|---|---|
-| `static/js/fragment-password.mjs` (new) | `readFragmentPassword(hash) → string \| null`, `buildOneClickLink(shareUrl, password)` | `""`, `#`, `#abc`, `#%E2%9C%93`, `#a%20b`, malformed `#%ZZ` → `null`; encode↔decode round trip |
-| `static/js/file-extensions.mjs` (new) | `isAllowedFile(name, allowedExtensions)` | No dot, trailing dot, dotfile, double extension, uppercase. **Pins current behaviour** (`README` → `readme`). |
-| `static/js/shared-files.mjs` (existing) | + `statusBadgeClass(file)`, `rowSearchText(searchBase, file)` | Badge priority downloaded > expired > active; null IP or missing display |
+| `static/js/fragment-password.js` (new) | `readFragmentPassword(hash) → string \| null`, `buildOneClickLink(shareUrl, password)` | `""`, `#`, `#abc`, `#%E2%9C%93`, `#a%20b`, malformed `#%ZZ` → `null`; encode↔decode round trip |
+| `static/js/file-extensions.js` (new) | `isAllowedFile(name, allowedExtensions)` | No dot, trailing dot, dotfile, double extension, uppercase. **Pins current behaviour** (`README` → `readme`). |
+| `static/js/shared-files.js` (existing) | + `statusBadgeClass(file)`, `rowSearchText(searchBase, file)` | Badge priority downloaded > expired > active; null IP or missing display |
 
-The `history.replaceState` fragment scrub stays in each page, because it's an effect. The strength-meter mapping stays in the index page, since `assessPassword` is already unit-tested. Tests live at `tests/js/<name>.test.mjs`.
+The `history.replaceState` fragment scrub stays in each page, because it's an effect. The strength-meter mapping stays in the index page, since `assessPassword` is already unit-tested. Tests live at `tests/js/<name>.test.js`.
 
 ## 4. DOM fixtures
 
@@ -108,7 +108,7 @@ From [What does the JS-integration layer's protocol fake look like?](https://git
 - **Injected failures:** `failNext(route, { status, body } | 'network')` is one-shot. For 413 and rate-limit 429 the body defaults to the **recorded** one (see §6). 500, malformed JSON and network errors are hand-specified.
 - **Request log:** every request is recorded (method, URL, headers, body). The security invariants assert on it.
 - **Source of truth:** `app.py`, not `CLAUDE.md`.
-- **Module:** shared test support, e.g. `tests/js/support/protocol-fake.mjs`.
+- **Module:** shared test support, e.g. `tests/js/support/protocol-fake.js`.
 
 ## 6. Protocol contract (keeping the fake honest)
 
@@ -130,7 +130,7 @@ From [How is the protocol fake kept honest against the real server?](https://git
   - `Cache-Control: no-store` on `/release`.
   - No other headers are compared.
 - **Coverage:** every response the fake produces from state, plus the recorded 413 and rate-limit 429. **Completeness rule:** the fake declares the `(route, status)` pairs it can emit in a table, and the contract test fails on any pair that no scenario covers.
-- **Contract test:** `tests/js/integration/protocol-contract.test.mjs` replays each scenario against `handle()` and compares raw responses. One adapter test checks that `fetch` follows the 302.
+- **Contract test:** `tests/js/integration/protocol-contract.test.js` replays each scenario against `handle()` and compares raw responses. One adapter test checks that `fetch` follows the 302.
 - **Workflow:** after changing a protocol response in `app.py`, run `npm run fixtures`. `js-fast` stays red until the fake matches.
 
 ## 7. Scenario catalogue
@@ -139,7 +139,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 
 ### Unit (`node --test`)
 - Existing: `crypto`, `passphrase`, `shared-files` (the crypto fixtures are byte-identical to `tests/unit/test_cli_crypto.py`).
-- New: `fragment-password.test.mjs`, `file-extensions.test.mjs`; `shared-files.test.mjs` gains the badge and search-text cases (§3).
+- New: `fragment-password.test.js`, `file-extensions.test.js`; `shared-files.test.js` gains the badge and search-text cases (§3).
 
 ### DOM (Vitest + happy-dom, against the template fixtures)
 - **Index page (`main.js`):**

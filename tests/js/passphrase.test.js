@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { EFF_WORDLIST } from '../../static/js/eff-wordlist.mjs';
+import { EFF_WORDLIST } from '../../static/js/eff-wordlist.js';
 import {
     assessPassword,
     generatePassphrase,
     MIN_ENTROPY_BITS,
     STRONG_ENTROPY_BITS,
-} from '../../static/js/passphrase.mjs';
+} from '../../static/js/passphrase.js';
 
 const WORD_SET = new Set(EFF_WORDLIST);
 

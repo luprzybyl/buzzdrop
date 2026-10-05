@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSharedFilesUrl, getSharedFilesPage, rowSearchText, statusBadgeClass } from '../../static/js/shared-files.mjs';
+import { buildSharedFilesUrl, getSharedFilesPage, rowSearchText, statusBadgeClass } from '../../static/js/shared-files.js';
 
 const rows = Array.from({ length: 12 }, (_, index) => ({
     dataset: { searchText: `file-${index}.txt` },

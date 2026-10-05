@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildOneClickLink, readFragmentPassword } from '../../static/js/fragment-password.mjs';
+import { buildOneClickLink, readFragmentPassword } from '../../static/js/fragment-password.js';
 
 test('reads no password from an empty or bare fragment', () => {
     assert.equal(readFragmentPassword(''), null);
