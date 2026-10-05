@@ -61,7 +61,7 @@ npm run fixtures
 3. `file_key = HKDF(Kp ‖ H, salt, 'file')`; plaintext is `BKP-FILE ‖ receipt(32B random) ‖ data` (the receipt is the decryption proof — the server stores only its SHA-256), then AES-GCM encrypted
 4. Envelope: `BKV3 ‖ salt(16) ‖ iv(12) ‖ ciphertext`, uploaded with `file_id` + `key_verifier` (hex V) + `receipt_hash` — the server binds V to the pending share atomically (only the account that ran `begin` may finish: `created_by` check, 403 otherwise)
 
-Decryption in `static/js/view.js`: fetch the blob, derive `V` from the password, `POST /release/<file_id>` `{v}` → the server returns `H` exactly once (the whole read→check→count→release cycle is one transaction, `attempt_key_release`); the client derives `file_key`, decrypts, extracts the receipt, and reports it to `/report_decryption` — which validates `SHA-256(receipt)` and writes `decryption_success` once (first valid report wins). **`BKV3` is the only supported format** — legacy v1/v2 shares are rejected (deliberate pre-production format break, no backward compatibility).
+Decryption in `static/js/view-page.js` (`initView`, run by the `view.js` entry): fetch the blob, derive `V` from the password, `POST /release/<file_id>` `{v}` → the server returns `H` exactly once (the whole read→check→count→release cycle is one transaction, `attempt_key_release`); the client derives `file_key`, decrypts, extracts the receipt, and reports it to `/report_decryption` — which validates `SHA-256(receipt)` and writes `decryption_success` once (first valid report wins). **`BKV3` is the only supported format** — legacy v1/v2 shares are rejected (deliberate pre-production format break, no backward compatibility).
 
 ### Storage Architecture
 
