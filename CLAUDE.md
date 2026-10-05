@@ -54,7 +54,7 @@ npm run fixtures
 
 **Subresource Integrity (SRI)**: Flask context processor (`sri_hash_processor`) generates SHA-384 hashes for JavaScript files at runtime. All `<script>` tags include `integrity` and `crossorigin` attributes to verify file integrity before execution.
 
-**Client-Side Encryption** (`static/js/crypto.js`, driven by `static/js/main.js`): Files are encrypted in the browser using Web Crypto API under a **server-gated key release** scheme (see `docs/true-one-time.md` §6). The file key is split — one half derives from the password, the other half (`H`, 32 random bytes) lives in the `file_keys` table and is released exactly once — so a stolen ciphertext alone is not brute-forceable offline. Upload is always two-phase:
+**Client-Side Encryption** (`static/js/crypto.js`, driven by `static/js/index-page.js`, run by the `main.js` entry): Files are encrypted in the browser using Web Crypto API under a **server-gated key release** scheme (see `docs/true-one-time.md` §6). The file key is split — one half derives from the password, the other half (`H`, 32 random bytes) lives in the `file_keys` table and is released exactly once — so a stolen ciphertext alone is not brute-forceable offline. Upload is always two-phase:
 
 1. `POST /upload/begin` → server mints `file_id` and a random share `H`, returns `{file_id, h}` (H as hex)
 2. `master = PBKDF2-SHA256(password, salt, 600k)`; `Kp = HKDF(master, salt, 'enc')`, `V = HKDF(master, salt, 'ver')`
