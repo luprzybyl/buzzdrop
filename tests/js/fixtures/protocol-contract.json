@@ -1,12 +1,16 @@
 {
   "csrfToken": "fixture-csrf-token",
   "defaultUser": "testuser",
+  "accountEmails": {
+    "notifyuser": "notify@example.test"
+  },
   "scenarios": [
     {
       "name": "file-round-trip",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -206,7 +210,8 @@
       "name": "note-round-trip",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -352,7 +357,8 @@
       "name": "report-first-valid-wins",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -511,7 +517,8 @@
       "name": "release-wrong-v-then-right",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 3,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -674,7 +681,8 @@
       "name": "release-lockout-burn-off",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 2,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": false
+        "KEY_RELEASE_BURN_ON_LOCKOUT": false,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -836,7 +844,8 @@
       "name": "release-lockout-burn-on",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -967,7 +976,8 @@
       "name": "release-expired",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -1119,7 +1129,8 @@
       "name": "release-missing-or-pending",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -1210,7 +1221,8 @@
       "name": "release-invalid-verifier",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -1338,7 +1350,8 @@
       "name": "upload-csrf",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -1428,7 +1441,8 @@
       "name": "upload-invalid-material",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -1497,7 +1511,8 @@
       "name": "upload-refinish",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -1600,7 +1615,8 @@
       "name": "upload-unknown-share",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -1640,10 +1656,256 @@
       ]
     },
     {
+      "name": "upload-notify-on-open",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "no-account-email",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+              "notify_on_open": "true"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Configure an account email before enabling open notifications"
+            }
+          }
+        },
+        {
+          "name": "begin-notify",
+          "as": "notifyuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "other-email",
+          "as": "notifyuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin-notify.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+              "notify_on_open": "true",
+              "notification_email": "other@example.test"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Open notifications can only be sent to your configured account email"
+            }
+          }
+        },
+        {
+          "name": "own-email",
+          "as": "notifyuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin-notify.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+              "notify_on_open": "true",
+              "notification_email": "notify@example.test"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "upload-notify-unconfigured",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "SMTP_HOST": null,
+        "NOTIFICATIONS_CONFIGURED": false
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "notifyuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "notifyuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a",
+              "notify_on_open": "true"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 400,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Open notifications are not configured on this server"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "upload-other-owner",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -1712,7 +1974,8 @@
       "name": "download-missing",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -1783,7 +2046,8 @@
       "name": "report-enforcement",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
-        "KEY_RELEASE_BURN_ON_LOCKOUT": true
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -1940,7 +2204,8 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
-        "MAX_CONTENT_LENGTH": 64
+        "MAX_CONTENT_LENGTH": 64,
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -2011,7 +2276,8 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
-        "UPLOAD_RATE_LIMIT": "1 per minute"
+        "UPLOAD_RATE_LIMIT": "1 per minute",
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -2069,7 +2335,8 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
-        "UPLOAD_RATE_LIMIT": "1 per minute"
+        "UPLOAD_RATE_LIMIT": "1 per minute",
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -2178,7 +2445,8 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
-        "PUBLIC_FILE_RATE_LIMIT": "1 per minute"
+        "PUBLIC_FILE_RATE_LIMIT": "1 per minute",
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -2291,7 +2559,8 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 3,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
-        "KEY_RELEASE_RATE_LIMIT": "1 per minute"
+        "KEY_RELEASE_RATE_LIMIT": "1 per minute",
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {
@@ -2425,7 +2694,8 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
-        "REPORT_DECRYPTION_RATE_LIMIT": "1 per minute"
+        "REPORT_DECRYPTION_RATE_LIMIT": "1 per minute",
+        "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
         {

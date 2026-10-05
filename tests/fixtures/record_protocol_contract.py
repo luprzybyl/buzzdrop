@@ -28,17 +28,25 @@ import tempfile
 
 from fixture_env import CSRF_TOKEN, PASSWORDS, ROOT
 
-from app import app as flask_app, get_backend, limiter  # noqa: E402
-from protocol_scenarios import SCENARIOS  # noqa: E402
+from app import app as flask_app, get_backend, limiter
+from auth import get_users
+from protocol_scenarios import SCENARIOS
 
 OUT_FILE = ROOT / 'tests' / 'js' / 'fixtures' / 'protocol-contract.json'
 DEFAULT_USER = 'testuser'
 # Recorded with every scenario, overridden or not: the fake takes them as
-# its maxAttempts / burnOnLockout options.
+# its maxAttempts / burnOnLockout options, plus NOTIFICATIONS_CONFIGURED
+# (SMTP set up, as app.py's _notifications_configured decides) as
+# notificationsConfigured.
 FAKE_CONFIG = ('KEY_RELEASE_MAX_ATTEMPTS', 'KEY_RELEASE_BURN_ON_LOCKOUT')
 
 UUID = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
 HEX64 = re.compile(r'\b[0-9a-f]{64}\b')
+
+
+# _normalise, _resolve and _record are mirrored by normalise, resolve and
+# toRecorded in tests/js/integration/protocol-contract.test.js: change them
+# together.
 
 
 def _normalise(value):
@@ -141,6 +149,8 @@ def record_scenario(scenario):
             })
         config = {key: flask_app.config[key] for key in FAKE_CONFIG}
         config.update(scenario.get('config', {}))
+        config['NOTIFICATIONS_CONFIGURED'] = bool(
+            flask_app.config.get('SMTP_HOST') and flask_app.config.get('SMTP_FROM_EMAIL'))
     finally:
         flask_app.config.update(defaults)
     return {'name': scenario['name'], 'config': config, 'steps': steps}
@@ -152,6 +162,9 @@ def record_all():
     return {
         'csrfToken': CSRF_TOKEN,
         'defaultUser': DEFAULT_USER,
+        # The fake's accountEmails option: who may ask for open notifications.
+        'accountEmails': {name: user['email'] for name, user in sorted(get_users().items())
+                          if user.get('email')},
         'scenarios': [record_scenario(scenario) for scenario in SCENARIOS],
     }
 

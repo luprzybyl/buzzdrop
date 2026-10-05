@@ -5,7 +5,9 @@
 // changes a response, `npm run fixtures` re-records the contract and this test
 // stays red until the fake matches.
 import { describe, it, expect } from 'vitest';
-import { EMITS, loadContract, makeProtocolFake, routeOf } from '../support/protocol-fake.js';
+import {
+    EMITS, isJsonContentType, loadContract, makeProtocolFake, routeOf,
+} from '../support/protocol-fake.js';
 
 /**
  * @typedef {import('../support/protocol-fake.js').RecordedRequest} RecordedRequest
@@ -17,6 +19,9 @@ const contract = loadContract();
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
 const HEX64 = /\b[0-9a-f]{64}\b/g;
+
+// normalise, resolve and toRecorded mirror _normalise, _resolve and _record in
+// tests/fixtures/record_protocol_contract.py: change them together.
 
 /**
  * The same normalisation record_protocol_contract.py applies.
@@ -49,8 +54,9 @@ function resolve(value, responses) {
     }
     if (value && typeof value === 'object') {
         if ('$ref' in value && typeof value.$ref === 'string') {
-            const [step, field] = value.$ref.split('.');
-            return responses[step][field];
+            // Split at the first dot only, as Python's split('.', 1).
+            const dot = value.$ref.indexOf('.');
+            return responses[value.$ref.slice(0, dot)][value.$ref.slice(dot + 1)];
         }
         return Object.fromEntries(
             Object.entries(value).map(([k, v]) => [k, resolve(v, responses)]));
@@ -107,7 +113,7 @@ function toRecorded(path, response) {
     }
     const bytes = typeof response.body === 'string'
         ? new TextEncoder().encode(response.body) : response.body;
-    if (response.headers['Content-Type'] === 'application/json') {
+    if (isJsonContentType(response.headers['Content-Type'])) {
         recorded.json = JSON.parse(new TextDecoder().decode(bytes));
     } else if (response.status < 300 || response.status >= 400) {
         recorded.bodyBase64 = Buffer.from(bytes).toString('base64');
@@ -132,6 +138,8 @@ describe('protocol fake replays the recorded contract', () => {
                 burnOnLockout: scenario.config.KEY_RELEASE_BURN_ON_LOCKOUT,
                 owner: contract.defaultUser,
                 csrfToken: contract.csrfToken,
+                notificationsConfigured: scenario.config.NOTIFICATIONS_CONFIGURED,
+                accountEmails: contract.accountEmails,
             });
             /** @type {Record<string, Record<string, unknown>>} */
             const responses = {};
@@ -148,7 +156,7 @@ describe('protocol fake replays the recorded contract', () => {
                 expect(recorded, `${scenario.name}/${step.name}`).toEqual(step.response);
                 expect(EMITS, `${scenario.name}/${step.name}: undeclared response`)
                     .toContainEqual([routeOf(path), response.status, source(step)]);
-                if (response.headers['Content-Type'] === 'application/json') {
+                if (isJsonContentType(response.headers['Content-Type'])) {
                     responses[step.name] = JSON.parse(String(response.body));
                 }
             }
@@ -299,5 +307,31 @@ describe('decryption result', () => {
 
         expect((await report(fake, fileId, true)).status).toBe(200);
         expect(fake.state.files.get(fileId)?.decryptionSuccess).toBe(false);
+    });
+});
+
+describe('released key', () => {
+    // The contract normalises every H to <hex64>, so it can't see which one
+    // /release hands back; this pins it to the H /upload/begin minted.
+    it('is the H the share was begun with', async () => {
+        const fake = makeProtocolFake();
+        const headers = { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': contract.csrfToken };
+        const begin = JSON.parse(String(
+            (await fake.handle({ method: 'POST', url: '/upload/begin', headers })).body));
+        const form = new FormData();
+        form.append('file_id', begin.file_id);
+        form.append('key_verifier', '11'.repeat(32));
+        form.append('receipt_hash', '33'.repeat(32));
+        form.append('file', new File(['ciphertext'], 'report.pdf'));
+        await fake.handle({ method: 'POST', url: '/upload', headers, body: form });
+
+        const release = await fake.handle({
+            method: 'POST',
+            url: `/release/${begin.file_id}`,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ v: '11'.repeat(32) }),
+        });
+        expect(release.status).toBe(200);
+        expect(JSON.parse(String(release.body)).h).toBe(begin.h);
     });
 });

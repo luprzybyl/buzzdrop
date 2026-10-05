@@ -12,8 +12,12 @@
 // - /upload without X-Requested-With or a multipart body throws; app.py would
 //   answer with an HTML redirect the page's XHR code can't parse.
 // - A request to a route the fake doesn't serve throws.
-// And one check is left out: /upload takes any file extension. The page refuses
-// a disallowed one before sending anything, which the DOM tests cover.
+// - /upload/begin or /upload with no logged-in user (state.user null) throws;
+//   app.py would answer through its login check, which the page never meets.
+// And two checks are left out: /upload takes any file extension (the page
+// refuses a disallowed one before sending anything, which the DOM tests
+// cover), and accountEmails are trusted as given (app.py also rejects a
+// malformed configured address, a server-config error).
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,6 +61,8 @@ import { CryptoService, bytesToHex } from '../../../static/js/crypto.js';
  *   burnOnLockout?: boolean,
  *   owner?: string | null,
  *   csrfToken?: string,
+ *   notificationsConfigured?: boolean,
+ *   accountEmails?: Record<string, string>,
  * }} FakeOptions
  * @typedef {string | { $ref: string }} PathPart
  * @typedef {{
@@ -82,10 +88,19 @@ import { CryptoService, bytesToHex } from '../../../static/js/crypto.js';
  * }} RecordedStep
  * @typedef {{
  *   name: string,
- *   config: { KEY_RELEASE_MAX_ATTEMPTS: number, KEY_RELEASE_BURN_ON_LOCKOUT: boolean },
+ *   config: {
+ *     KEY_RELEASE_MAX_ATTEMPTS: number,
+ *     KEY_RELEASE_BURN_ON_LOCKOUT: boolean,
+ *     NOTIFICATIONS_CONFIGURED: boolean,
+ *   },
  *   steps: RecordedStep[],
  * }} RecordedScenario
- * @typedef {{ csrfToken: string, defaultUser: string, scenarios: RecordedScenario[] }} Contract
+ * @typedef {{
+ *   csrfToken: string,
+ *   defaultUser: string,
+ *   accountEmails: Record<string, string>,
+ *   scenarios: RecordedScenario[],
+ * }} Contract
  */
 
 // What the fake's adapters stand in for the page's origin, and the upload
@@ -177,6 +192,18 @@ function recordedInjection() {
 }
 
 /**
+ * Whether a Content-Type is JSON the way Flask's `is_json` decides it:
+ * `application/json` or `application/*+json`, parameters ignored.
+ * @param {string | undefined} contentType
+ * @returns {boolean}
+ */
+export function isJsonContentType(contentType) {
+    const mimetype = (contentType ?? '').split(';')[0].trim().toLowerCase();
+    return mimetype === 'application/json'
+        || (mimetype.startsWith('application/') && mimetype.endsWith('+json'));
+}
+
+/**
  * Key material (H, V, receipt hash) travels as 64 lowercase hex chars.
  * @param {unknown} value
  * @returns {value is string}
@@ -233,6 +260,10 @@ export function makeProtocolFake(opts = {}) {
     const maxAttempts = opts.maxAttempts ?? 1;
     const burnOnLockout = opts.burnOnLockout ?? true;
     const csrfToken = opts.csrfToken ?? 'fixture-csrf-token';
+    // Defaults mirror the fixture environment: SMTP configured, and only
+    // notifyuser has an account email.
+    const notificationsConfigured = opts.notificationsConfigured ?? true;
+    const accountEmails = opts.accountEmails ?? { notifyuser: 'notify@example.test' };
 
     /** @type {FakeState} */
     const state = {
@@ -278,7 +309,8 @@ export function makeProtocolFake(opts = {}) {
         if (typeof body === 'string') {
             return { status, headers: { 'Content-Type': 'text/plain', ...headers }, body };
         }
-        return { ...json(status, body), headers: { 'Content-Type': 'application/json', ...headers } };
+        const response = json(status, body);
+        return { ...response, headers: { ...response.headers, ...headers } };
     }
 
     /**
@@ -314,6 +346,32 @@ export function makeProtocolFake(opts = {}) {
         state.keys.delete(fileId);
     }
 
+    /**
+     * _get_notification_preferences: an open notification goes only to the
+     * account's own configured email, and only when SMTP is set up. Returns
+     * the server's error message, or null when the request is acceptable.
+     * @param {string} user
+     * @param {(field: string) => string | null} field
+     * @returns {string | null}
+     */
+    function notificationPreferenceError(user, field) {
+        const requested = ['1', 'true', 'yes', 'on']
+            .includes((field('notify_on_open') ?? '').trim().toLowerCase());
+        if (!requested) return null;
+        if (!notificationsConfigured) {
+            return 'Open notifications are not configured on this server';
+        }
+        const configured = accountEmails[user];
+        if (!configured) {
+            return 'Configure an account email before enabling open notifications';
+        }
+        const asked = (field('notification_email') ?? '').trim();
+        if (asked && asked !== configured) {
+            return 'Open notifications can only be sent to your configured account email';
+        }
+        return null;
+    }
+
     /** @param {Record<string, string>} headers */
     function hasCsrf(headers) {
         return headers['x-csrf-token'] === csrfToken;
@@ -336,7 +394,7 @@ export function makeProtocolFake(opts = {}) {
      * @returns {Record<string, unknown> | null}
      */
     function jsonObject(headers, body) {
-        if (!(headers['content-type'] ?? '').startsWith('application/json') || typeof body !== 'string') {
+        if (!isJsonContentType(headers['content-type']) || typeof body !== 'string') {
             return null;
         }
         try {
@@ -376,6 +434,10 @@ export function makeProtocolFake(opts = {}) {
             const value = body.get(field);
             return typeof value === 'string' ? value : null;
         };
+        const notificationError = notificationPreferenceError(owner, field);
+        if (notificationError) {
+            return json(400, { error: notificationError });
+        }
         const fileId = field('file_id')?.trim() || null;
         const keyVerifier = canonicalHex(field('key_verifier'));
         const receiptHash = canonicalHex(field('receipt_hash'));

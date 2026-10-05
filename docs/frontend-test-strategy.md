@@ -101,8 +101,8 @@ From [What does the JS-integration layer's protocol fake look like?](https://git
 
   A failed check returns **the server's own status and body**. It never throws.
 
-  **Deliberately stricter than the server** where the page never takes the other path, so a page change that would take it fails loudly: CSRF only via the `X-CSRF-Token` header (no form/JSON field, no `Authorization` exemption), and a `/upload` without `X-Requested-With` or a multipart body throws instead of getting the server's HTML redirect. **Not enforced:** the file-extension allow-list on `/upload` (the page checks it before sending; DOM-tested). The header of `protocol-fake.js` lists these.
-- **Options** mirror the server config: `maxAttempts`, `burnOnLockout`, `owner` (the logged-in account; `state.user` switches it mid-test), plus the session's `csrfToken` (defaults to the DOM fixtures' token).
+  **Deliberately stricter than the server** where the page never takes the other path, so a page change that would take it fails loudly: CSRF only via the `X-CSRF-Token` header (no form/JSON field, no `Authorization` exemption), a `/upload` without `X-Requested-With` or a multipart body throws instead of getting the server's HTML redirect, and `/upload/begin` or `/upload` with no logged-in user throws instead of meeting the login check. **Not enforced:** the file-extension allow-list on `/upload` (the page checks it before sending; DOM-tested), and a malformed configured account email (a server-config error). The header of `protocol-fake.js` lists these.
+- **Options** mirror the server config: `maxAttempts`, `burnOnLockout`, `owner` (the logged-in account; `state.user` switches it mid-test), plus the session's `csrfToken` (defaults to the DOM fixtures' token), `notificationsConfigured` (SMTP set up) and `accountEmails` (who may ask for open notifications); the contract test takes all of these from the recording.
 - **Failures produced by state:**
   - wrong V → 403 + `attempts_remaining`
   - second release → 410

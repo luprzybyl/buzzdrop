@@ -175,6 +175,25 @@ SCENARIOS = [
             'file_id': MISSING_ID, 'key_verifier': V, 'receipt_hash': RECEIPT_HASH}}],
     },
     {
+        # Open notifications are checked before the key material: only to the
+        # account's own configured email, and only when SMTP is configured.
+        'name': 'upload-notify-on-open',
+        'steps': [
+            begin(), upload_file('no-account-email', notify_on_open='true'),
+            begin('begin-notify', **{'as': 'notifyuser'}),
+            {**upload_file('other-email', share='begin-notify', notify_on_open='true',
+                           notification_email='other@example.test'), 'as': 'notifyuser'},
+            {**upload_file('own-email', share='begin-notify', notify_on_open='true',
+                           notification_email='notify@example.test'), 'as': 'notifyuser'},
+        ],
+    },
+    {
+        'name': 'upload-notify-unconfigured',
+        'config': {'SMTP_HOST': None},
+        'steps': [begin(**{'as': 'notifyuser'}),
+                  {**upload_file(notify_on_open='true'), 'as': 'notifyuser'}],
+    },
+    {
         'name': 'upload-other-owner',
         'steps': [begin(**{'as': 'adminuser'}), upload_file()],
     },
