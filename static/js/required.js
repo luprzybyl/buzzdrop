@@ -31,7 +31,7 @@ export function requiredClosest(element, selector, tag) {
 /**
  * The window a page's document belongs to.
  * @param {Document} document
- * @returns {Window}
+ * @returns {Window & typeof globalThis}
  */
 export function requiredWindow(document) {
     if (!document.defaultView) throw new Error('Expected the document to have a window');

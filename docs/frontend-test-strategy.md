@@ -25,7 +25,7 @@ From [Choose the runner and DOM environment for DOM + JS-integration tests](http
 - Real 600k-iteration PBKDF2 runs in happy-dom at acceptable cost. Tests don't stub the KDF.
 - **Node 24** via a committed `.nvmrc`.
 - **npm scripts:** `test:unit` (today's `test:js`, renamed), `test:dom` (`vitest run --coverage`), `test` (both), `fixtures` (regenerates the DOM fixtures and the protocol contract), `typecheck` (`tsc -p jsconfig.json`).
-- **Type checking** (from [#203](https://github.com/luprzybyl/buzzdrop/issues/203)): `tsc --checkJs` under `strict` checks `static/js/` and `tests/js/` from their JSDoc, with no build step and no `.ts` files (`noEmit`; the browser loads the same `.js`). Config: root `jsconfig.json`; devDeps `typescript` and `@types/node`. Its `include` is a temporary allowlist until the index and view pages are split (§3). No `@ts-ignore`/`@ts-nocheck`; an `@ts-expect-error` carries a one-line reason.
+- **Type checking** (from [#203](https://github.com/luprzybyl/buzzdrop/issues/203)): `tsc --checkJs` under `strict` checks `static/js/` and `tests/js/` from their JSDoc, with no build step and no `.ts` files (`noEmit`; the browser loads the same `.js`). Config: root `jsconfig.json`; devDeps `typescript` and `@types/node`. Its `include` is all of `static/js/**/*.js` and `tests/js/**/*.js`. No `@ts-ignore`/`@ts-nocheck`; an `@ts-expect-error` carries a one-line reason.
 - **Typed DOM tests:** page modules are typed against lib.dom, happy-dom's window against its own classes. Tests drive the page through `browserView(window)` from `tests/js/support/dom-fixture.js`, the one bridge between the two.
 - **Coverage** is reported, not gated.
 
