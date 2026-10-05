@@ -16,7 +16,6 @@ import { makeProtocolFake } from '../support/protocol-fake.js';
  * @typedef {object} StartOptions
  * @property {'index--empty' | 'index--notification-email'} [fixture]
  * @property {import('../support/protocol-fake.js').FakeOptions} [fakeOptions]
- * @property {(fake: Fake, count: number) => void} [onBegin] - runs on each /upload/begin answer (count from 1), before the page sees it
  */
 
 // Six EFF words: strong enough for the gate, and distinctive enough that a
@@ -51,7 +50,7 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
     });
 
     /** @param {StartOptions} [options] */
-    const start = ({ fixture = 'index--empty', fakeOptions = {}, onBegin } = {}) => {
+    const start = ({ fixture = 'index--empty', fakeOptions = {} } = {}) => {
         page = loadFixture(fixture);
         const window = browserView(page);
         const { document } = window;
@@ -65,7 +64,6 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
                 /** @type {IssuedShare} */
                 const share = await response.clone().json();
                 issued.push(share);
-                onBegin?.(fake, issued.length);
             }
             return response;
         };
@@ -247,9 +245,12 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
      * @property {string} name
      * @property {string} message - what the page alerts
      * @property {boolean} reachesUpload - whether the failed attempt sends /upload
-     * @property {(fake: Fake) => void} [arrange]
-     * @property {StartOptions['onBegin']} [onBegin]
+     * @property {(fake: Fake) => void} arrange
      */
+    // File and note share the upload code, so the error paths run once, in
+    // file mode: one failure per phase, plus the 413 message
+    // (docs/frontend-test-strategy.md §7, Granularity). Which message each
+    // other status shows is not an integration concern.
     /** @type {ErrorCase[]} */
     const ERROR_CASES = [
         {
@@ -257,42 +258,6 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
             message: 'The server refused the upload handshake.',
             reachesUpload: false,
             arrange: (fake) => fake.failNext('/upload/begin', 429),
-        },
-        {
-            name: 'begin errors (500)',
-            message: 'The server refused the upload handshake.',
-            reachesUpload: false,
-            arrange: (fake) => fake.failNext('/upload/begin', {
-                status: 500, body: '<!doctype html><title>500 Internal Server Error</title>',
-            }),
-        },
-        {
-            name: 'begin fails on the network',
-            message: 'Failed to fetch',
-            reachesUpload: false,
-            arrange: (fake) => fake.failNext('/upload/begin', 'network'),
-        },
-        {
-            // The session changed hands between begin and finish; the retry
-            // runs as the new account.
-            name: 'the share belongs to another account (403)',
-            message: 'Key-release share belongs to another user',
-            reachesUpload: true,
-            onBegin: (fake, count) => {
-                if (count === 1) fake.state.user = 'adminuser';
-            },
-        },
-        {
-            name: 'the upload is too large (413)',
-            message: 'File too large',
-            reachesUpload: true,
-            arrange: (fake) => fake.failNext('/upload', 413),
-        },
-        {
-            name: 'the upload is rate-limited (429)',
-            message: 'Too many requests. Please try again later.',
-            reachesUpload: true,
-            arrange: (fake) => fake.failNext('/upload', 429),
         },
         {
             name: 'the upload errors (500, HTML body)',
@@ -303,21 +268,19 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
             }),
         },
         {
-            name: 'the upload fails on the network',
-            message: 'Network error during upload',
+            name: 'the upload is too large (413)',
+            message: 'File too large',
             reachesUpload: true,
-            arrange: (fake) => fake.failNext('/upload', 'network'),
+            arrange: (fake) => fake.failNext('/upload', 413),
         },
     ];
 
-    describe.each(MODES)('upload errors (%s)', (mode) => {
+    describe('upload errors', () => {
         it.each(ERROR_CASES)('$name: alerts, recovers and retries with a fresh share', async (errorCase) => {
-            const { document, fake, issued, navigate, alert, share, settled, requestsTo } = start({
-                onBegin: errorCase.onBegin,
-            });
-            errorCase.arrange?.(fake);
+            const { document, fake, issued, navigate, alert, share, settled, requestsTo } = start();
+            errorCase.arrange(fake);
 
-            share(mode);
+            share('file');
             await settled();
 
             expect(alert).toHaveBeenCalledExactlyOnceWith(errorCase.message);
