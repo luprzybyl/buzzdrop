@@ -86,6 +86,14 @@ LISTED_FILES = [
     _file('00000000-0000-4000-8000-000000000005', 'shared.docx',
           uploaded_by='adminuser', shared_with=['testuser']),
 ]
+# One existing token so the /users token table renders a row.
+API_TOKENS = [{
+    'token_hash': 'cd' * 32,
+    'username': 'testuser',
+    'created_at': CREATED_AT,
+    'last_used_at': None,
+    'expires_at': FUTURE,
+}]
 SHARE_FILE = _file('00000000-0000-4000-8000-0000000000f1', 'contract.pdf')
 SHARE_TEXT = _file('00000000-0000-4000-8000-0000000000f2', 'Secret Note', type='text')
 
@@ -93,7 +101,7 @@ SCRIPT_SRC_TAG = re.compile(r'[ \t]*<script\b[^>]*\bsrc=[^>]*>\s*</script>[ \t]*
 SRI_HASH = re.compile(r'sha384-[A-Za-z0-9+/=%]+')
 
 
-def _reset(files):
+def _reset(files, tokens=()):
     limiter.reset()
     with flask_app.app_context():
         backend = get_backend()
@@ -101,6 +109,8 @@ def _reset(files):
         backend.tokens.truncate()
         for record in files:
             backend.files.insert(dict(record))
+        for doc_id, token in enumerate(tokens, start=1):
+            backend.tokens.insert(dict(token), doc_id=doc_id)
 
 
 def _client(username=None):
@@ -136,6 +146,9 @@ def render_all():
 
     _reset(LISTED_FILES)
     fixtures.append(_render('index--files', _client('testuser'), 'GET', '/'))
+
+    _reset([], API_TOKENS)
+    fixtures.append(_render('users--admin', _client('adminuser'), 'GET', '/users'))
 
     for kind, record in (('file', SHARE_FILE), ('text', SHARE_TEXT)):
         _reset([record])

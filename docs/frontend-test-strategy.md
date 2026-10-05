@@ -31,7 +31,7 @@ From [Choose the runner and DOM environment for DOM + JS-integration tests](http
 
 From [What shape should the testability refactor of page scripts take?](https://github.com/luprzybyl/buzzdrop/issues/158). Production JS may be refactored to make it testable, as long as behaviour doesn't change.
 
-- **Split:** each page gets a side-effect-free module (`index-page.mjs`, `view-page.mjs`, `success-page.mjs`, `confirm-download-page.mjs`, `hero-flow-page.mjs`) exporting `init<Page>(root, deps)` and `browserDeps()`. The existing entry files (`main.js`, `view.js`, `success.js`, `confirm-download.js`, `hero-flow.js`) shrink to `init<Page>(document, browserDeps())`. Template `<script>` tags, SRI attributes and JSON config blocks stay as they are. **Tests import the page module, never the entry.**
+- **Split:** each page gets a side-effect-free module (`index-page.mjs`, `view-page.mjs`, `success-page.mjs`, `confirm-download-page.mjs`, `hero-flow-page.mjs`, `users-page.mjs`) exporting `init<Page>(root, deps)` and `browserDeps()`. The existing entry files (`main.js`, `view.js`, `success.js`, `confirm-download.js`, `hero-flow.js`, `users.js`) shrink to `init<Page>(document, browserDeps())`. Template `<script>` tags, SRI attributes and JSON config blocks stay as they are. **Tests import the page module, never the entry.**
 - **State lives in the `init` closure** (e.g. `uploadInProgress`, `activeShareMode`, parsed config, CSRF token). Every `init()` is a fresh page, and no `vi.resetModules()` is needed.
 - **Dependencies (`deps`):**
 
@@ -64,16 +64,17 @@ The `history.replaceState` fragment scrub stays in each page, because it's an ef
 From [How are DOM fixtures rendered from the real Jinja templates?](https://github.com/luprzybyl/buzzdrop/issues/157). Fixtures are rendered from the real templates and are never copied by hand.
 
 - **Generator:** `tests/fixtures/render_dom_fixtures.py` requests the **real routes** through `test_client` (`GET /`, `POST /view/<id>/confirm`, the upload → success path, …). It seeds the database with fixed IDs and timestamps and logs in as the conftest test users. It saves the full response HTML, including `base.html` (nav, flashes, `<meta name="csrf-token">`).
-- **Output:** `tests/js/fixtures/html/<template>--<state>.html`, committed.
-- **Determinism:** fixed seed IDs, frozen time (`freezegun` or an injected clock; if `freezegun`, it is added to `requirements.txt` next to `pytest`), and a fixed CSRF token in the session. Only values that can't be controlled at the source are rewritten afterwards (e.g. `sha384-…` → `sha384-FIXTURE`).
+- **Output:** `tests/js/fixtures/html/<template>--<state>.html`, committed. `npm run fixtures` regenerates them, and the pre-commit hook in `.githooks/` does it automatically for commits that touch `templates/`, a root `*.py`, `.env.example` or the generator.
+- **Determinism:** fixed users, seed IDs, timestamps and session CSRF token; expiry dates far in the past or future, so nothing rendered depends on the current time (no `freezegun` or clock injection needed). The developer's `.env` is ignored. The generator fails if two renders differ. Only values that can't be controlled at the source are rewritten afterwards (e.g. `sha384-…` → `sha384-FIXTURE`).
 - **Stripped:** `<script src>` tags (tests import or `init()` the module themselves; `test_sri_in_templates.py` keeps covering script references). **Kept:** the JSON config blocks (`allowed-extensions-json`, `upload-endpoints-json`, `view-config-json`).
-- **States:**
-  - `index`: anonymous; logged-in with no files; logged-in with files in each status (active, downloaded, expired, with private note, shared with them); admin; user with `configured_notification_email`
+- **States** (fixture names in brackets):
+  - `index`: anonymous (`anonymous`); logged-in with no files (`empty`); logged-in with files in each status: active, downloaded, expired, with private note, shared with them (`files`); admin (`admin`); user with `configured_notification_email` (`notification-email`)
   - `view`: file, text
   - `confirm_download`: file, text
   - `success`: file, text
+  - `users`: admin, with one existing token (`admin`)
 
-  `login.html` and `users.html` are excluded (they have no JS). Flash-message variants are added only when a DOM test needs one.
+  `login.html` is excluded (it has no JS). Flash-message variants are added only when a DOM test needs one.
 
 ## 5. Protocol fake
 
@@ -153,6 +154,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 - **Success page (`success.js`):** copy link and one-click link, password visibility toggle, the field filled from a well-formed fragment.
 - **Confirm page (`confirm-download.js`):** the fragment password carried across the confirm POST (one well-formed case).
 - **Hero flow (`hero-flow.js`):** reduced motion means no autoplay; the toggle pauses it.
+- **Users page (`users.js`, admin):** Generate shows the token and its expiry and re-enables the button; a server error shows its message; the request carries the CSRF header; Copy shows "Copied!".
 
 ### JS integration (page modules + real `crypto.js` + protocol fake)
 - **Two-phase upload, for file and for note:** begin → encrypt under H → upload with `file_id`, verifier and `receipt_hash` → progress updates → redirect to success.
@@ -199,7 +201,7 @@ From [Pin down E2E harness facts: Playwright against the Buzzdrop Docker image](
   | Variable | Value | Why |
   |---|---|---|
   | `FLASK_ENV` | `testing` | HTTP cookies; limiter on with relaxed limits (all E2E traffic comes from one IP) |
-  | `FLASK_USER_1` | `e2e:<password>:false` | Single non-admin user (no admin UI with JS) |
+  | `FLASK_USER_1` | `e2e:<password>:false` | Single non-admin user (the admin token UI is covered in the DOM layer, not E2E) |
   | `FLASK_SECRET_KEY` | fixed dummy | Deterministic; silences the temporary-key warning |
   | `STORAGE_BACKEND` | `local` | No mounts; state disappears with `--rm` |
   | `DATABASE_URL` | `sqlite:////tmp/e2e/buzzdrop.db` | |
@@ -236,6 +238,6 @@ All gating CI lives in `ci.yml`. **`build-test.yml` is deleted** (it duplicated 
 - Visual regression, accessibility audits, performance and load testing.
 - Changes to the Python test suite beyond what this strategy names.
 - CLI ↔ browser cross-client E2E: format interop is proven by the shared byte-identical BKV3 fixtures.
-- The admin token UI (`users.html` has no JS).
+- E2E of the admin token UI: `users.js` is covered in the DOM layer (§7), and nothing in it needs a real browser plus server.
 - SRI for ES modules imported by entry scripts. This gap already exists, and it is tracked in [SRI does not cover ES modules imported by entry scripts](https://github.com/luprzybyl/buzzdrop/issues/166).
 - The `/release` 404-vs-403 mismatch is a product bug, tracked in [Burned share: /release returns 404, CLAUDE.md says 403, view.js shows a generic error](https://github.com/luprzybyl/buzzdrop/issues/169). The fake and contract follow whatever `app.py` returns.
