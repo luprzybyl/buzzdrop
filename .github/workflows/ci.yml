@@ -36,11 +36,35 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    env:
+      # One decoy per secret/state pattern in .dockerignore, some nested.
+      DECOYS: >-
+        .env .env.local .envrc cli/.env
+        buzzdrop.db buzzdrop.db-wal buzzdrop.db.bak tests/stray.db local.sqlite3 db.json
+        data/buzzdrop.db uploads/blob instance/config.py server.pem server.key
+        .claude/settings.json .venv/pyvenv.cfg node_modules/stray.js
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      # A clean checkout has no secrets or local state, so plant decoys
+      # where a developer's tree has them: .dockerignore must keep them out
+      # of the image (#163). The image is built from this same context.
+      - name: Plant decoy secrets and local state
+        run: |
+          for f in $DECOYS; do
+            mkdir -p "$(dirname "$f")"
+            echo decoy > "$f"
+          done
       - name: Build Docker image
         run: docker build -t buzzdrop-test .
+      - name: Check the image carries no secrets or local state
+        run: |
+          docker run --rm -e DECOYS buzzdrop-test sh -c '
+            leaked=0
+            for f in $DECOYS .git; do
+              if [ -e "$f" ]; then echo "::error::/app/$f is in the image"; leaked=1; fi
+            done
+            exit $leaked'
       - name: Save Docker image
         run: docker save buzzdrop-test -o ${{ runner.temp }}/buzzdrop-test.tar
       - name: Upload Docker image

@@ -194,4 +194,4 @@ Key variables in `.env`:
 
 **Passenger WSGI**: `passenger_wsgi.py` provides WSGI entry point with PATH_INFO encoding fixes for production deployment.
 
-**Docker**: Single-service compose with volume mounts for `uploads/` and `buzzdrop.db` persistence.
+**Docker**: Single-service compose with volume mounts for `uploads/` and `buzzdrop.db` persistence. The `Dockerfile` copies the whole context, so `.dockerignore` keeps secrets (`.env*` except the placeholder `.env.example`, keys), local state (`*.db*`, `data/`, `uploads/`) and dev clutter out of the image. `tests/`, `docs/` and `cli/` stay in, because CI runs pytest inside the image. The CI `build` job plants a decoy for each secret/state pattern (its `DECOYS` list) and fails if one leaks into the image; add a new pattern to both.
