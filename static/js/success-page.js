@@ -62,14 +62,19 @@ export function initSuccess(root, deps) {
         flashCopied(shareLinkWithPassword.nextElementSibling, 'One-click link copied to clipboard.');
     }
 
+    // A reveal's auto-hide; a manual Hide cancels it, so it can't cut a later
+    // reveal short.
+    let hideTimer = null;
+
     // Toggle password field between 'password' and 'text' for user convenience
     function togglePasswordVisibility() {
         const pwdInput = root.getElementById('password-display');
         const toggleBtn = root.getElementById('toggle-password');
+        clearTimeout(hideTimer);
         if (pwdInput.type === 'password') {
             pwdInput.type = 'text';
             toggleBtn.textContent = 'Hide';
-            setTimeout(() => {
+            hideTimer = setTimeout(() => {
                 pwdInput.type = 'password';
                 toggleBtn.textContent = 'Show';
             }, 5000);

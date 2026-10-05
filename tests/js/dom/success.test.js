@@ -106,6 +106,21 @@ describe('success page', () => {
         expect(byId('toggle-password').textContent).toBe('Show');
     });
 
+    it('showing the password again restarts the five seconds', () => {
+        const { byId } = start();
+        const toggle = byId('toggle-password');
+
+        toggle.click();
+        vi.advanceTimersByTime(3000);
+        toggle.click();
+        toggle.click();
+        // The first reveal's five seconds are up; the second's are not.
+        vi.advanceTimersByTime(3000);
+
+        expect(byId('password-display').type).toBe('text');
+        expect(toggle.textContent).toBe('Hide');
+    });
+
     it('fills the password and one-click link from a well-formed fragment', () => {
         const { byId } = start(`${PAGE_URL}#correct%20horse`);
 
