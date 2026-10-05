@@ -4,7 +4,7 @@
 // - Toggling password visibility
 // - Auto-filling the password from the URL fragment
 
-import { buildOneClickLink, readFragmentPassword } from './fragment-password.mjs';
+import { buildOneClickLink, readFragmentPassword } from './fragment-password.js';
 
 // One region for the page announces every copy; the button flash is visual.
 function setCopyStatus(message) {

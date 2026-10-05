@@ -14,7 +14,7 @@
 //     repetitive or sequential input ("abcabcabc", "qwerty", "aaaa...").
 // It underestimates, never overestimates — the order matters for a gate.
 
-import { EFF_WORDLIST } from './eff-wordlist.mjs';
+import { EFF_WORDLIST } from './eff-wordlist.js';
 
 const WORD_SET = new Set(EFF_WORDLIST);
 const BITS_PER_WORD = Math.log2(EFF_WORDLIST.length); // ~12.92

@@ -47,7 +47,7 @@ Scope is the frontend only. The backend already has 141 pytest tests.
 
 ### Why jsdom rather than pure-function extraction
 
-The existing `shared-files.mjs` pattern (pure functions tested in bare Node) is cheaper, but it would have caught none of the bugs fixed in this PR: the stale `fileField.files`, the span wiped by `textContent`, and the swallowed clipboard rejection. All of them were DOM side-effect bugs. Extracting pure predicates would produce green tests with no real protection.
+The existing `shared-files.js` pattern (pure functions tested in bare Node) is cheaper, but it would have caught none of the bugs fixed in this PR: the stale `fileField.files`, the span wiped by `textContent`, and the swallowed clipboard rejection. All of them were DOM side-effect bugs. Extracting pure predicates would produce green tests with no real protection.
 
 ### Heavier alternative
 

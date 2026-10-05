@@ -32,7 +32,7 @@ from urllib.parse import urlparse
 # Each word carries log2(7776) ~ 12.92 bits of entropy, so the default
 # 6-word passphrase gives ~77.5 bits — comfortably beyond offline
 # brute-force for a one-time link. The same list backs the web UI
-# generator in static/js/eff-wordlist.mjs; keep them in sync.
+# generator in static/js/eff-wordlist.js; keep them in sync.
 # ---------------------------------------------------------------------------
 _WORDS = [
     "abacus", "abdomen", "abdominal", "abide", "abiding", "ability", "ablaze", "able",

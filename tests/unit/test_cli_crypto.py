@@ -12,7 +12,7 @@ round-trip encrypt→decrypt produces the original data for the key-release
     file_key = HKDF(Kp ‖ H, salt, 'file')
 
 The V3_FIXTURE hex blob below is shared verbatim with
-tests/js/crypto.test.mjs so both implementations are pinned to identical
+tests/js/crypto.test.js so both implementations are pinned to identical
 bytes: salt = bytes(range(16)), iv = bytes(range(16, 28)),
 h = bytes(range(32, 64)), receipt = bytes(range(64, 96)),
 password = 'fixture-password-123', plaintext payload = b'fixture-data'.
@@ -130,7 +130,7 @@ def test_encrypt_decrypt_roundtrip():
 
 @requires_cryptography
 def test_v3_fixture_decrypts_and_verifier_matches():
-    """Pinned v3 fixture: same bytes in JS test (crypto.test.mjs)."""
+    """Pinned v3 fixture: same bytes in JS test (crypto.test.js)."""
     buzz = _import_buzz()
     data, receipt = buzz.decrypt_file(
         V3_FIXTURE, FIXTURE_PASSWORD, h=V3_FIXTURE_H)
@@ -239,12 +239,12 @@ def test_wordlist_is_eff_large_wordlist():
 
 
 def test_js_wordlist_matches_cli():
-    """static/js/eff-wordlist.mjs must be the same list as cli/buzz's."""
+    """static/js/eff-wordlist.js must be the same list as cli/buzz's."""
     import re
     buzz = _import_buzz()
     js_path = os.path.abspath(
         os.path.join(os.path.dirname(__file__), '..', '..',
-                     'static', 'js', 'eff-wordlist.mjs')
+                     'static', 'js', 'eff-wordlist.js')
     )
     with open(js_path) as fh:
         js_words = re.findall(r"'([a-z-]+)'", fh.read())

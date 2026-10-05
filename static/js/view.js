@@ -8,7 +8,7 @@
 // 4. Save file to disk and notify server
 
 import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
-import { readFragmentPassword } from './fragment-password.mjs';
+import { readFragmentPassword } from './fragment-password.js';
 
 const cryptoService = new CryptoService();
 

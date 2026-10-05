@@ -1,9 +1,9 @@
 // Import CryptoService for encryption
 import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
-import { buildSharedFilesUrl, getSharedFilesPage, rowSearchText, statusBadgeClass } from './shared-files.mjs';
-import { isAllowedFile } from './file-extensions.mjs';
-import { buildOneClickLink } from './fragment-password.mjs';
-import { assessPassword, generatePassphrase } from './passphrase.mjs';
+import { buildSharedFilesUrl, getSharedFilesPage, rowSearchText, statusBadgeClass } from './shared-files.js';
+import { isAllowedFile } from './file-extensions.js';
+import { buildOneClickLink } from './fragment-password.js';
+import { assessPassword, generatePassphrase } from './passphrase.js';
 
 const cryptoService = new CryptoService();
 let activeShareMode = 'file';

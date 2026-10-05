@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isAllowedFile } from '../../static/js/file-extensions.mjs';
+import { isAllowedFile } from '../../static/js/file-extensions.js';
 
 const allowed = ['pdf', 'gz', 'jpg', 'bashrc', 'readme'];
 
