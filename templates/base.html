@@ -7,6 +7,7 @@
     <meta name="theme-color" content="#07080B">
     <meta name="description" content="BuzzDrop: secure, one-time file sharing. Upload encrypted files or secret notes, send a link, and let them vanish as soon as the recipient downloads them.">
     <title>BuzzDrop: Secure, One-Time File Sharing</title>
+    <script type="importmap">{{ module_import_map()|safe }}</script>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=sri_hash('css/app.css')) }}">
 </head>

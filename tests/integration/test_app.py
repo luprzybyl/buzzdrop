@@ -1,5 +1,6 @@
 import pytest
 import os
+import re
 from flask import url_for, session
 
 import io
@@ -230,7 +231,10 @@ def test_manage_users_page_for_admin(client, app, db_instance):
     # Check that literal passwords from config are not displayed
     assert b'testuser:password:false' not in response.data # Raw config string
     assert b'adminuser:adminpass:true' not in response.data # Raw config string
-    assert b'password' not in response.data # The literal string 'password'
+    # The import map lists module URLs such as fragment-password.js; it
+    # carries no user data, so the bare-word check skips it.
+    page = re.sub(rb'<script type="importmap">.*?</script>', b'', response.data, flags=re.S)
+    assert b'password' not in page # The literal string 'password'
     assert b'adminpass' not in response.data # The literal string 'adminpass'
 
 # Removing placeholder tests as the template logic for empty lists is different

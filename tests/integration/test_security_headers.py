@@ -8,6 +8,8 @@ that the markup stays compatible with ``script-src 'self'`` (no inline
 executable <script> and no inline on* handlers — only static SRI'd files
 and type="application/json" data islands).
 """
+import base64
+import hashlib
 import re
 from io import BytesIO
 
@@ -35,15 +37,20 @@ def _upload_file(client, key_release_upload):
     return file_id
 
 
-def _assert_no_inline_script(html):
+def _assert_no_inline_script(response):
     """
-    Every <script> tag must either load an external file (src=...) or be a
-    non-executable data island (type="application/json"). Anything else is
-    inline JS, which CSP script-src 'self' forbids.
+    Every <script> tag must either load an external file (src=...), be a
+    non-executable data island (type="application/json"), or be an inline
+    block whose SHA-256 the response's CSP allows (base.html's import map).
+    Anything else is inline JS, which CSP script-src 'self' forbids.
     """
-    for tag in re.findall(r'<script[^>]*>', html):
-        assert 'src=' in tag or 'type="application/json"' in tag, \
-            f"inline <script> blocked by CSP: {tag}"
+    html = response.data.decode('utf-8')
+    csp = response.headers['Content-Security-Policy']
+    for tag, content in re.findall(r'(<script[^>]*>)(.*?)</script>', html, re.DOTALL):
+        if 'src=' in tag or 'type="application/json"' in tag:
+            continue
+        digest = base64.b64encode(hashlib.sha256(content.encode('utf-8')).digest()).decode()
+        assert f"'sha256-{digest}'" in csp, f"inline <script> blocked by CSP: {tag}"
 
 
 def _assert_no_inline_handlers(html):
@@ -92,7 +99,8 @@ def test_csp_policy_directives(client):
     response = client.get('/')
     csp = response.headers['Content-Security-Policy']
 
-    # All markup ships scripts as SRI'd static files — no inline escape hatch.
+    # All markup ships scripts as SRI'd static files — no inline escape
+    # hatch beyond the import map's own hash.
     assert "script-src 'self'" in csp
     script_src = re.search(r"script-src ([^;]*)", csp).group(1)
     assert "'unsafe-inline'" not in script_src
@@ -145,24 +153,26 @@ def test_no_inline_scripts_in_templates(client, key_release_upload):
     _login(client)
 
     for path in ('/', '/login'):
-        html = client.get(path).data.decode('utf-8')
-        _assert_no_inline_script(html)
-        _assert_no_inline_handlers(html)
+        response = client.get(path)
+        _assert_no_inline_script(response)
+        _assert_no_inline_handlers(response.data.decode('utf-8'))
 
     # /view/<id> (confirm_download.html) — the page that used to carry an
     # inline fragment→sessionStorage script.
     file_id = _upload_file(client, key_release_upload)
-    html = client.get(f'/view/{file_id}').data.decode('utf-8')
-    _assert_no_inline_script(html)
+    response = client.get(f'/view/{file_id}')
+    html = response.data.decode('utf-8')
+    _assert_no_inline_script(response)
     _assert_no_inline_handlers(html)
     assert 'js/confirm-download.js' in html
 
     # view.html — the page that used to inject window.* URLs inline.
-    html = client.post(
+    response = client.post(
         f'/view/{file_id}/confirm',
         data={'csrf_token': 'test-csrf-token'},
-    ).data.decode('utf-8')
-    _assert_no_inline_script(html)
+    )
+    html = response.data.decode('utf-8')
+    _assert_no_inline_script(response)
     _assert_no_inline_handlers(html)
     assert 'id="view-config-json"' in html
 
