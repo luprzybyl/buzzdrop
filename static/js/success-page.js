@@ -125,7 +125,9 @@ export function initSuccess(root, deps) {
     if (pwd) {
         pwdInput.value = pwd;
 
-        // Generate link with password in URL fragment
+        // The convenience link: password in the fragment, ready to paste
+        // anywhere. Deliberate, and deliberately labelled as such on the page —
+        // see the tradeoff spelled out in fragment-password.js.
         shareLinkWithPassword.value = buildOneClickLink(shareLink.value, pwd);
     }
 }
