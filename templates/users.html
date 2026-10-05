@@ -19,7 +19,7 @@
         <svg class="mt-0.5 h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
         </svg>
-        <span>Users are managed through environment variables. To add or modify users, update the <code class="rounded border border-white/10 bg-hive-850 px-1.5 py-0.5 text-xs">.env</code> file and redeploy.</span>
+        <span>Users are managed through environment variables. To add or modify users, update the <code class="rounded-sm border border-white/10 bg-hive-850 px-1.5 py-0.5 text-xs">.env</code> file and redeploy.</span>
     </div>
 
     <section class="surface-card animate-fade-up delay-2 p-6 sm:p-8">
@@ -51,8 +51,8 @@
         <div class="mt-5 space-y-4">
             {% for username, user in users.items() %}
             {% set user_tokens = tokens_by_user.get(username, []) %}
-            <div class="token-card overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-                <div class="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+            <div class="token-card overflow-hidden rounded-2xl border border-white/6 bg-white/2">
+                <div class="flex items-center justify-between gap-3 border-b border-white/6 px-4 py-3">
                     <div>
                         <h3 class="text-sm font-semibold text-white">{{ username }}</h3>
                         <p class="text-xs text-slate-500">{{ 'Admin' if user.is_admin else 'User' }}</p>
@@ -62,7 +62,7 @@
                         <span class="status-badge status-badge-slate">{{ user_tokens|length }} token{{ '' if user_tokens|length == 1 else 's' }}</span>
                     </div>
                 </div>
-                <div class="token-result border-b border-white/[0.06] px-4 py-4" hidden>
+                <div class="token-result border-b border-white/6 px-4 py-4" hidden>
                     <p class="text-xs text-slate-400">New token for <span class="font-semibold text-white">{{ username }}</span> — shown once. Store it now.</p>
                     <div class="copy-field mt-3">
                         <input type="text" readonly aria-label="New API token" class="generated-token-input field-input flex-1 border-transparent bg-transparent font-mono shadow-none">
@@ -75,7 +75,7 @@
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-sm">
                         <thead>
-                            <tr class="border-b border-white/[0.06]">
+                            <tr class="border-b border-white/6">
                                 <th class="px-4 py-3 text-left text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Created</th>
                                 <th class="px-4 py-3 text-left text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Last used</th>
                                 <th class="px-4 py-3 text-left text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Expires</th>
@@ -84,7 +84,7 @@
                         </thead>
                         <tbody>
                             {% for token in user_tokens %}
-                            <tr class="border-b border-white/[0.04] transition last:border-0 hover:bg-white/[0.03]">
+                            <tr class="border-b border-white/4 transition last:border-0 hover:bg-white/3">
                                 <td class="px-4 py-3 tabular-nums text-slate-300">{{ token.created_at }}</td>
                                 <td class="px-4 py-3 tabular-nums text-slate-500">{{ token.last_used_at or 'Never' }}</td>
                                 <td class="px-4 py-3 tabular-nums text-slate-500">{{ token.expires_at }}</td>

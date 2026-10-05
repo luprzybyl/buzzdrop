@@ -64,11 +64,11 @@
 
         <div id="text-note-section" style="display:none;" class="mt-6" role="tabpanel" aria-labelledby="text-tab">
             <label for="note-text" class="field-label">Secret text</label>
-            <textarea id="note-text" rows="9" class="field-input min-h-[14rem] font-mono text-[0.8rem] leading-6" placeholder="Paste the note you want to protect with a one-time buzz..." required></textarea>
+            <textarea id="note-text" rows="9" class="field-input min-h-56 font-mono text-[0.8rem] leading-6" placeholder="Paste the note you want to protect with a one-time buzz..." required></textarea>
             <p class="field-help">Encrypted in the browser before it reaches the server.</p>
         </div>
 
-        <div class="mt-8 space-y-6 border-t border-white/[0.06] pt-8">
+        <div class="mt-8 space-y-6 border-t border-white/6 pt-8">
             <div class="grid gap-5 md:grid-cols-2">
                 <div>
                     <label for="shared-password" class="field-label">Password</label>
@@ -131,7 +131,7 @@
                 </div>
             </div>
 
-            <div class="relative overflow-hidden rounded-2xl border border-honey-400/20 bg-gradient-to-br from-honey-400/[0.09] to-transparent p-5">
+            <div class="relative overflow-hidden rounded-2xl border border-honey-400/20 bg-linear-to-br from-honey-400/9 to-transparent p-5">
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div class="text-sm">
                         <p class="font-semibold text-white">One-time buzz</p>
@@ -157,7 +157,7 @@
 {% else %}
 {# -------------------------------------------------------------- Landing #}
 <div class="space-y-20">
-    <section class="grid items-center gap-12 lg:grid-cols-[1.15fr,1fr]">
+    <section class="grid items-center gap-12 lg:grid-cols-[1.15fr_1fr]">
         <div class="animate-fade-up space-y-7">
             <span class="eyebrow">
                 <span class="h-1.5 w-1.5 rounded-full bg-honey-400" aria-hidden="true"></span>
@@ -410,7 +410,7 @@
     </section>
 
     <section class="surface-card p-8 sm:p-12">
-        <div class="grid gap-10 lg:grid-cols-[1.2fr,1fr] lg:items-center">
+        <div class="grid gap-10 lg:grid-cols-[1.2fr_1fr] lg:items-center">
             <div class="space-y-5">
                 <span class="eyebrow">Open source</span>
                 <h2 class="section-title">Read the code. Then trust it.</h2>
@@ -460,7 +460,7 @@
             <span class="status-badge status-badge-slate">{{ user_files|length }} total</span>
         </div>
 
-        <div class="mt-6 flex flex-col gap-4 border-t border-white/[0.06] pt-6 lg:flex-row lg:items-end lg:justify-between">
+        <div class="mt-6 flex flex-col gap-4 border-t border-white/6 pt-6 lg:flex-row lg:items-end lg:justify-between">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <label class="block sm:w-72">
                     <span class="field-label">Quick search</span>
@@ -529,9 +529,9 @@
 
         <p id="copy-status" class="sr-only" role="status"></p>
 
-        <p id="shared-files-empty-state" class="mt-4 hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-6 text-center text-sm text-slate-500">No drops match this search.</p>
+        <p id="shared-files-empty-state" class="mt-4 hidden rounded-2xl border border-white/6 bg-white/2 px-5 py-6 text-center text-sm text-slate-500">No drops match this search.</p>
 
-        <div class="mt-6 flex flex-col gap-3 border-t border-white/[0.06] pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <div class="mt-6 flex flex-col gap-3 border-t border-white/6 pt-5 sm:flex-row sm:items-center sm:justify-between">
             <span id="shared-files-page" class="text-sm font-medium text-slate-500"></span>
             <div class="flex gap-2">
                 <button id="shared-files-prev" type="button" class="btn-secondary px-4 py-2 disabled:pointer-events-none disabled:opacity-40">Previous</button>
