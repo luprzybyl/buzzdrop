@@ -32,6 +32,7 @@ import { required, requiredWindow } from './required.js';
 /**
  * What POST /release answers: `{h}` (the server share, hex) on a verifier
  * match; otherwise `{error}`, plus `attempts_remaining` on a 403 miss.
+ * 404 means the file or its share is gone (deleted, expired or burned).
  * @typedef {object} ReleaseResponse
  * @property {string} [h]
  * @property {number} [attempts_remaining]
@@ -202,6 +203,14 @@ export async function initView(root, deps) {
         if (res.status === 429) {
             throw new Error(
                 'Too many incorrect attempts — this share is locked.');
+        }
+        if (res.status === 404) {
+            // A deleted file, an expired or burned share all answer a uniform
+            // 404. Our own lockout gets the 429 above; a 404 means the share
+            // was gone before this attempt (e.g. a link holder burned it).
+            throw new Error(
+                'This share no longer exists — it was deleted, has expired, '
+                + 'or was locked by wrong password attempts.');
         }
         if (!res.ok || typeof body.h !== 'string') {
             throw new Error('The server refused to release the key.');

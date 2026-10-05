@@ -149,7 +149,7 @@ Encrypts files using the same `BKV3` format as the browser client and runs the s
 - `/view/<file_id>` (GET): Shows download confirmation page
 - `/view/<file_id>/confirm` (POST): Shows decryption interface
 - `/download/<file_id>` (GET): Serves the ciphertext once, marks as downloaded, deletes file
-- `/release/<file_id>` (POST): Server-gated key release — JSON `{v}` → `{h}` on a constant-time match inside one atomic `attempt_key_release` transaction (410 after release, 403 when the share is gone). Misses increment `attempts`; lockout at `KEY_RELEASE_MAX_ATTEMPTS` (optional burn). Rate-limited per `file_id`, not per IP. `Cache-Control: no-store`
+- `/release/<file_id>` (POST): Server-gated key release — JSON `{v}` → `{h}` on a constant-time match inside one atomic `attempt_key_release` transaction (403 on a wrong verifier, 410 after release or expiry, 429 on the attempt that locks the share, a uniform 404 when the file or share is missing, pending or burned — so with burn-on-lockout, calls after the lockout get 404). Misses increment `attempts`; lockout at `KEY_RELEASE_MAX_ATTEMPTS` (optional burn). Rate-limited per `file_id`, not per IP. `Cache-Control: no-store`
 - `/delete/<file_id>` (POST): Manual deletion by uploader (also drops the `file_keys` row)
 - `/report_decryption/<file_id>` (POST): Records if client-side decryption succeeded — requires the plaintext `receipt` matching the stored `receipt_hash` (403 otherwise), and only the first valid report takes effect. Unauthenticated but rate-limited per file_id via `REPORT_DECRYPTION_RATE_LIMIT`
 

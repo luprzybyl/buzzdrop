@@ -164,7 +164,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 - **Two-phase upload, for file and for note:** begin → encrypt under H → upload with `file_id`, verifier and `receipt_hash` → progress updates → redirect to success.
 - **Share options sent on upload, for file and for note:** expiry, private note, notify-on-open, notification email. Asserted on the request bodies.
 - **Upload error paths:** begin fails (abort), 403, 413, 429, server error. The UI recovers and can be retried, and no stale share is reused.
-- **View:** fetch the blob → release → decrypt → report the receipt. Status handling for 403 (`attempts_remaining`), 410 and 429; 404 (missing or burned share) once [the burned-share bug](https://github.com/luprzybyl/buzzdrop/issues/169) gives `view.js` a branch for it.
+- **View:** fetch the blob → release → decrypt → report the receipt. Status handling for 403 (`attempts_remaining`), 410, 429 and 404 (missing or burned share).
 
 ### E2E journeys (Playwright, against the app container)
 1. File: upload → success → share link → confirm → decrypt → downloaded bytes equal the original.
@@ -244,4 +244,4 @@ All gating CI lives in `ci.yml`. **`build-test.yml` is deleted** (it duplicated 
 - CLI ↔ browser cross-client E2E: format interop is proven by the shared byte-identical BKV3 fixtures.
 - E2E of the admin token UI: `users.js` is covered in the DOM layer (§7), and nothing in it needs a real browser plus server.
 - SRI for ES modules imported by entry scripts. It was fixed outside this strategy by the import map in `base.html` ([SRI does not cover ES modules imported by entry scripts](https://github.com/luprzybyl/buzzdrop/issues/166)), and the DOM fixtures strip that map.
-- The `/release` 404-vs-403 mismatch is a product bug, tracked in [Burned share: /release returns 404, CLAUDE.md says 403, view.js shows a generic error](https://github.com/luprzybyl/buzzdrop/issues/169). The fake and contract follow whatever `app.py` returns.
+- The `/release` 404-vs-403 mismatch. It was fixed outside this strategy ([Burned share: /release returns 404, CLAUDE.md says 403, view.js shows a generic error](https://github.com/luprzybyl/buzzdrop/issues/169)): 404 is the intended answer for a missing or burned share, `CLAUDE.md` now says so, and `view.js` shows a message for it. The fake and contract follow whatever `app.py` returns.
