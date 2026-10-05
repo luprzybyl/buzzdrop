@@ -171,6 +171,7 @@ Tests use `conftest.py` fixtures:
 Test structure:
 - `tests/unit/`: Unit tests for utilities, database functions, and SRI hash generation
 - `tests/integration/`: Integration tests for routes, workflows, and SRI HTML attributes
+- `tests/js/`: browser-JS tests. **`docs/frontend-test-strategy.md` is the locked spec for them** (layers, runners, page-script refactor, DOM fixtures, protocol fake, scenario catalogue, E2E, CI) — read it before adding or changing any JS test or test harness
 
 ### Environment Configuration
 
