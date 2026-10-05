@@ -9,6 +9,10 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             include: ['static/js/**'],
+            // Never imported by tests: entry scripts (tests import the page
+            // module instead; add each entry here as its page is split) and the
+            // passphrase wordlist, which is data.
+            exclude: ['static/js/hero-flow.js', 'static/js/eff-wordlist.mjs'],
             reporter: ['text', 'html'],
         },
     },
