@@ -4,48 +4,16 @@
 // core, handle(), and each response must match the recorded one. When app.py
 // changes a response, `npm run fixtures` re-records the contract and this test
 // stays red until the fake matches.
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { EMITS, makeProtocolFake, routeOf } from '../support/protocol-fake.js';
+import { EMITS, loadContract, makeProtocolFake, routeOf } from '../support/protocol-fake.js';
 
 /**
- * @typedef {string | { $ref: string }} PathPart
- * @typedef {{
- *   method: string,
- *   path: PathPart[],
- *   headers?: Record<string, string>,
- *   json?: unknown,
- *   form?: Record<string, string | { $ref: string }>,
- *   files?: Record<string, { filename: string, content: string }>,
- * }} RecordedRequest
- * @typedef {{
- *   status: number,
- *   headers: Record<string, string>,
- *   json?: unknown,
- *   bodyBase64?: string,
- * }} RecordedResponse
- * @typedef {{
- *   name: string,
- *   as: string | null,
- *   injected?: boolean,
- *   request: RecordedRequest,
- *   response: RecordedResponse,
- * }} RecordedStep
- * @typedef {{
- *   name: string,
- *   config: { KEY_RELEASE_MAX_ATTEMPTS: number, KEY_RELEASE_BURN_ON_LOCKOUT: boolean },
- *   steps: RecordedStep[],
- * }} RecordedScenario
- * @typedef {{ csrfToken: string, defaultUser: string, scenarios: RecordedScenario[] }} Contract
+ * @typedef {import('../support/protocol-fake.js').RecordedRequest} RecordedRequest
+ * @typedef {import('../support/protocol-fake.js').RecordedResponse} RecordedResponse
+ * @typedef {import('../support/protocol-fake.js').RecordedStep} RecordedStep
  */
 
-// Paths, not URLs: under the happy-dom environment the global URL is happy-dom's.
-const CONTRACT_FILE = join(
-    dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'protocol-contract.json');
-/** @type {Contract} */
-const contract = JSON.parse(readFileSync(CONTRACT_FILE, 'utf8'));
+const contract = loadContract();
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
 const HEX64 = /\b[0-9a-f]{64}\b/g;
@@ -147,6 +115,15 @@ function toRecorded(path, response) {
     return /** @type {RecordedResponse} */ (normalise(recorded));
 }
 
+/**
+ * Whether the fake answers a step from its state or by injection.
+ * @param {RecordedStep} step
+ * @returns {'state' | 'injected'}
+ */
+function source(step) {
+    return step.injected ? 'injected' : 'state';
+}
+
 describe('protocol fake replays the recorded contract', () => {
     for (const scenario of contract.scenarios) {
         it(scenario.name, async () => {
@@ -170,7 +147,7 @@ describe('protocol fake replays the recorded contract', () => {
 
                 expect(recorded, `${scenario.name}/${step.name}`).toEqual(step.response);
                 expect(EMITS, `${scenario.name}/${step.name}: undeclared response`)
-                    .toContainEqual([routeOf(path), response.status]);
+                    .toContainEqual([routeOf(path), response.status, source(step)]);
                 if (response.headers['Content-Type'] === 'application/json') {
                     responses[step.name] = JSON.parse(String(response.body));
                 }
@@ -182,10 +159,11 @@ describe('protocol fake replays the recorded contract', () => {
 describe('the contract covers the fake', () => {
     // The completeness rule: every response the fake can emit has a scenario.
     const recorded = contract.scenarios.flatMap((scenario) => scenario.steps.map(
-        (step) => JSON.stringify([routeOf(String(step.request.path[0])), step.response.status])));
-    for (const [route, status] of EMITS) {
-        it(`${route} ${status} is recorded`, () => {
-            expect(recorded).toContain(JSON.stringify([route, status]));
+        (step) => JSON.stringify(
+            [routeOf(String(step.request.path[0])), step.response.status, source(step)])));
+    for (const [route, status, from] of EMITS) {
+        it(`${route} ${status} (${from}) is recorded`, () => {
+            expect(recorded).toContain(JSON.stringify([route, status, from]));
         });
     }
 });

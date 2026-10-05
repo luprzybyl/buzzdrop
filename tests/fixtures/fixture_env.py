@@ -4,10 +4,15 @@ The deterministic environment both fixture generators import ``app`` under.
 Importing this module (before ``app``) keeps the developer's .env out of
 the generated fixtures: ``app.py``'s load_dotenv is disabled, only the
 committed .env.example is loaded, and the users and limits the fixtures
-rely on are set explicitly.
+rely on are set explicitly. The database and upload folder point at a
+throwaway directory, so neither app's import-time orphan sweep nor its
+storage backend (built once, at import) touches the developer's state.
 """
+import atexit
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +33,13 @@ os.environ.update({
     'EXPIRY_SWEEP_INTERVAL_SECONDS': '0',
     'ALLOWED_EXTENSIONS': 'txt,pdf,png,jpg,jpeg,gif,doc,docx,xls,xlsx,mp4',
     'MAX_CONTENT_LENGTH': '104857600',
+})
+
+STATE_DIR = tempfile.mkdtemp(prefix='buzzdrop-fixtures-')
+atexit.register(shutil.rmtree, STATE_DIR, ignore_errors=True)
+os.environ.update({
+    'DATABASE_URL': f'sqlite:///{STATE_DIR}/fixtures.db',
+    'UPLOAD_FOLDER': f'{STATE_DIR}/uploads',
 })
 
 sys.path.insert(0, str(ROOT))

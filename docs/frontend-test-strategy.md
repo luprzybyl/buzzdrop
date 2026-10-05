@@ -67,7 +67,7 @@ The `history.replaceState` fragment scrub stays in each page, because it's an ef
 From [How are DOM fixtures rendered from the real Jinja templates?](https://github.com/luprzybyl/buzzdrop/issues/157). Fixtures are rendered from the real templates and are never copied by hand.
 
 - **Generator:** `tests/fixtures/render_dom_fixtures.py` requests the **real routes** through `test_client` (`GET /`, `POST /view/<id>/confirm`, the upload → success path, …). It seeds the database with fixed IDs and timestamps and logs in as the conftest test users. It saves the full response HTML, including `base.html` (nav, flashes, `<meta name="csrf-token">`).
-- **Output:** `tests/js/fixtures/html/<template>--<state>.html`, committed. `npm run fixtures` regenerates them, and the pre-commit hook in `.githooks/` does it automatically for commits that touch `templates/`, a root `*.py`, `.env.example` or the generator.
+- **Output:** `tests/js/fixtures/html/<template>--<state>.html`, committed. `npm run fixtures` regenerates them (and the protocol contract, §6), and the pre-commit hook in `.githooks/` does it automatically for commits that touch `templates/`, `db/`, a root `*.py`, `.env.example` or anything under `tests/fixtures/` (the generators and the protocol scenarios).
 - **Determinism:** fixed users, seed IDs, timestamps and session CSRF token; expiry dates far in the past or future, so nothing rendered depends on the current time (no `freezegun` or clock injection needed). The developer's `.env` is ignored. The generator fails if two renders differ. Only values that can't be controlled at the source are rewritten afterwards (e.g. `sha384-…` → `sha384-FIXTURE`).
 - **Stripped:** `<script src>` tags and the import map, which was added by [#166](https://github.com/luprzybyl/buzzdrop/issues/166) (tests import or `init()` the module themselves; `test_sri_in_templates.py` keeps covering script references). **Kept:** the JSON config blocks (`allowed-extensions-json`, `upload-endpoints-json`, `view-config-json`).
 - **States** (fixture names in brackets):
@@ -100,7 +100,7 @@ From [What does the JS-integration layer's protocol fake look like?](https://git
   - the receipt on `/report_decryption`
 
   A failed check returns **the server's own status and body**. It never throws.
-- **Options** mirror the server config: `maxAttempts`, `burnOnLockout`, `owner`.
+- **Options** mirror the server config: `maxAttempts`, `burnOnLockout`, `owner` (the logged-in account; `state.user` switches it mid-test), plus the session's `csrfToken` (defaults to the DOM fixtures' token).
 - **Failures produced by state:**
   - wrong V → 403 + `attempts_remaining`
   - second release → 410
@@ -132,7 +132,7 @@ From [How is the protocol fake kept honest against the real server?](https://git
   - `/download`: status, `Content-Type` and `Location`, plus the body bytes on success.
   - `Cache-Control: no-store` on `/release`.
   - No other headers are compared.
-- **Coverage:** every response the fake produces from state, plus the recorded 413 and rate-limit 429. **Completeness rule:** the fake declares the `(route, status)` pairs it can emit in a table, and the contract test fails on any pair that no scenario covers.
+- **Coverage:** every response the fake produces from state, plus the recorded 413 and rate-limit 429. **Completeness rule:** the fake declares what it can emit in a table (`EMITS`), as `(route, status, source)` with source `state` or `injected`, so a lockout 429 and a rate-limit 429 are separate entries. The contract test fails on any entry that no scenario covers, and on any replayed response missing from the table.
 - **Contract test:** `tests/js/integration/protocol-contract.test.js` replays each scenario against `handle()` and compares raw responses. One adapter test checks that `fetch` follows the 302.
 - **Workflow:** after changing a protocol response in `app.py`, run `npm run fixtures`. `js-fast` stays red until the fake matches.
 

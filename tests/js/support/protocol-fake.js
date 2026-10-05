@@ -28,7 +28,6 @@ import { CryptoService, bytesToHex } from '../../../static/js/crypto.js';
  *   releasedAt: string | null,
  * }} KeyRow - a file_keys row: the server share H and the bound verifier V
  * @typedef {{
- *   type: 'file' | 'text',
  *   name: string,
  *   blob: Bytes | null,
  *   expiryAt: Date | null,
@@ -36,7 +35,6 @@ import { CryptoService, bytesToHex } from '../../../static/js/crypto.js';
  *   downloaded: boolean,
  *   receiptHash: string,
  *   decryptionSuccess: boolean | null,
- *   options: Record<string, string>,
  * }} FileRecord - a files row plus its stored blob (null once deleted)
  * @typedef {{
  *   user: string | null,
@@ -48,27 +46,61 @@ import { CryptoService, bytesToHex } from '../../../static/js/crypto.js';
  *   burnOnLockout?: boolean,
  *   owner?: string | null,
  *   csrfToken?: string,
- *   origin?: string,
- *   now?: () => Date,
- *   progressSteps?: number[],
  * }} FakeOptions
+ * @typedef {string | { $ref: string }} PathPart
+ * @typedef {{
+ *   method: string,
+ *   path: PathPart[],
+ *   headers?: Record<string, string>,
+ *   json?: unknown,
+ *   form?: Record<string, string | { $ref: string }>,
+ *   files?: Record<string, { filename: string, content: string }>,
+ * }} RecordedRequest
+ * @typedef {{
+ *   status: number,
+ *   headers: Record<string, string>,
+ *   json?: unknown,
+ *   bodyBase64?: string,
+ * }} RecordedResponse
+ * @typedef {{
+ *   name: string,
+ *   as: string | null,
+ *   injected?: boolean,
+ *   request: RecordedRequest,
+ *   response: RecordedResponse,
+ * }} RecordedStep
+ * @typedef {{
+ *   name: string,
+ *   config: { KEY_RELEASE_MAX_ATTEMPTS: number, KEY_RELEASE_BURN_ON_LOCKOUT: boolean },
+ *   steps: RecordedStep[],
+ * }} RecordedScenario
+ * @typedef {{ csrfToken: string, defaultUser: string, scenarios: RecordedScenario[] }} Contract
  */
 
+// What the fake's adapters stand in for the page's origin, and the upload
+// progress the XHR adapter reports before it loads.
+const ORIGIN = 'http://localhost';
+const PROGRESS_STEPS = [0.5, 1];
+
 /**
- * Every `(route, status)` the fake can answer with — from state or as a
- * recorded injection. The contract test fails on a pair no scenario records.
- * @type {Array<[Route, number]>}
+ * Every response the fake can answer with, as `[route, status, source]`:
+ * 'state' when the fake produces it from its own state, 'injected' when
+ * only failNext can (413, rate-limit 429). The contract test fails on an
+ * entry no scenario records, and on a recorded response missing here.
+ * @type {Array<[Route, number, 'state' | 'injected']>}
  */
 export const EMITS = [
-    ['/upload/begin', 200], ['/upload/begin', 403], ['/upload/begin', 429],
-    ['/upload', 200], ['/upload', 400], ['/upload', 403], ['/upload', 409],
-    ['/upload', 413], ['/upload', 429],
-    ['/download', 200], ['/download', 302], ['/download', 429],
-    ['/release', 200], ['/release', 400], ['/release', 403], ['/release', 404],
-    ['/release', 410], ['/release', 429],
-    ['/report_decryption', 200], ['/report_decryption', 400],
-    ['/report_decryption', 403], ['/report_decryption', 404],
-    ['/report_decryption', 429],
+    ['/upload/begin', 200, 'state'], ['/upload/begin', 403, 'state'],
+    ['/upload/begin', 429, 'injected'],
+    ['/upload', 200, 'state'], ['/upload', 400, 'state'], ['/upload', 403, 'state'],
+    ['/upload', 409, 'state'], ['/upload', 413, 'injected'], ['/upload', 429, 'injected'],
+    ['/download', 200, 'state'], ['/download', 302, 'state'], ['/download', 429, 'injected'],
+    ['/release', 200, 'state'], ['/release', 400, 'state'], ['/release', 403, 'state'],
+    ['/release', 404, 'state'], ['/release', 410, 'state'], ['/release', 429, 'state'],
+    ['/release', 429, 'injected'],
+    ['/report_decryption', 200, 'state'], ['/report_decryption', 400, 'state'],
+    ['/report_decryption', 403, 'state'], ['/report_decryption', 404, 'state'],
+    ['/report_decryption', 429, 'injected'],
 ];
 
 /** @type {Array<[Route, RegExp]>} */
@@ -98,6 +130,15 @@ export function routeOf(path) {
 const CONTRACT_FILE = join(
     dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'protocol-contract.json');
 
+/**
+ * The protocol contract recorded from app.py
+ * (tests/js/fixtures/protocol-contract.json).
+ * @returns {Contract}
+ */
+export function loadContract() {
+    return JSON.parse(readFileSync(CONTRACT_FILE, 'utf8'));
+}
+
 /** @type {Map<string, FakeResponse> | undefined} */
 let recordedInjections;
 
@@ -108,13 +149,11 @@ let recordedInjections;
  */
 function recordedInjection() {
     if (!recordedInjections) {
-        /** @type {{ scenarios: Array<{ steps: Array<{ injected?: boolean, request: { path: string[] }, response: { status: number, headers: Record<string, string>, json?: unknown, bodyBase64?: string } }> }> }} */
-        const contract = JSON.parse(readFileSync(CONTRACT_FILE, 'utf8'));
         recordedInjections = new Map();
-        for (const step of contract.scenarios.flatMap((scenario) => scenario.steps)) {
+        for (const step of loadContract().scenarios.flatMap((scenario) => scenario.steps)) {
             if (!step.injected) continue;
             const { status, headers, json, bodyBase64 } = step.response;
-            recordedInjections.set(`${routeOf(step.request.path[0])} ${status}`, {
+            recordedInjections.set(`${routeOf(String(step.request.path[0]))} ${status}`, {
                 status,
                 headers: { ...headers },
                 body: json !== undefined
@@ -183,9 +222,6 @@ export function makeProtocolFake(opts = {}) {
     const maxAttempts = opts.maxAttempts ?? 1;
     const burnOnLockout = opts.burnOnLockout ?? true;
     const csrfToken = opts.csrfToken ?? 'fixture-csrf-token';
-    const origin = opts.origin ?? 'http://localhost';
-    const now = opts.now ?? (() => new Date());
-    const progressSteps = opts.progressSteps ?? [0.5, 1];
 
     /** @type {FakeState} */
     const state = {
@@ -234,9 +270,26 @@ export function makeProtocolFake(opts = {}) {
         return { ...json(status, body), headers: { 'Content-Type': 'application/json', ...headers } };
     }
 
+    /**
+     * Create the files row of a finished upload.
+     * @param {string} fileId
+     * @param {{ name: string, blob: Bytes, expiry: string | null, receiptHash: string }} upload
+     */
+    function storeFile(fileId, { name, blob, expiry, receiptHash }) {
+        state.files.set(fileId, {
+            name,
+            blob,
+            expiryAt: parseExpiry(expiry),
+            status: 'active',
+            downloaded: false,
+            receiptHash,
+            decryptionSuccess: null,
+        });
+    }
+
     /** @param {FileRecord} file */
     function isExpired(file) {
-        return file.status === 'expired' || (file.expiryAt !== null && now() >= file.expiryAt);
+        return file.status === 'expired' || (file.expiryAt !== null && new Date() >= file.expiryAt);
     }
 
     /**
@@ -264,18 +317,20 @@ export function makeProtocolFake(opts = {}) {
     }
 
     /**
-     * `request.get_json(silent=True)`: the parsed body only for a JSON
-     * Content-Type and valid JSON, else null.
+     * `request.get_json(silent=True)` checked for a dict, as /release and
+     * /report_decryption do: the parsed body only for a JSON Content-Type
+     * and a valid JSON object, else null.
      * @param {Record<string, string>} headers
      * @param {FakeRequest['body']} body
-     * @returns {unknown}
+     * @returns {Record<string, unknown> | null}
      */
-    function jsonBody(headers, body) {
+    function jsonObject(headers, body) {
         if (!(headers['content-type'] ?? '').startsWith('application/json') || typeof body !== 'string') {
             return null;
         }
         try {
-            return JSON.parse(body);
+            const data = JSON.parse(body);
+            return data && typeof data === 'object' && !Array.isArray(data) ? data : null;
         } catch {
             return null;
         }
@@ -342,26 +397,10 @@ export function makeProtocolFake(opts = {}) {
         }
 
         key.v = keyVerifier;
-        /** @type {Record<string, string>} */
-        const options = {};
-        for (const option of ['expiry', 'private_note', 'notify_on_open', 'notification_email']) {
-            const value = field(option);
-            if (value !== null) options[option] = value;
-        }
-        state.files.set(fileId, {
-            type: isText ? 'text' : 'file',
-            name,
-            blob,
-            expiryAt: parseExpiry(field('expiry')),
-            status: 'active',
-            downloaded: false,
-            receiptHash,
-            decryptionSuccess: null,
-            options,
-        });
+        storeFile(fileId, { name, blob, expiry: field('expiry'), receiptHash });
         return json(200, {
             file_id: fileId,
-            share_link: `${origin}/view/${fileId}`,
+            share_link: `${ORIGIN}/view/${fileId}`,
             type: isText ? 'text' : 'file',
         });
     }
@@ -408,11 +447,11 @@ export function makeProtocolFake(opts = {}) {
      * @param {FakeRequest['body']} body
      */
     function release(fileId, headers, body) {
-        const data = jsonBody(headers, body);
-        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        const data = jsonObject(headers, body);
+        if (!data) {
             return json(400, { error: 'Invalid request' });
         }
-        const v = canonicalHex(/** @type {Record<string, unknown>} */ (data).v);
+        const v = canonicalHex(data.v);
         if (!isKeyMaterial(v)) {
             return json(400, { error: 'Invalid request' });
         }
@@ -437,7 +476,7 @@ export function makeProtocolFake(opts = {}) {
         }
         if (key.v === v) {
             const h = /** @type {string} */ (key.h);
-            key.releasedAt = now().toISOString();
+            key.releasedAt = new Date().toISOString();
             key.h = null;
             key.v = null;
             return json(200, { h });
@@ -462,11 +501,10 @@ export function makeProtocolFake(opts = {}) {
         if (!file) {
             return json(404, { error: 'File not found' });
         }
-        const data = jsonBody(headers, body);
-        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        const report = jsonObject(headers, body);
+        if (!report) {
             return json(400, { error: 'Invalid request' });
         }
-        const report = /** @type {Record<string, unknown>} */ (data);
         const receipt = canonicalHex(report.receipt);
         if (!('success' in report) || typeof report.success !== 'boolean' || !isKeyMaterial(receipt)) {
             return json(400, { error: 'Invalid request' });
@@ -496,7 +534,7 @@ export function makeProtocolFake(opts = {}) {
         }
         const method = request.method.toUpperCase();
         const body = request.body ?? null;
-        const url = new URL(request.url, origin);
+        const url = new URL(request.url, ORIGIN);
         log.push({ method, url: url.href, headers: { ...request.headers }, body });
 
         const route = routeOf(url.pathname);
@@ -549,17 +587,17 @@ export function makeProtocolFake(opts = {}) {
         if (response.status >= 300 && response.status < 400 && response.headers.Location) {
             return browserResponse(new Response('', {
                 status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' },
-            }), new URL(response.headers.Location, origin).href, true);
+            }), new URL(response.headers.Location, ORIGIN).href, true);
         }
         return browserResponse(
             new Response(response.body.length === 0 ? null : response.body,
                 { status: response.status, headers: response.headers }),
-            new URL(url, origin).href, false);
+            new URL(url, ORIGIN).href, false);
     }
 
     /**
      * A browser-style XMLHttpRequest over handle(), firing upload.onprogress
-     * (happy-dom's own XHR never does) at each of `progressSteps`.
+     * (happy-dom's own XHR never does) at each of PROGRESS_STEPS.
      */
     class FakeXMLHttpRequest {
         constructor() {
@@ -606,7 +644,7 @@ export function makeProtocolFake(opts = {}) {
                     this.onerror?.();
                     return;
                 }
-                for (const step of progressSteps) {
+                for (const step of PROGRESS_STEPS) {
                     await Promise.resolve();
                     this.upload.onprogress?.({ lengthComputable: true, loaded: step * 100, total: 100 });
                 }
@@ -621,10 +659,10 @@ export function makeProtocolFake(opts = {}) {
     /**
      * Build a valid, uploaded share directly — for view-only tests, which
      * start where the index page left off. Returns its file_id.
-     * @param {{ password: string, plaintext: string | Bytes, type?: 'file' | 'text', name?: string, expiry?: string }} share
+     * @param {{ password: string, plaintext: string | Bytes, name?: string, expiry?: string }} share
      * @returns {Promise<string>}
      */
-    async function seedShare({ password, plaintext, type = 'file', name, expiry }) {
+    async function seedShare({ password, plaintext, name = 'report.pdf', expiry }) {
         const cryptoService = new CryptoService();
         /** @type {Bytes} */
         const h = crypto.getRandomValues(new Uint8Array(32));
@@ -635,16 +673,8 @@ export function makeProtocolFake(opts = {}) {
             h: bytesToHex(h), v: bytesToHex(verifier),
             owner: state.user ?? 'testuser', attempts: 0, releasedAt: null,
         });
-        state.files.set(fileId, {
-            type,
-            name: name ?? (type === 'text' ? 'Secret Note' : 'report.pdf'),
-            blob,
-            expiryAt: parseExpiry(expiry ?? null),
-            status: 'active',
-            downloaded: false,
-            receiptHash: await cryptoService.receiptHash(receipt),
-            decryptionSuccess: null,
-            options: expiry ? { expiry } : {},
+        storeFile(fileId, {
+            name, blob, expiry: expiry ?? null, receiptHash: await cryptoService.receiptHash(receipt),
         });
         return fileId;
     }

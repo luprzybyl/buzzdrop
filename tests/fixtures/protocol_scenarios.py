@@ -35,6 +35,8 @@ The server never checks crypto, so verifiers and receipt hashes are fixed
 import base64
 import hashlib
 
+from fixture_env import CSRF_TOKEN
+
 V = '11' * 32
 WRONG_V = '22' * 32
 RECEIPT = '33' * 32
@@ -48,7 +50,7 @@ MISSING_ID = '00000000-0000-4000-8000-00000000dead'
 # What the browser sends: index-page.js sets both on begin and on the
 # upload XHR; view-page.js sets X-Requested-With on /release only.
 XHR = {'X-Requested-With': 'XMLHttpRequest'}
-SESSION_XHR = {**XHR, 'X-CSRF-Token': 'fixture-csrf-token'}
+SESSION_XHR = {**XHR, 'X-CSRF-Token': CSRF_TOKEN}
 JSON_XHR = {**XHR, 'Content-Type': 'application/json'}
 JSON = {'Content-Type': 'application/json'}
 
