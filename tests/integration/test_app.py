@@ -148,7 +148,7 @@ def test_user_file_status_endpoint_returns_only_owned_file_statuses(client, app,
     assert status == {
         'id': 'file-5',
         'status': 'active',
-        'status_display': '',
+        'status_display': 'Downloaded',
         'downloaded_at': '2025-01-02 12:00:00 CET',
         'downloaded_by_ip': None,
     }
