@@ -90,3 +90,6 @@ data/
 
 # Node build artifacts
 node_modules/
+
+# JS test coverage (vitest)
+coverage/

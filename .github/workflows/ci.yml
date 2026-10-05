@@ -29,6 +29,8 @@ jobs:
         run: npm ci
       - name: Run JS unit tests
         run: npm run test:unit
+      - name: Run JS DOM tests
+        run: npm run test:dom
 
   build:
     runs-on: ubuntu-latest
