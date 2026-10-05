@@ -36,8 +36,9 @@ pytest tests/unit/test_db.py -v
 # Run specific test function
 pytest tests/unit/test_db.py::test_function_name -v
 
-# Regenerate the committed DOM-test fixtures after changing a template
-# or a page route (CI fails if they are stale)
+# Regenerate the committed DOM-test fixtures (CI fails if they are stale).
+# The pre-commit hook in .githooks/ does this automatically for commits
+# touching templates/ or the root Python modules; npm install enables it.
 npm run fixtures
 ```
 
