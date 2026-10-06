@@ -69,3 +69,10 @@ def test_note_tells_the_recipient_to_copy_it_now(client, files_store, csrf_form_
     html = _view_page(client, files_store, csrf_form_data, file_type='text')
 
     assert 'Copy it now — this page can’t be reopened.' in html
+
+
+@pytest.mark.parametrize('file_type, button', [('text', 'Decrypt and view'), ('file', 'Decrypt and download')])
+def test_auto_filled_password_names_the_button_to_press(client, files_store, csrf_form_data, file_type, button):
+    html = _view_page(client, files_store, csrf_form_data, file_type=file_type)
+
+    assert f'Your link included the password — just press {button}.' in html
