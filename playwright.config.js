@@ -21,6 +21,10 @@ export default defineConfig({
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure',
         video: 'off',
+        // No animations: entrance animations and the hero walkthrough move
+        // elements while tests click them. The app collapses every animation
+        // under prefers-reduced-motion.
+        contextOptions: { reducedMotion: 'reduce' },
     },
     projects: [
         { name: 'chromium', use: { ...devices['Desktop Chrome'] } },

@@ -241,7 +241,7 @@ From [Pin down E2E harness facts: Playwright against the Buzzdrop Docker image](
 - **`.dockerignore`:** at least `.env`, `buzzdrop.db*`, `uploads/`, `node_modules/`, `.venv/`, `__pycache__/`; the file itself is the full list ([#163](https://github.com/luprzybyl/buzzdrop/issues/163)). Without it, `COPY . .` bakes a developer's `.env` and DB into the image, and `load_dotenv` fills in anything the profile leaves unset.
 - **Isolation:** one fresh container per `playwright test` run, shared by all browser projects and workers. **No test-only reset or seed hooks.** Each test uploads under a unique filename and finds its own row.
 - **Downloads:** `page.waitForEvent('download')` + `download.path()` captures the Blob save byte-exact. PBKDF2 costs about 40–90 ms per derivation, which is negligible.
-- **Config:** projects Chromium, Firefox and WebKit; `retries: 0`; `trace: 'retain-on-failure'`, `screenshot: 'only-on-failure'`, `video: 'off'`.
+- **Config:** projects Chromium, Firefox and WebKit; `retries: 0`; `trace: 'retain-on-failure'`, `screenshot: 'only-on-failure'`, `video: 'off'`; `reducedMotion: 'reduce'`, because animations moved elements under clicks and lost some of them (the app collapses every animation under `prefers-reduced-motion`).
 - **Browser matrix:** every journey runs in all three browsers. After the first failure in Firefox or WebKit that has no real bug behind it, Chromium keeps every journey and the other two run only journeys 1, 2 and 5.
 
 ## 9. CI
