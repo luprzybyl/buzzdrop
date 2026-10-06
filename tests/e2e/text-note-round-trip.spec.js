@@ -14,8 +14,9 @@ test('a shared note decrypts to the original text on the page', async ({ page, r
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Note is in the hive');
 
     await openShare(recipient, link);
-    await recipient.locator('#password-input').fill(password);
-    await recipient.locator('#decrypt-btn').click();
+    // Enter in the field submits, as on any form (#227).
+    await recipient.getByLabel('Password').fill(password);
+    await recipient.getByLabel('Password').press('Enter');
 
     await expect(recipient.locator('#status')).toHaveText('Text decrypted successfully.');
     expect(await recipient.locator('#text-content').textContent()).toBe(note);

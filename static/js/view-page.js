@@ -75,6 +75,7 @@ export async function initView(root, deps) {
     // Download the encrypted file as a single Uint8Array
     const res = await deps.fetch(downloadUrl);
     const encryptedData = new Uint8Array(await res.arrayBuffer());
+    const decryptForm = required(root, '#decrypt-form', 'form');
     const decryptBtn = required(root, '#decrypt-btn', 'button');
     const passInput = required(root, '#password-input', 'input');
     const status = required(root, '#status', 'p');
@@ -130,8 +131,7 @@ export async function initView(root, deps) {
             required(root, '#text-content', 'pre').textContent = text;
             required(root, '#text-display', 'div').style.display = 'block';
             status.textContent = 'Text decrypted successfully.';
-            passInput.style.display = 'none';
-            decryptBtn.style.display = 'none';
+            decryptForm.style.display = 'none';
 
             // Add copy functionality
             const btn = required(root, '#copy-text-btn', 'button');
@@ -222,8 +222,10 @@ export async function initView(root, deps) {
         return { data, receipt };
     }
 
-    // When user clicks 'Decrypt', attempt to decrypt the file
-    decryptBtn.addEventListener('click', async () => {
+    // Submitting the form (the Decrypt button or Enter in the field) attempts
+    // the decryption in place; the form never navigates.
+    decryptForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
         const password = passInput.value;
         if (!password) return;
         decryptBtn.disabled = true;

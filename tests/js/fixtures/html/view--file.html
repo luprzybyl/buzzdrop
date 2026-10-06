@@ -84,17 +84,23 @@
 
             <span class="eyebrow">Recipient step</span>
             <h1 class="mt-5 wrap-break-word text-2xl font-semibold tracking-tight text-white">contract.pdf</h1>
-            <p id="status" class="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-400">
+            <p id="status" class="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-400" aria-live="polite">
                 Enter the password to decrypt and download.
             </p>
         </div>
 
-        <div class="mt-7 space-y-3">
-            <input id="password-input" type="password" placeholder="Password" autocomplete="off" class="field-input text-center">
-            <button id="decrypt-btn" class="btn-primary w-full">
+        <form id="decrypt-form" class="mt-7 space-y-3">
+            <div>
+                <label for="password-input" class="field-label">Password</label>
+                <input id="password-input" type="password" autocomplete="off" aria-describedby="attempts-warning" class="field-input text-center">
+            </div>
+            <p id="attempts-warning" class="field-help">
+                You have one attempt — check the password before you continue.
+            </p>
+            <button id="decrypt-btn" type="submit" class="btn-primary w-full">
                 <span class="relative z-10">Decrypt and download</span>
             </button>
-        </div>
+        </form>
 
         <p id="password-status" class="mt-4 flex items-center justify-center gap-2 text-sm font-medium text-emerald-300" style="display: none;">
             <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -108,12 +114,13 @@
                 <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Decrypted text</h2>
                 <button id="copy-text-btn" class="btn-secondary px-3 py-1.5 text-xs">Copy</button>
             </div>
+            <p class="border-b border-white/6 px-4 py-2 text-xs text-honey-200/80">Copy it now — this page can’t be reopened.</p>
             <pre id="text-content" class="max-h-96 overflow-y-auto whitespace-pre-wrap wrap-break-word px-4 py-4 font-mono text-sm leading-6 text-slate-200"></pre>
         </div>
     </div>
 
     <p class="mt-6 text-center text-xs text-slate-600">
-        Decryption happens entirely in your browser. The password is never sent to the server.
+        Decryption happens entirely in your browser. Your password stays in your browser; only a derived check value is sent.
     </p>
 </div>
 <script id="view-config-json" type="application/json">{"downloadUrl": "/download/00000000-0000-4000-8000-0000000000f1", "fileType": "file", "originalName": "contract.pdf", "releaseUrl": "/release/00000000-0000-4000-8000-0000000000f1", "reportDecryptionUrl": "/report_decryption/00000000-0000-4000-8000-0000000000f1"}</script>

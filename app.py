@@ -1193,7 +1193,8 @@ def confirm_view_file(file_id):
         flash('Invalid request')
         return redirect(url_for('view_file', file_id=file_id))
     file_type = file_info.get('type', 'file')
-    return render_template('view.html', file_id=file_id, original_name=file_info.get('original_name'), file_type=file_type)
+    return render_template('view.html', file_id=file_id, original_name=file_info.get('original_name'), file_type=file_type,
+                           max_attempts=current_app.config['KEY_RELEASE_MAX_ATTEMPTS'])
 
 
 def _release_rate_limit_key() -> str:

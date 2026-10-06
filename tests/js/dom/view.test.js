@@ -86,6 +86,7 @@ describe('view page', () => {
             status,
             input,
             decryptBtn,
+            form: required(window.document, '#decrypt-form', 'form'),
             textDisplay: required(window.document, '#text-display', 'div'),
             textContent: required(window.document, '#text-content', 'pre'),
             copyBtn: required(window.document, '#copy-text-btn', 'button'),
@@ -102,16 +103,38 @@ describe('view page', () => {
     };
 
     it('a text note is shown in the page once decrypted', async () => {
-        const { decrypt, status, input, decryptBtn, textDisplay, textContent, reports } = await start();
+        const { decrypt, status, form, textDisplay, textContent, reports } = await start();
 
         await decrypt('correct horse');
 
         expect(textContent.textContent).toBe(NOTE);
         expect(textDisplay.style.display).toBe('block');
         expect(status.textContent).toBe('Text decrypted successfully.');
-        expect(input.style.display).toBe('none');
-        expect(decryptBtn.style.display).toBe('none');
+        expect(form.style.display).toBe('none');
         expect(reports).toEqual([{ success: true, receipt: RECEIPT_HEX }]);
+    });
+
+    // happy-dom has no implicit submission, so this submits the form the way
+    // Enter in the field does in a browser (the E2E note journey presses Enter).
+    it('submitting the form decrypts without navigating away', async () => {
+        const { form, input, status, textContent } = await start();
+        input.value = 'correct horse';
+        // Runs after the page's listener, so it sees whether that one
+        // cancelled the navigation (happy-dom wouldn't navigate either way).
+        let navigationCancelled = false;
+        form.addEventListener('submit', (event) => { navigationCancelled = event.defaultPrevented; });
+
+        form.requestSubmit();
+
+        await vi.waitFor(() => expect(status.textContent).toBe('Text decrypted successfully.'));
+        expect(textContent.textContent).toBe(NOTE);
+        expect(navigationCancelled).toBe(true);
+    });
+
+    it('the status line is a live region, so outcomes are announced', async () => {
+        const { status } = await start();
+
+        expect(status.getAttribute('aria-live')).toBe('polite');
     });
 
     it('Copy copies the note and shows "Copied!"', async () => {
