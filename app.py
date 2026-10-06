@@ -1225,8 +1225,8 @@ def release_key(file_id):
     result = file_repo.attempt_key_release(
         file_id,
         v_hex,
-        current_app.config.get('KEY_RELEASE_MAX_ATTEMPTS', 1),
-        current_app.config.get('KEY_RELEASE_BURN_ON_LOCKOUT', False),
+        current_app.config['KEY_RELEASE_MAX_ATTEMPTS'],
+        current_app.config['KEY_RELEASE_BURN_ON_LOCKOUT'],
     )
     status = result['status']
 
