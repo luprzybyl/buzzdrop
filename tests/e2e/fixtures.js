@@ -3,14 +3,16 @@
 // runs under the guard:
 // - no request URL, header or body, and no cookie, may contain a password
 //   the test drew from `sharePassword`;
-// - after the test, no page may hold anything in localStorage or
-//   sessionStorage (H, or anything else, persisted client-side).
+// - no page may hold anything in localStorage or sessionStorage (H, or
+//   anything else, persisted client-side) when it closes or the test ends.
 // The guard covers the default context and every context the test opens
-// with browser.newContext() or browser.newPage().
+// with browser.newContext() or browser.newPage(). Calls a test makes itself
+// through page.request are not browser traffic and are not watched.
 import { randomBytes } from 'node:crypto';
 import { test as base, expect } from '@playwright/test';
 
 /** @typedef {import('@playwright/test').BrowserContext} BrowserContext */
+/** @typedef {import('@playwright/test').Page} Page */
 /** @typedef {import('@playwright/test').Request} Request */
 
 /**
@@ -18,6 +20,8 @@ import { test as base, expect } from '@playwright/test';
  * @property {() => string} sharePassword - a fresh share password the guard
  *   watches for; draw every password a test types from here, wrong ones too
  * @property {string[]} drawnPasswords - every password sharePassword handed out
+ * @property {Page} recipient - a page in a fresh context with no session, as
+ *   a recipient opening a share link
  * @property {void} invariantGuard
  */
 
@@ -43,14 +47,12 @@ function wireUrl(url) {
 }
 
 /**
- * The headers are the ones the page set: the raw ones the browser added
- * (allHeaders) only arrive with a response, which a stalled request never
- * gets. The one browser-added header a page can steer, Cookie, is covered by
- * the cookie check at the end of the test.
+ * The headers are the ones the page set. The one browser-added header a page
+ * can steer, Cookie, is covered by the cookie check at the end of the test.
  * @param {Request} request
  * @returns {SentRequest}
  */
-function record(request) {
+function recordRequest(request) {
     const url = wireUrl(request.url());
     return {
         label: `${request.method()} ${url}`,
@@ -77,31 +79,27 @@ function findPasswords(request, passwords) {
     }
     return leaks;
 }
+
 /**
- * What the context's open pages hold in Web Storage, as "page: storage key"
- * lines.
- * @param {BrowserContext} context
+ * What the page holds in Web Storage, as "page: storage key" lines.
+ * @param {Page} page
  * @returns {Promise<string[]>}
  */
-async function storedItems(context) {
-    const items = [];
-    for (const page of context.pages()) {
-        const held = await page.evaluate(() => {
-            /** @param {Storage} storage */
-            const keys = (storage) => Array.from({ length: storage.length }, (_, i) => storage.key(i));
-            try {
-                return [
-                    ...keys(window.localStorage).map((key) => `localStorage ${key}`),
-                    ...keys(window.sessionStorage).map((key) => `sessionStorage ${key}`),
-                ];
-            } catch {
-                // An opaque origin (about:blank) has no storage to hold anything.
-                return [];
-            }
-        });
-        items.push(...held.map((item) => `${page.url()}: ${item}`));
-    }
-    return items;
+async function storedItems(page) {
+    const held = await page.evaluate(() => {
+        /** @param {Storage} storage */
+        const keys = (storage) => Array.from({ length: storage.length }, (_, i) => storage.key(i));
+        try {
+            return [
+                ...keys(window.localStorage).map((key) => `localStorage ${key}`),
+                ...keys(window.sessionStorage).map((key) => `sessionStorage ${key}`),
+            ];
+        } catch {
+            // An opaque origin (about:blank) has no storage to hold anything.
+            return [];
+        }
+    });
+    return held.map((item) => `${page.url()}: ${item}`);
 }
 
 /**
@@ -126,7 +124,15 @@ const guardFixtures = {
         });
     },
 
-    invariantGuard: [async ({ browser, context, drawnPasswords }, use) => {
+    // Set up after the guard, so it closes first, through the guard's checks.
+    recipient: async ({ browser }, use) => {
+        const context = await browser.newContext();
+        // Downloads live until their context closes.
+        await use(await context.newPage());
+        await context.close();
+    },
+
+    invariantGuard: [async ({ browser, browserName, context, drawnPasswords }, use) => {
         /** @type {SentRequest[]} */
         const sent = [];
         /** @type {string[]} */
@@ -134,36 +140,69 @@ const guardFixtures = {
         /** @type {string[]} */
         const cookies = [];
         /** @type {Set<BrowserContext>} */
-        const open = new Set();
+        const openContexts = new Set();
+        /** @type {Set<Page>} */
+        const openPages = new Set();
+
+        /** @param {Page} page */
+        const inspectPage = async (page) => {
+            if (openPages.delete(page)) stored.push(...await storedItems(page));
+        };
 
         /** @param {BrowserContext} watched */
-        const inspect = async (watched) => {
-            stored.push(...await storedItems(watched));
+        const inspectContext = async (watched) => {
+            if (!openContexts.delete(watched)) return;
+            for (const page of watched.pages()) await inspectPage(page);
             cookies.push(...(await watched.cookies()).map(({ name, value }) => `${name}=${value}`));
         };
 
-        // A context the test closes itself is inspected first, while its
-        // pages and cookies are still there.
-        /** @param {BrowserContext} watched */
-        const watch = (watched) => {
-            open.add(watched);
-            watched.on('request', (request) => {
-                sent.push(record(request));
-            });
-            const close = watched.close.bind(watched);
-            watched.close = async (options) => {
-                if (open.delete(watched)) await inspect(watched);
+        // A page or context the test closes itself is inspected first, while
+        // its storage and cookies are still there.
+        /** @param {Page} page */
+        const watchPage = (page) => {
+            openPages.add(page);
+            const close = page.close.bind(page);
+            page.close = async (options) => {
+                await inspectPage(page);
                 return close(options);
             };
         };
 
-        watch(context);
+        /** @param {BrowserContext} watched */
+        const watchContext = async (watched) => {
+            openContexts.add(watched);
+            watched.pages().forEach(watchPage);
+            watched.on('page', watchPage);
+            // Each browser shows the guard a multipart body with a file part
+            // differently. Chromium's request event leaves the body out, so
+            // Chromium requests are intercepted, and fallback() hands them on
+            // untouched to a test's own page.route() mocks or the network.
+            // WebKit sometimes sends such a body truncated when intercepted;
+            // its request event carries the form fields, as Firefox's does.
+            if (browserName === 'chromium') {
+                await watched.route('**/*', async (route) => {
+                    sent.push(recordRequest(route.request()));
+                    await route.fallback();
+                });
+            } else {
+                watched.on('request', (request) => {
+                    sent.push(recordRequest(request));
+                });
+            }
+            const close = watched.close.bind(watched);
+            watched.close = async (options) => {
+                await inspectContext(watched);
+                return close(options);
+            };
+        };
+
+        await watchContext(context);
         // browser.newPage() goes through newContext() too.
         const newContext = browser.newContext;
         /** @param {import('@playwright/test').BrowserContextOptions} [options] */
         browser.newContext = async (options) => {
             const created = await newContext.call(browser, options);
-            watch(created);
+            await watchContext(created);
             return created;
         };
 
@@ -173,7 +212,7 @@ const guardFixtures = {
             browser.newContext = newContext;
         }
 
-        for (const watched of open) await inspect(watched);
+        for (const watched of [...openContexts]) await inspectContext(watched);
         const leaks = sent.flatMap((request) => findPasswords(request, drawnPasswords));
         for (const cookie of cookies) {
             if (drawnPasswords.some((password) => cookie.includes(password))) {

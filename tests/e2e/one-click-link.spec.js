@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { test, expect } from './fixtures.js';
 import { clickDecryptForDownload, logIn, shareFile, uniqueFile } from './support.js';
 
-test('a one-click link decrypts without typing and loses its fragment', async ({ page, browser, sharePassword }) => {
+test('a one-click link decrypts without typing and loses its fragment', async ({ page, recipient, sharePassword }) => {
     const file = uniqueFile();
     const password = sharePassword();
 
@@ -16,23 +16,17 @@ test('a one-click link decrypts without typing and loses its fragment', async ({
     await expect(oneClickField).toHaveValue(/\/view\/[^#]+#./);
     const oneClickLink = await oneClickField.inputValue();
 
-    const recipient = await browser.newContext();
-    try {
-        const view = await recipient.newPage();
-        await view.goto(oneClickLink);
-        await expect(view.locator('#password-hint')).toContainText('This link already carries the key');
-        expect(view.url()).not.toContain('#');
+    await recipient.goto(oneClickLink);
+    await expect(recipient.locator('#password-hint')).toContainText('This link already carries the key');
+    expect(recipient.url()).not.toContain('#');
 
-        await view.locator('#confirm-form button[type="submit"]').click();
-        await expect(view.locator('#password-status')).toBeVisible();
-        await expect(view.locator('#password-input')).toHaveValue(password);
-        expect(view.url()).not.toContain('#');
+    await recipient.locator('#confirm-form button[type="submit"]').click();
+    await expect(recipient.locator('#password-status')).toBeVisible();
+    await expect(recipient.locator('#password-input')).toHaveValue(password);
+    expect(recipient.url()).not.toContain('#');
 
-        const download = await clickDecryptForDownload(view);
-        expect((await readFile(await download.path())).equals(file.buffer)).toBe(true);
-        await expect(view.locator('#status')).toHaveText('Download complete.');
-        expect(view.url()).not.toContain('#');
-    } finally {
-        await recipient.close();
-    }
+    const download = await clickDecryptForDownload(recipient);
+    expect((await readFile(await download.path())).equals(file.buffer)).toBe(true);
+    await expect(recipient.locator('#status')).toHaveText('Download complete.');
+    expect(recipient.url()).not.toContain('#');
 });

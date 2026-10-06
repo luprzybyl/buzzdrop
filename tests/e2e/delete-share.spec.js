@@ -3,7 +3,7 @@
 import { test, expect } from './fixtures.js';
 import { flash, logIn, shareFile, uniqueFile } from './support.js';
 
-test('the uploader deletes a file and the link is dead', async ({ page, browser, sharePassword }) => {
+test('the uploader deletes a file and the link is dead', async ({ page, recipient, sharePassword }) => {
     const file = uniqueFile();
 
     await logIn(page);
@@ -18,15 +18,9 @@ test('the uploader deletes a file and the link is dead', async ({ page, browser,
     page.once('dialog', (dialog) => dialog.accept());
     await row.getByRole('button', { name: 'Delete' }).click();
     await expect(flash(page)).toHaveText('File deleted successfully');
-    await expect(page.locator('.shared-file-row', { hasText: file.name })).toHaveCount(0);
+    await expect(row).toHaveCount(0);
 
-    const recipient = await browser.newContext();
-    try {
-        const view = await recipient.newPage();
-        await view.goto(link);
-        await expect(flash(view)).toHaveText('File not found');
-        await expect(view.locator('#confirm-form')).toHaveCount(0);
-    } finally {
-        await recipient.close();
-    }
+    await recipient.goto(link);
+    await expect(flash(recipient)).toHaveText('File not found');
+    await expect(recipient.locator('#confirm-form')).toHaveCount(0);
 });

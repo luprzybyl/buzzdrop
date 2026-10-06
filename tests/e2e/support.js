@@ -138,18 +138,29 @@ export async function clickDecryptForDownload(page) {
  * @returns {Promise<number>} the response status
  */
 export async function releaseStatus(page, link, blob, password) {
-    const crypto = new CryptoService();
-    const v = await crypto.deriveVerifier(password, crypto.parseBlob(blob).salt);
-    const response = await page.request.post(link.replace('/view/', '/release/'), {
+    const service = new CryptoService();
+    const v = await service.deriveVerifier(password, service.parseBlob(blob).salt);
+    const response = await page.request.post(shareUrl(link, 'release'), {
         data: { v: bytesToHex(v) },
     });
     return response.status();
 }
 
 /**
+ * Another route of the share a link points at.
+ * @param {string} link - the /view/<id> share link
+ * @param {'download' | 'release'} route
+ * @returns {string}
+ */
+export function shareUrl(link, route) {
+    return link.replace('/view/', `/${route}/`);
+}
+
+/**
  * The flash message the next page shows after a redirect, e.g. when a dead
  * share link bounces to the index.
  * @param {Page} page
+ * @returns {import('@playwright/test').Locator}
  */
 export function flash(page) {
     return page.locator('.alert-banner');
