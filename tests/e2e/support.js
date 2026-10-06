@@ -140,9 +140,18 @@ export async function clickDecryptForDownload(page) {
 export async function releaseStatus(page, link, blob, password) {
     const service = new CryptoService();
     const v = await service.deriveVerifier(password, service.parseBlob(blob).salt);
-    const response = await page.request.post(shareUrl(link, 'release'), {
-        data: { v: bytesToHex(v) },
-    });
+    return verifierStatus(page, link, bytesToHex(v));
+}
+
+/**
+ * Posts a verifier to the share's /release as it is, without deriving it.
+ * @param {Page} page - its request context carries the call
+ * @param {string} link
+ * @param {string} v - the verifier as hex
+ * @returns {Promise<number>} the response status
+ */
+export async function verifierStatus(page, link, v) {
+    const response = await page.request.post(shareUrl(link, 'release'), { data: { v } });
     return response.status();
 }
 
@@ -164,4 +173,16 @@ export function shareUrl(link, route) {
  */
 export function flash(page) {
     return page.locator('.alert-banner');
+}
+
+/**
+ * The share link leads nowhere: the index bounces it with "File not found"
+ * and offers no confirm form.
+ * @param {Page} page
+ * @param {string} link
+ */
+export async function expectDeadLink(page, link) {
+    await page.goto(link);
+    await expect(flash(page)).toHaveText('File not found');
+    await expect(page.locator('#confirm-form')).toHaveCount(0);
 }

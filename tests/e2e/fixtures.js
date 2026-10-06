@@ -2,7 +2,7 @@
 // Every E2E test imports `test` from here, so every test in every browser
 // runs under the guard:
 // - no request URL, header or body, and no cookie, may contain a password
-//   the test drew from `sharePassword`;
+//   the test drew from `sharePassword`, as typed or hex- or base64-encoded;
 // - no page may hold anything in localStorage or sessionStorage (H, or
 //   anything else, persisted client-side) when it closes or the test ends.
 // The guard covers the default context and every context the test opens
@@ -63,21 +63,50 @@ function recordRequest(request) {
 }
 
 /**
+ * The forms a password can take on the wire: as typed (URL, form and JSON
+ * encoding leave its characters as they are), hex, and base64. Base64 of a
+ * password inside a longer value depends on where it starts in a 3-byte
+ * group, so there is one form per offset, without the edge characters it
+ * shares with its neighbours.
+ * @param {string} password
+ * @returns {{ form: string, text: string }[]}
+ */
+function encodedForms(password) {
+    const bytes = Buffer.from(password);
+    const forms = [
+        { form: 'as typed', text: password },
+        { form: 'hex', text: bytes.toString('hex') },
+        { form: 'hex', text: bytes.toString('hex').toUpperCase() },
+    ];
+    for (const offset of [0, 1, 2]) {
+        const shifted = Buffer.concat([Buffer.alloc(offset), bytes]);
+        const edge = (shifted.length % 3) ? 1 : 0;
+        for (const encoding of /** @type {const} */ (['base64', 'base64url'])) {
+            const encoded = shifted.toString(encoding).replace(/=+$/, '');
+            forms.push({ form: encoding, text: encoded.slice([0, 2, 3][offset], encoded.length - edge) });
+        }
+    }
+    return forms;
+}
+
+/**
  * Where in the request a password shows up, if anywhere.
  * @param {SentRequest} request
  * @param {string[]} passwords
  * @returns {string[]}
  */
 function findPasswords(request, passwords) {
-    const leaks = [];
+    const leaks = new Set();
     for (const password of passwords) {
-        if (request.url.includes(password)) leaks.push(`${request.label}: password in the URL`);
-        for (const header of request.headers) {
-            if (header.includes(password)) leaks.push(`${request.label}: password in header ${header.split(':')[0]}`);
+        for (const { form, text } of encodedForms(password)) {
+            if (request.url.includes(text)) leaks.add(`${request.label}: password (${form}) in the URL`);
+            for (const header of request.headers) {
+                if (header.includes(text)) leaks.add(`${request.label}: password (${form}) in header ${header.split(':')[0]}`);
+            }
+            if (request.body?.includes(text)) leaks.add(`${request.label}: password (${form}) in the body`);
         }
-        if (request.body?.includes(password)) leaks.push(`${request.label}: password in the body`);
     }
-    return leaks;
+    return [...leaks];
 }
 
 /**
@@ -114,8 +143,8 @@ const guardFixtures = {
     },
 
     // Passwords are lowercase letters, digits and dashes, which URL, form and
-    // JSON encoding all leave as they are, so a plain substring search finds
-    // them wherever the browser puts them.
+    // JSON encoding all leave as they are, so findPasswords only has to try
+    // the encodings a page might apply itself (hex, base64).
     sharePassword: async ({ drawnPasswords }, use) => {
         await use(() => {
             const password = `amber-orchard-${randomBytes(6).toString('hex')}-velvet-comet`;
@@ -133,8 +162,14 @@ const guardFixtures = {
     },
 
     invariantGuard: [async ({ browser, browserName, context, drawnPasswords }, use) => {
-        /** @type {SentRequest[]} */
-        const sent = [];
+        /** @type {Map<Request, SentRequest>} */
+        const sent = new Map();
+        /** @param {Request} request */
+        const record = (request) => {
+            const seen = sent.get(request);
+            const fresh = recordRequest(request);
+            sent.set(request, seen ? { ...seen, body: seen.body ?? fresh.body } : fresh);
+        };
         /** @type {string[]} */
         const stored = [];
         /** @type {string[]} */
@@ -173,20 +208,21 @@ const guardFixtures = {
             openContexts.add(watched);
             watched.pages().forEach(watchPage);
             watched.on('page', watchPage);
-            // Each browser shows the guard a multipart body with a file part
-            // differently. Chromium's request event leaves the body out, so
-            // Chromium requests are intercepted, and fallback() hands them on
-            // untouched to a test's own page.route() mocks or the network.
-            // WebKit sometimes sends such a body truncated when intercepted;
-            // its request event carries the form fields, as Firefox's does.
+            // The request event fires for every request, including those a
+            // test's page.route() mock answers. Those mocks run before any
+            // context route, so the event is what the guard relies on.
+            watched.on('request', record);
+            // Chromium's request event leaves out a multipart body with a file
+            // part, so Chromium requests are also intercepted to read it, and
+            // fallback() sends them on untouched. A request a page.route()
+            // mock fulfils or continues itself never gets here: if it is such
+            // an upload, its body goes unchecked in Chromium (Firefox and
+            // WebKit still show it in the event). WebKit is not intercepted:
+            // it sometimes sends an intercepted multipart body truncated.
             if (browserName === 'chromium') {
                 await watched.route('**/*', async (route) => {
-                    sent.push(recordRequest(route.request()));
+                    record(route.request());
                     await route.fallback();
-                });
-            } else {
-                watched.on('request', (request) => {
-                    sent.push(recordRequest(request));
                 });
             }
             const close = watched.close.bind(watched);
@@ -213,7 +249,7 @@ const guardFixtures = {
         }
 
         for (const watched of [...openContexts]) await inspectContext(watched);
-        const leaks = sent.flatMap((request) => findPasswords(request, drawnPasswords));
+        const leaks = [...sent.values()].flatMap((request) => findPasswords(request, drawnPasswords));
         for (const cookie of cookies) {
             if (drawnPasswords.some((password) => cookie.includes(password))) {
                 leaks.push(`cookie ${cookie.split('=')[0]}: password in a cookie`);
