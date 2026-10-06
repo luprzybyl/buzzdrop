@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { expect } from '@playwright/test';
 
 /** @typedef {import('@playwright/test').Page} Page */
+/** @typedef {import('@playwright/test').FilePayload} FilePayload */
 
 // Matches FLASK_USER_1 in tests/e2e/e2e.env.
 export const USER = { username: 'e2e', password: 'e2e-login-password' };
@@ -19,7 +20,7 @@ export function sharePassword() {
 /**
  * A file with every byte value, under a unique name, so a decrypt that is
  * off by one byte, a text decoding or a truncation shows up.
- * @returns {{ name: string, mimeType: string, buffer: Buffer }}
+ * @returns {FilePayload}
  */
 export function uniqueFile() {
     return {
@@ -44,7 +45,7 @@ export async function logIn(page) {
  * Uploads a file from the index page and returns the share link from the
  * success page.
  * @param {Page} page
- * @param {{ name: string, mimeType: string, buffer: Buffer }} file
+ * @param {FilePayload} file
  * @param {string} password
  * @returns {Promise<string>}
  */
