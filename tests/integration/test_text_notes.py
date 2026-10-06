@@ -352,7 +352,7 @@ def test_success_route_shows_note_wording_after_xhr_upload(client, app, files_st
     login_user(client, 'testuser', 'password')
     file_id = upload_note(client, files_store).get_json()['file_id']
 
-    response = client.get(f'/success/{file_id}')
+    response = client.get(url_for('upload_success', file_id=file_id))
 
     assert response.status_code == 200
     assert b'Note is in the hive' in response.data
@@ -364,7 +364,7 @@ def test_success_route_shows_file_wording_for_files(client, app, key_release_upl
     file_id, _h, _receipt, upload = key_release_upload()
     assert upload.status_code == 200
 
-    response = client.get(f'/success/{file_id}')
+    response = client.get(url_for('upload_success', file_id=file_id))
 
     assert response.status_code == 200
     assert b'File is in the hive' in response.data
@@ -373,7 +373,7 @@ def test_success_route_shows_file_wording_for_files(client, app, key_release_upl
 def test_success_route_unknown_id_is_not_found(client, app):
     login_user(client, 'testuser', 'password')
 
-    response = client.get('/success/no-such-id', follow_redirects=True)
+    response = client.get(url_for('upload_success', file_id='no-such-id'), follow_redirects=True)
 
     assert response.request.path == url_for('index')
     assert b'File not found' in response.data
@@ -386,7 +386,7 @@ def test_success_route_hides_other_users_share(client, app, files_store):
     other = app.test_client()
     login_user(other, 'adminuser', 'adminpass')
 
-    response = other.get(f'/success/{file_id}', follow_redirects=True)
+    response = other.get(url_for('upload_success', file_id=file_id), follow_redirects=True)
 
     assert response.request.path == url_for('index')
     assert b'File not found' in response.data
