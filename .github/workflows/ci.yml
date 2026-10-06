@@ -42,6 +42,7 @@ jobs:
         .env .env.local .envrc cli/.env
         buzzdrop.db buzzdrop.db-wal buzzdrop.db.bak tests/stray.db local.sqlite3 db.json
         data/buzzdrop.db uploads/blob instance/config.py server.pem server.key
+        playwright-report/index.html test-results/trace.zip
         .claude/settings.json .venv/pyvenv.cfg node_modules/stray.js
     steps:
       - name: Checkout code

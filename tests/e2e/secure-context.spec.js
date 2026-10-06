@@ -5,9 +5,9 @@ import { test, expect } from '@playwright/test';
 
 test('the app origin is a secure context with crypto.subtle', async ({ page }) => {
     await page.goto('/login');
-    const context = await page.evaluate(() => ({
+    const origin = await page.evaluate(() => ({
         secure: window.isSecureContext,
         subtle: typeof window.crypto.subtle?.deriveBits,
     }));
-    expect(context).toEqual({ secure: true, subtle: 'function' });
+    expect(origin).toEqual({ secure: true, subtle: 'function' });
 });

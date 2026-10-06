@@ -2,7 +2,7 @@
 // share link in a fresh context, decrypt, and get back the original bytes.
 import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
-import { logIn, shareFile, sharePassword, uniqueFile } from './support.js';
+import { decryptShare, logIn, shareFile, sharePassword, uniqueFile } from './support.js';
 
 test('a shared file decrypts to the original bytes', async ({ page, browser }) => {
     const file = uniqueFile();
@@ -15,14 +15,7 @@ test('a shared file decrypts to the original bytes', async ({ page, browser }) =
     const recipient = await browser.newContext();
     try {
         const view = await recipient.newPage();
-        await view.goto(link);
-        await view.locator('#confirm-form button[type="submit"]').click();
-        await view.locator('#password-input').fill(password);
-
-        const [download] = await Promise.all([
-            view.waitForEvent('download'),
-            view.locator('#decrypt-btn').click(),
-        ]);
+        const download = await decryptShare(view, link, password);
 
         expect(download.suggestedFilename()).toBe(file.name);
         expect((await readFile(await download.path())).equals(file.buffer)).toBe(true);

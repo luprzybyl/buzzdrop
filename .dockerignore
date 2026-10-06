@@ -16,6 +16,9 @@ uploads/
 instance/
 **/*.pem
 **/*.key
+# Playwright reports and traces record typed passwords and session cookies.
+playwright-report/
+test-results/
 
 # Development clutter
 .git/
@@ -26,8 +29,6 @@ node_modules/
 **/*.py[cod]
 .pytest_cache/
 coverage/
-playwright-report/
-test-results/
 htmlcov/
 .coverage
 .claude/
