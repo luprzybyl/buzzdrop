@@ -1,10 +1,10 @@
 // Journey 1 (docs/frontend-test-strategy.md §7): upload a file, open the
 // share link in a fresh context, decrypt, and get back the original bytes.
 import { readFile } from 'node:fs/promises';
-import { test, expect } from '@playwright/test';
-import { decryptShare, logIn, shareFile, sharePassword, uniqueFile } from './support.js';
+import { test, expect } from './fixtures.js';
+import { decryptShare, logIn, shareFile, uniqueFile } from './support.js';
 
-test('a shared file decrypts to the original bytes', async ({ page, browser }) => {
+test('a shared file decrypts to the original bytes', async ({ page, browser, sharePassword }) => {
     const file = uniqueFile();
     const password = sharePassword();
 
