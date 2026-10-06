@@ -406,6 +406,21 @@ def test_release_burn_on_lockout(client, files_store, key_release_settings):
     assert follow_up.status_code == 404
 
 
+@pytest.mark.parametrize(
+    'missing', ['KEY_RELEASE_MAX_ATTEMPTS', 'KEY_RELEASE_BURN_ON_LOCKOUT'])
+def test_release_raises_without_lockout_config(
+        client, files_store, key_release_settings, missing):
+    """A config missing a lockout key must not fall back to a weaker policy."""
+    del key_release_settings[missing]
+    file_id, _h, _v = _bound_share(files_store)
+
+    with pytest.raises(KeyError, match=missing):
+        client.post(
+            url_for('release_key', file_id=file_id), json={'v': 'dd' * 32})
+    # Nothing was attempted: the share is untouched.
+    assert files_store.get_key_share(file_id)['attempts'] == 0
+
+
 def test_release_without_key_share_is_404(client, files_store):
     """A file record with no share (e.g. after burn) has nothing to release."""
     _create_file_record(files_store, file_id='legacy-1')
