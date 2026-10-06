@@ -11,6 +11,7 @@ test('a shared note decrypts to the original text on the page', async ({ page, r
 
     await logIn(page);
     const link = await shareNote(page, note, password);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Note is in the hive');
 
     await openShare(recipient, link);
     await recipient.locator('#password-input').fill(password);

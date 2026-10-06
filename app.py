@@ -1147,8 +1147,13 @@ def delete_file(file_id):
 @app.route('/success/<file_id>')
 @login_required
 def upload_success(file_id):
+    file_info = file_repo.get_by_id(file_id)
+    if not file_info or file_info.get('uploaded_by') != get_current_user()['username']:
+        flash('File not found')
+        return redirect(url_for('index'))
     share_link = url_for('view_file', file_id=file_id, _external=True)
-    return render_template('success.html', share_link=share_link)
+    return render_template('success.html', share_link=share_link,
+                           file_type=file_info.get('type'))
 
 
 @app.route('/view/<file_id>', methods=['GET'])
