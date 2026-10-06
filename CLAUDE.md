@@ -47,6 +47,14 @@ npm run typecheck
 # After changing a protocol response in app.py, update
 # tests/js/support/protocol-fake.js until js-fast is green again.
 npm run fixtures
+
+# E2E (Playwright on the host against the app image; tests/e2e/). The
+# config's webServer starts one container per run with the profile in
+# tests/e2e/e2e.env on 127.0.0.1:5055 (E2E_PORT) and stops it afterwards.
+# Rebuild the image after changing app code; E2E_IMAGE picks another tag.
+docker build -t buzzdrop-e2e .
+npx playwright install chromium firefox webkit   # once
+npx playwright test
 ```
 
 ## Architecture
@@ -179,6 +187,7 @@ Test structure:
 - `tests/unit/`: Unit tests for utilities, database functions, and SRI hash generation
 - `tests/integration/`: Integration tests for routes, workflows, and SRI HTML attributes
 - `tests/js/`: browser-JS tests. **`docs/frontend-test-strategy.md` is the locked spec for them** (layers, runners, page-script refactor, DOM fixtures, protocol fake, scenario catalogue, E2E, CI) — read it before adding or changing any JS test or test harness
+- `tests/e2e/`: Playwright journeys against the app image (`playwright.config.js`, profile `tests/e2e/e2e.env`); spec §7–§9 of `docs/frontend-test-strategy.md`
 - **Protocol contract — keep it in step with the server.** The JS protocol fake (`tests/js/support/protocol-fake.js`) is held to responses recorded from `app.py`, but only for requests a scenario sends; a new server response nothing exercises passes every check silently. So when you add, change or remove a response of `/upload/begin`, `/upload`, `/download`, `/release` or `/report_decryption` (status, body or the condition that triggers it), add or adjust a scenario in `tests/fixtures/protocol_scenarios.py`, run `npm run fixtures`, and update the fake and its `EMITS` table until `npm run test:dom` passes. Remove a scenario only together with the server behaviour it records. A new route the browser calls in the upload/view flow is added to the fake the same way
 
 ### Environment Configuration

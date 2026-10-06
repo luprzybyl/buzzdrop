@@ -16,6 +16,9 @@ uploads/
 instance/
 **/*.pem
 **/*.key
+# Playwright reports and traces record typed passwords and session cookies.
+playwright-report/
+test-results/
 
 # Development clutter
 .git/
