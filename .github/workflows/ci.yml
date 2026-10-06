@@ -106,3 +106,42 @@ jobs:
         run: |
           docker run --rm -v ${{ github.workspace }}:/app buzzdrop-test python tests/fixtures/record_protocol_contract.py
           git diff --exit-code tests/js/fixtures/protocol-contract.json || { echo '::error::The protocol contract is stale; run npm run fixtures and commit the result'; exit 1; }
+
+  e2e:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Download Docker image
+        uses: actions/download-artifact@v4
+        with:
+          name: buzzdrop-test-image
+          path: ${{ runner.temp }}
+      - name: Load Docker image
+        run: docker load -i ${{ runner.temp }}/buzzdrop-test.tar
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      # Not cached: restoring takes about as long as downloading, and the
+      # OS dependencies can't be cached anyway.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      # playwright.config.js starts the image (webServer) and stops it after.
+      - name: Run E2E tests
+        run: npx playwright test
+        env:
+          E2E_IMAGE: buzzdrop-test
+      - name: Upload Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-output
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

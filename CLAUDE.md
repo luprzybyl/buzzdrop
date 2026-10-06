@@ -47,6 +47,14 @@ npm run typecheck
 # After changing a protocol response in app.py, update
 # tests/js/support/protocol-fake.js until js-fast is green again.
 npm run fixtures
+
+# E2E (Playwright on the host against the app image; tests/e2e/). The
+# config's webServer starts one container per run with the profile in
+# tests/e2e/e2e.env on 127.0.0.1:5055 (E2E_PORT) and stops it afterwards.
+# Rebuild the image after changing app code; E2E_IMAGE picks another tag.
+docker build -t buzzdrop-e2e .
+npx playwright install chromium firefox webkit   # once
+npx playwright test
 ```
 
 ## Architecture
