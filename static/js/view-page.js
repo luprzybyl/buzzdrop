@@ -79,6 +79,9 @@ export async function initView(root, deps) {
     const decryptBtn = required(root, '#decrypt-btn', 'button');
     const passInput = required(root, '#password-input', 'input');
     const status = required(root, '#status', 'p');
+    // Counts the attempts before the first one; after that the status line
+    // says what is left, so the warning would only contradict it.
+    const attemptsWarning = required(root, '#attempts-warning', 'p');
 
     /** @type {Bytes} */
     let salt;
@@ -87,6 +90,7 @@ export async function initView(root, deps) {
     } catch (err) {
         decryptBtn.disabled = true;
         passInput.disabled = true;
+        attemptsWarning.hidden = true;
         status.textContent =
             'This share uses an unsupported format. Ask the author to upload it again.';
         return;
@@ -230,6 +234,7 @@ export async function initView(root, deps) {
         if (!password) return;
         decryptBtn.disabled = true;
         passInput.disabled = true;
+        attemptsWarning.hidden = true;
 
         try {
             const result = await decryptKeyRelease(password);

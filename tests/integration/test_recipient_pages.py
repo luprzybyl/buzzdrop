@@ -3,6 +3,7 @@ The recipient's password step (templates/view.html) as the server renders
 it: the labelled field, the attempts warning that follows
 KEY_RELEASE_MAX_ATTEMPTS, and what it says about the password (#227).
 """
+import re
 from datetime import datetime
 
 import pytest
@@ -12,10 +13,11 @@ FILE_ID = '00000000-0000-4000-8000-000000000227'
 
 
 @pytest.fixture
-def max_attempts(app):
-    original = app.config['KEY_RELEASE_MAX_ATTEMPTS']
+def key_release_settings(app):
+    """Mutate key-release config and restore it afterwards."""
+    original = {'KEY_RELEASE_MAX_ATTEMPTS': app.config['KEY_RELEASE_MAX_ATTEMPTS']}
     yield app.config
-    app.config['KEY_RELEASE_MAX_ATTEMPTS'] = original
+    app.config.update(original)
 
 
 def _view_page(client, files_store, csrf_form_data, file_type='file'):
@@ -38,7 +40,7 @@ def _view_page(client, files_store, csrf_form_data, file_type='file'):
 def test_password_field_has_a_label(client, files_store, csrf_form_data):
     html = _view_page(client, files_store, csrf_form_data)
 
-    assert '<label for="password-input" class="field-label">Password</label>' in html
+    assert re.search(r'<label for="password-input"[^>]*>Password</label>', html)
 
 
 def test_warns_of_a_single_attempt_by_default(client, files_store, csrf_form_data):
@@ -47,8 +49,8 @@ def test_warns_of_a_single_attempt_by_default(client, files_store, csrf_form_dat
     assert 'You have one attempt' in html
 
 
-def test_attempts_warning_follows_the_configured_limit(client, files_store, csrf_form_data, max_attempts):
-    max_attempts['KEY_RELEASE_MAX_ATTEMPTS'] = 3
+def test_attempts_warning_follows_the_configured_limit(client, files_store, csrf_form_data, key_release_settings):
+    key_release_settings['KEY_RELEASE_MAX_ATTEMPTS'] = 3
 
     html = _view_page(client, files_store, csrf_form_data)
 

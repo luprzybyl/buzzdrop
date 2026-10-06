@@ -87,6 +87,7 @@ describe('view page', () => {
             input,
             decryptBtn,
             form: required(window.document, '#decrypt-form', 'form'),
+            attemptsWarning: required(window.document, '#attempts-warning', 'p'),
             textDisplay: required(window.document, '#text-display', 'div'),
             textContent: required(window.document, '#text-content', 'pre'),
             copyBtn: required(window.document, '#copy-text-btn', 'button'),
@@ -189,6 +190,19 @@ describe('view page', () => {
         expect(reports).toEqual([]);
     });
 
+    // The warning counts the attempts before the first one; afterwards the
+    // status line reports what is left, or that the share is gone.
+    it('the attempts warning goes once a password has been tried', async () => {
+        const { decrypt, attemptsWarning } = await start({
+            release: { status: 403, body: { error: 'Incorrect password', attempts_remaining: 2 } },
+        });
+        expect(attemptsWarning.hidden).toBe(false);
+
+        await decrypt('wrong');
+
+        expect(attemptsWarning.hidden).toBe(true);
+    });
+
     it('a failed decryption is reported to the server', async () => {
         const { decrypt, input, decryptBtn, reports } = await start({
             release: { status: 410, body: { error: 'Key already released' } },
@@ -202,7 +216,9 @@ describe('view page', () => {
     });
 
     it('an unsupported share format disables the form', async () => {
-        const { status, input, decryptBtn } = await start({ unsupported: true });
+        const { status, input, decryptBtn, attemptsWarning } = await start({ unsupported: true });
+
+        expect(attemptsWarning.hidden).toBe(true);
 
         expect(status.textContent).toBe(
             'This share uses an unsupported format. Ask the author to upload it again.');
