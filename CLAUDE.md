@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Buzzdrop is a one-time, self-destructing file-sharing Flask application with client-side encryption. Files are encrypted in the browser before upload and can only be downloaded once before being automatically deleted.
 
+## Working on Issues
+
+Never commit issue work to `main`. Before the first change, branch off an up-to-date `main` as `BD-<issue number>-<short-kebab-summary>`, e.g. `BD-188-note-success-page-wording` for #188, and commit there.
+
 ## Development Commands
 
 ### Setup
