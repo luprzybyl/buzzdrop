@@ -6,18 +6,9 @@ KEY_RELEASE_MAX_ATTEMPTS, and what it says about the password (#227).
 import re
 from datetime import datetime
 
-import pytest
 from flask import url_for
 
 FILE_ID = '00000000-0000-4000-8000-000000000227'
-
-
-@pytest.fixture
-def key_release_settings(app):
-    """Mutate key-release config and restore it afterwards."""
-    original = {'KEY_RELEASE_MAX_ATTEMPTS': app.config['KEY_RELEASE_MAX_ATTEMPTS']}
-    yield app.config
-    app.config.update(original)
 
 
 def _view_page(client, files_store, csrf_form_data, file_type='file'):

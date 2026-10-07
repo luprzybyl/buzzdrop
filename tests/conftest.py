@@ -172,6 +172,19 @@ def receipt_pair():
 
 
 @pytest.fixture
+def key_release_settings(app):
+    """Mutate key-release config and restore it afterwards."""
+    keys = (
+        'KEY_RELEASE_RATE_LIMIT',
+        'KEY_RELEASE_MAX_ATTEMPTS',
+        'KEY_RELEASE_BURN_ON_LOCKOUT',
+    )
+    original = {key: app.config.get(key) for key in keys}
+    yield app.config
+    app.config.update(original)
+
+
+@pytest.fixture
 def key_share(files_store):
     """
     Create a pending key share directly in the store — the same

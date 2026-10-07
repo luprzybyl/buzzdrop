@@ -83,14 +83,20 @@ export async function initView(root, deps) {
     // says what is left, so the warning would only contradict it.
     const attemptsWarning = required(root, '#attempts-warning', 'p');
 
+    // Shuts the password step while a try is in flight, or for good when the
+    // share can't be opened; the attempts warning doesn't come back either way.
+    function lockForm() {
+        decryptBtn.disabled = true;
+        passInput.disabled = true;
+        attemptsWarning.hidden = true;
+    }
+
     /** @type {Bytes} */
     let salt;
     try {
         ({ salt } = cryptoService.parseBlob(encryptedData));
     } catch (err) {
-        decryptBtn.disabled = true;
-        passInput.disabled = true;
-        attemptsWarning.hidden = true;
+        lockForm();
         status.textContent =
             'This share uses an unsupported format. Ask the author to upload it again.';
         return;
@@ -231,9 +237,7 @@ export async function initView(root, deps) {
         event.preventDefault();
         const password = passInput.value;
         if (!password) return;
-        decryptBtn.disabled = true;
-        passInput.disabled = true;
-        attemptsWarning.hidden = true;
+        lockForm();
 
         try {
             const result = await decryptKeyRelease(password);
