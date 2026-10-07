@@ -70,6 +70,7 @@ describe('index page', () => {
 
             expect(strengthMeter()).toHaveAttribute('aria-valuetext', level);
             expect(strengthMeter()).toHaveAttribute('aria-valuenow', fill);
+            expect(upload.strengthBarFill()).toBe(`${fill}%`);
         });
 
         it('hides the meter once the field is emptied', async () => {
@@ -87,6 +88,7 @@ describe('index page', () => {
             await upload.enterPassword(SEVEN_WORDS);
 
             expect(strengthMeter()).toHaveAttribute('aria-valuenow', '100');
+            expect(upload.strengthBarFill()).toBe('100%');
         });
 
         it('Generate fills a visible passphrase rated strong', async () => {

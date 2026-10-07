@@ -49,10 +49,13 @@ describe('users page', () => {
 
         expect(await users.clipboardText()).toBe(TOKEN);
         const copy = card().getByRole('button', { name: 'Copy token' });
+        const clipboardStatus = screen.getByRole('status', { name: 'Clipboard' });
         expect(copy).toHaveTextContent('Copied!');
+        expect(clipboardStatus).toHaveTextContent('Token copied to clipboard.');
 
         vi.advanceTimersByTime(2000);
 
         expect(copy).toHaveTextContent('Copy');
+        expect(clipboardStatus).toBeEmptyDOMElement();
     });
 });

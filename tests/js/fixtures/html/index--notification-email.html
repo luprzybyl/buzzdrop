@@ -171,8 +171,8 @@
                         </button>
                     </div>
                     <div id="password-strength" class="mt-2" aria-live="polite" hidden>
-                        <div id="password-strength-meter" class="honey-track" role="meter" aria-label="Password strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="password-strength-text">
-                            <div id="password-strength-bar" class="pw-fill" style="width: 0%"></div>
+                        <div id="password-strength-meter" class="honey-track" role="meter" aria-label="Password strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="password-strength-text" style="--strength-fill: 0%">
+                            <div id="password-strength-bar" class="pw-fill" style="width: var(--strength-fill)"></div>
                         </div>
                         <p id="password-strength-text" class="field-help"></p>
                     </div>

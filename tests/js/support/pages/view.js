@@ -8,9 +8,9 @@ import { CryptoService, bytesToHex } from '../../../../static/js/crypto.js';
 import { initView } from '../../../../static/js/view-page.js';
 import { makeProtocolFake } from '../protocol-fake.js';
 import { makeStubCrypto } from '../stub-crypto.js';
-import { openPage, replaceInFixture, typeable, waitUntil } from './page.js';
+import { DEFAULT_PASSWORD, REAL_CRYPTO_TIMEOUT, addressOf, openPage, replaceInFixture, typeable, waitUntil } from './page.js';
 
-export { screen } from './page.js';
+export { DEFAULT_PASSWORD, screen } from './page.js';
 
 /**
  * @typedef {import('../../../../static/js/crypto.js').Bytes} Bytes
@@ -26,7 +26,6 @@ const FIXTURES = {
 };
 
 /** What a share holds when a test doesn't say. */
-export const DEFAULT_PASSWORD = 'correct horse';
 export const DEFAULT_MESSAGE = 'meet at the hive at noon';
 
 /** A verifier no password derives, for someone else's wrong guesses. */
@@ -35,9 +34,7 @@ const WRONG_VERIFIER = 'f'.repeat(64);
 /**
  * @typedef {object} ShareOptions
  * @property {'file' | 'message'} [type]
- * @property {'plain' | 'one-click' | 'mangled'} [link] - a one-click link carries
- *   the password in its fragment; a mangled one carries a fragment that isn't
- *   valid percent-encoding
+ * @property {import('./page.js').LinkKind} [link]
  * @property {string} [query] - a query string the link carries, e.g. 'x=1'
  * @property {string} [password] - the share's password
  * @property {string | Bytes} [content] - what was shared
@@ -110,15 +107,14 @@ export async function openShare({
     const logStart = backend.log.length;
 
     const { fixture, fileId: fixtureId } = FIXTURES[type];
-    const fragment = { plain: '', 'one-click': `#${encodeURIComponent(password)}`, mangled: '#%ZZ' }[link];
     const page = openPage(fixture, {
-        path: `/view/${fileId}/confirm${query ? `?${query}` : ''}${fragment}`,
+        path: addressOf(`/view/${fileId}/confirm`, { link, password, query }),
         // As the server renders it for this share.
         edit: (html) => replaceInFixture(replaceInFixture(html, fixtureId, fileId),
             'You have one attempt', maxAttempts === 1 ? 'You have one attempt' : `You have ${maxAttempts} attempts`),
     });
     const { window, screen, user } = page;
-    const timeout = crypto === 'real' ? 15_000 : 1000;
+    const timeout = crypto === 'real' ? REAL_CRYPTO_TIMEOUT : 1000;
 
     /** @type {() => void} */
     let finishDownload = () => {};
@@ -153,15 +149,23 @@ export async function openShare({
     const decryptButton = () => screen.getByRole('button', { name: /^Decrypt and / });
 
     /**
-     * Try a password and wait until the status line reports the outcome.
+     * Try a password and wait until the status line reports the outcome. It
+     * waits for the page to write the line, not for different text, so an
+     * outcome worded like the one before still counts.
      * @param {(field: HTMLElement) => Promise<void>} submit
      */
     const attempt = async (submit) => {
-        const before = status().textContent;
-        const field = passwordField();
-        await user.clear(field);
-        await submit(field);
-        await waitUntil(() => expect(status().textContent).not.toBe(before), timeout);
+        let reported = false;
+        const observer = new window.MutationObserver(() => { reported = true; });
+        observer.observe(status(), { childList: true, characterData: true, subtree: true });
+        try {
+            const field = passwordField();
+            await user.clear(field);
+            await submit(field);
+            await waitUntil(() => expect(reported).toBe(true), timeout);
+        } finally {
+            observer.disconnect();
+        }
     };
 
     return {

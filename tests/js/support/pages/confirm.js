@@ -1,7 +1,7 @@
 // Page driver for the confirm page: the one-time "Proceed" step before the
 // share is downloaded (docs/frontend-test-strategy.md §7a).
 import { initConfirmDownload } from '../../../../static/js/confirm-download-page.js';
-import { openPage } from './page.js';
+import { addressOf, openPage } from './page.js';
 
 export { screen } from './page.js';
 
@@ -9,19 +9,11 @@ export { screen } from './page.js';
 export const SHARE_PATH = '/view/00000000-0000-4000-8000-0000000000f1';
 
 /**
- * @typedef {object} ConfirmOptions
- * @property {'plain' | 'one-click'} [link] - a one-click link carries the password in its fragment
- * @property {string} [password] - the password a one-click link carries
- * @property {string} [query] - a query string the link carries, e.g. 'x=1'
- */
-
-/**
  * Open the confirm page the way a share link lands on it.
- * @param {ConfirmOptions} [options]
+ * @param {import('./page.js').AddressOptions} [link] - the share link
  */
-export function openConfirmPage({ link = 'plain', password = 'correct horse', query } = {}) {
-    const fragment = link === 'one-click' ? `#${encodeURIComponent(password)}` : '';
-    const page = openPage('confirm_download--file', { path: `${SHARE_PATH}${query ? `?${query}` : ''}${fragment}` });
+export function openConfirmPage(link = {}) {
+    const page = openPage('confirm_download--file', { path: addressOf(SHARE_PATH, link) });
     initConfirmDownload(page.window.document, {});
     return {
         url: page.url,

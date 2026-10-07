@@ -12,6 +12,39 @@ import { browserView, loadFixture } from '../dom-fixture.js';
 /** The origin every fixture is served from. */
 export const ORIGIN = 'http://localhost';
 
+/** The share password when a test doesn't name one. */
+export const DEFAULT_PASSWORD = 'correct horse';
+
+/**
+ * How long a driver waits for a step that runs the real crypto.js, whose
+ * 600k-iteration PBKDF2 runs on every encryption, verifier and decryption.
+ */
+export const REAL_CRYPTO_TIMEOUT = 15_000;
+
+/**
+ * What an address carries after its path: a one-click link has the password
+ * in its fragment; a mangled one has a fragment that isn't valid
+ * percent-encoding.
+ * @typedef {'plain' | 'one-click' | 'mangled'} LinkKind
+ */
+
+/**
+ * @typedef {object} AddressOptions
+ * @property {LinkKind} [link]
+ * @property {string} [password] - the password a one-click link carries
+ * @property {string} [query] - a query string the address carries, e.g. 'x=1'
+ */
+
+/**
+ * The address a page is opened at.
+ * @param {string} path
+ * @param {AddressOptions} [options]
+ */
+export function addressOf(path, { link = 'plain', password = DEFAULT_PASSWORD, query } = {}) {
+    const fragment = { plain: '', 'one-click': `#${encodeURIComponent(password)}`, mangled: '#%ZZ' }[link];
+    return `${path}${query ? `?${query}` : ''}${fragment}`;
+}
+
 /**
  * Testing Library's queries, bound to one page's body.
  * @typedef {import('@testing-library/dom').BoundFunctions<typeof import('@testing-library/dom').queries>} Screen

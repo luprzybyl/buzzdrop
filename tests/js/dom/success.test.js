@@ -38,7 +38,7 @@ describe('success page', () => {
     });
 
     it('Copy on the one-click link copies the link with the password', async () => {
-        const success = openSuccessPage({ password: 'correct horse' });
+        const success = openSuccessPage({ link: 'one-click', password: 'correct horse' });
 
         await success.copyOneClickLink();
 
@@ -85,21 +85,21 @@ describe('success page', () => {
     });
 
     it('fills the password and one-click link from a well-formed fragment', () => {
-        openSuccessPage({ password: 'correct horse' });
+        openSuccessPage({ link: 'one-click', password: 'correct horse' });
 
         expect(passwordField()).toHaveValue('correct horse');
         expect(screen.getByLabelText('One-click link with password')).toHaveValue(`${SHARE_LINK}#correct%20horse`);
     });
 
     it('scrubs the fragment from the URL without adding a history entry', () => {
-        const success = openSuccessPage({ password: 'correct horse', query: 'x=1' });
+        const success = openSuccessPage({ link: 'one-click', query: 'x=1' });
 
         expect(success.url()).toBe(`${PAGE_URL}?x=1`);
         expect(success.historyLength()).toBe(1);
     });
 
     it('scrubs a mangled fragment and leaves the fields empty', () => {
-        const success = openSuccessPage({ mangledFragment: true });
+        const success = openSuccessPage({ link: 'mangled' });
 
         expect(success.url()).toBe(PAGE_URL);
         expect(passwordField()).toHaveValue('');

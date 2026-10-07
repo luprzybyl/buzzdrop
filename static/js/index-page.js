@@ -216,21 +216,12 @@ export function initIndex(root, deps) {
     const strengthText = root.getElementById('password-strength-text');
     const passwordError = root.getElementById('password-error');
 
-    const STRENGTH_FILL = {
-        weak: 'pw-fill-weak',
-        fair: 'pw-fill-fair',
-        strong: 'pw-fill-strong',
-    };
-    const STRENGTH_TEXT = {
-        weak: 'pw-text-weak',
-        fair: 'pw-text-fair',
-        strong: 'pw-text-strong',
-    };
-    // What the meter reports to assistive tech; the colour carries it on screen.
-    const STRENGTH_LABEL = {
-        weak: 'Weak',
-        fair: 'Fair',
-        strong: 'Strong',
+    // Per level: the bar's and the message's colour, and the word the meter
+    // reports to assistive tech (the colour carries it on screen).
+    const STRENGTH = {
+        weak: { fill: 'pw-fill-weak', text: 'pw-text-weak', label: 'Weak' },
+        fair: { fill: 'pw-fill-fair', text: 'pw-text-fair', label: 'Fair' },
+        strong: { fill: 'pw-fill-strong', text: 'pw-text-strong', label: 'Strong' },
     };
 
     /**
@@ -251,13 +242,16 @@ export function initIndex(root, deps) {
             return;
         }
         strengthRegion.hidden = false;
-        strengthBar.className = `pw-fill ${STRENGTH_FILL[result.level]}`;
+        const level = STRENGTH[result.level];
+        strengthBar.className = `pw-fill ${level.fill}`;
         // Scale ~90 bits to a full bar so "fair" doesn't read as nearly done.
+        // The meter holds the fill once, for the bar's width and for
+        // assistive tech alike.
         const fill = Math.min(100, Math.round((result.bits / 90) * 100));
-        strengthBar.style.width = `${fill}%`;
+        strengthMeter.style.setProperty('--strength-fill', `${fill}%`);
         strengthMeter.setAttribute('aria-valuenow', String(fill));
-        strengthMeter.setAttribute('aria-valuetext', STRENGTH_LABEL[result.level]);
-        strengthText.className = `field-help ${STRENGTH_TEXT[result.level]}`;
+        strengthMeter.setAttribute('aria-valuetext', level.label);
+        strengthText.className = `field-help ${level.text}`;
         strengthText.textContent = result.message;
     }
 

@@ -12,7 +12,7 @@ import { initHeroFlow } from '../../../../static/js/hero-flow-page.js';
 import { initIndex } from '../../../../static/js/index-page.js';
 import { makeProtocolFake } from '../protocol-fake.js';
 import { makeStubCrypto } from '../stub-crypto.js';
-import { openPage, replaceInFixture, typeable, waitUntil } from './page.js';
+import { DEFAULT_PASSWORD, REAL_CRYPTO_TIMEOUT, openPage, replaceInFixture, typeable, waitUntil } from './page.js';
 
 export { screen } from './page.js';
 
@@ -43,7 +43,7 @@ const ACCOUNTS = {
 /** Passwords of each strength, as the meter rates them. */
 export const PASSWORDS = {
     weak: 'password',
-    fair: 'correct horse',
+    fair: DEFAULT_PASSWORD,
     // Six EFF words: ~77.5 bits. Distinctive enough that a leak of it into a
     // request can't be a coincidence.
     strong: 'abacus-abdomen-abdominal-abide-abiding-ability',
@@ -142,7 +142,7 @@ export function openUploadPage({
             ? replaceInFixture(html, 'data-page-size="5"', `data-page-size="${sharesPerPage}"`) : html),
     });
     const { window, screen, user } = page;
-    const timeout = crypto === 'real' ? 10_000 : 1000;
+    const timeout = crypto === 'real' ? REAL_CRYPTO_TIMEOUT : 1000;
 
     /** @type {Array<{ file_id: string, h: string }>} */
     const issued = [];
@@ -248,6 +248,13 @@ export function openUploadPage({
         },
         clearPassword: () => user.clear(passwordField()),
         generatePassword: () => user.click(screen.getByRole('button', { name: 'Generate' })),
+        /**
+         * How full the strength meter's bar is drawn, e.g. '68%'. The width is
+         * visual, so it is read from the meter that carries it for the bar
+         * (jest-dom's toHaveStyle can't check a custom property).
+         */
+        strengthBarFill: () => window.getComputedStyle(screen.getByRole('meter', { name: 'Password strength' }))
+            .getPropertyValue('--strength-fill'),
         /**
          * The optional share settings.
          * @param {{ expiry?: string, privateNote?: string, notify?: boolean }} options

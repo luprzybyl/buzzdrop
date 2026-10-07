@@ -139,6 +139,15 @@ const ROUTES = [
 ];
 
 /**
+ * The path of a logged request, e.g. '/release/<id>'.
+ * @param {{ url: string }} request
+ * @returns {string}
+ */
+export function pathOf(request) {
+    return new URL(request.url).pathname;
+}
+
+/**
  * The protocol route a path belongs to (a recorded path prefix such as
  * '/release/' counts). Throws for anything else.
  * @param {string} path

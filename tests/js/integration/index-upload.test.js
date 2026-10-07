@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { CryptoService, bytesToHex, hexToBytes } from '../../../static/js/crypto.js';
 import { PASSWORDS, openUploadPage, screen } from '../support/pages/upload.js';
+import { pathOf } from '../support/protocol-fake.js';
 
 /**
  * @typedef {'file' | 'text'} Mode
@@ -19,8 +20,8 @@ const FILE_BYTES = new TextEncoder().encode('%PDF-1.7 quarterly numbers');
 const NOTE = 'the gate code is 4711';
 const SHARE_OPTIONS = { expiry: '2099-01-31T12:00', privateNote: '  for the Q3 audit  ', notify: true };
 // PBKDF2 at 600k iterations runs once per encryption and once per check; the
-// driver waits up to 10 s for each upload to settle.
-const TEST_TIMEOUT = 20_000;
+// driver waits up to REAL_CRYPTO_TIMEOUT for each upload to settle.
+const TEST_TIMEOUT = 30_000;
 
 /** @type {Mode[]} */
 const MODES = ['file', 'text'];
@@ -41,9 +42,6 @@ const successUrl = (fileId) => `/success/${fileId}#${encodeURIComponent(PASSWORD
 const shareIn = (upload, mode, { password = PASSWORD, server } = {}) => (mode === 'text'
     ? upload.shareMessage(NOTE, password, { server })
     : upload.shareFile({ name: FILE_NAME, bytes: FILE_BYTES }, password, { server }));
-
-/** @param {LoggedRequest} request */
-const pathOf = (request) => new URL(request.url).pathname;
 
 /**
  * @param {UploadPage} upload

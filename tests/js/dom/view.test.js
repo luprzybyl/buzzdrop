@@ -55,6 +55,7 @@ describe('view page', () => {
 
         const copy = screen.getByRole('button', { name: 'Copy text' });
         await vi.waitFor(() => expect(copy).toHaveTextContent('Copied!'));
+        expect(screen.getByRole('status')).toHaveTextContent('Text copied to clipboard.');
         expect(await share.clipboardText()).toBe(DEFAULT_MESSAGE);
 
         vi.advanceTimersByTime(2000);

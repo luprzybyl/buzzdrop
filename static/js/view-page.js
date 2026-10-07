@@ -145,12 +145,14 @@ export async function initView(root, deps) {
             status.textContent = 'Text decrypted successfully.';
             decryptForm.style.display = 'none';
 
-            // Add copy functionality
+            // Add copy functionality. The button's name stays "Copy text", so
+            // the flash on it is visual; the status line announces the copy.
             const btn = required(root, '#copy-text-btn', 'button');
             btn.addEventListener('click', () => {
                 window.navigator.clipboard.writeText(text).then(() => {
                     const originalText = btn.textContent;
                     btn.textContent = 'Copied!';
+                    status.textContent = 'Text copied to clipboard.';
                     setTimeout(() => {
                         btn.textContent = originalText;
                     }, 2000);

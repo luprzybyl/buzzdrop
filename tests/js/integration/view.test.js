@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { openUploadPage } from '../support/pages/upload.js';
 import { openShare, screen } from '../support/pages/view.js';
+import { pathOf } from '../support/protocol-fake.js';
 
 /**
  * @typedef {import('../support/pages/view.js').ShareView} ShareView
@@ -17,11 +18,8 @@ const WRONG_PASSWORD = 'zebra-zesty-zigzag-zipfile-zipping-zone';
 const FILE_BYTES = new TextEncoder().encode('%PDF-1.7 signed contract');
 const NOTE = 'the gate code is 4711';
 // PBKDF2 at 600k iterations runs on every encryption, verifier and
-// decryption; the drivers wait up to 15 s for each step to settle.
+// decryption; the drivers wait up to REAL_CRYPTO_TIMEOUT for each step.
 const TEST_TIMEOUT = 30_000;
-
-/** @param {LoggedRequest} request */
-const pathOf = (request) => new URL(request.url).pathname;
 
 /**
  * Everything a view request carried, as text: URL, header names and values,
