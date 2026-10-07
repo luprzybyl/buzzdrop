@@ -129,12 +129,12 @@
                             <path d="M24 32V17m0 0-6.5 6.5M24 17l6.5 6.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                         <div class="space-y-1">
-                            <p class="text-base font-semibold text-white">
+                            <p id="dropzone-label" class="text-base font-semibold text-white">
                                 Drop a file here, or <span class="text-honey-300 underline decoration-honey-400/40 underline-offset-4">browse</span>
                             </p>
                             <p class="dropzone-hint text-sm text-slate-400">It is encrypted on this device before a single byte leaves it.</p>
                         </div>
-                        <p id="file-selected" class="hidden">
+                        <p id="file-selected" hidden>
                             <span class="file-chip">
                                 <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm6 0v3a1 1 0 0 0 1 1h3l-4-4Z" clip-rule="evenodd"/>
@@ -147,7 +147,7 @@
                             <p class="mx-auto max-w-sm text-xs leading-5 text-slate-600">DOC · DOCX · GIF · JPEG · JPG · MP4 · PDF · PNG · TXT · XLS · XLSX</p>
                         </div>
                     </div>
-                    <input id="file" name="file" type="file" class="sr-only" required>
+                    <input id="file" name="file" type="file" class="sr-only" aria-labelledby="dropzone-label" aria-describedby="file-error" required>
                 </label>
                 <p id="file-error" class="file-error" role="alert"></p>
             </form>
@@ -164,7 +164,7 @@
                 <div>
                     <label for="shared-password" class="field-label">Password</label>
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                        <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" required autocomplete="new-password">
+                        <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" aria-describedby="password-error" required autocomplete="new-password">
                         <button id="generate-password-btn" type="button" class="btn-secondary shrink-0 whitespace-nowrap px-4 py-3 text-xs sm:w-auto" title="Generate a 6-word passphrase (about 77 bits of entropy)">
                             <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.451a.75.75 0 0 0 0-1.5H4.5a.75.75 0 0 0-.75.75v3.75a.75.75 0 0 0 1.5 0v-2.033l.364.363a7 7 0 0 0 11.712-3.15.75.75 0 0 0-1.449-.388 5.51 5.51 0 0 1-.435 1.063ZM8.858 8.576a5.5 5.5 0 0 1 9.201-2.466l.312.311H15.92a.75.75 0 0 0 0 1.5h3.75a.75.75 0 0 0 .75-.75V3.421a.75.75 0 0 0-1.5 0v2.033l-.364-.363A7 7 0 0 0 6.894 8.24a.75.75 0 0 0 1.449.388c.14-.021.28-.042.415-.052Z" clip-rule="evenodd"/>
@@ -172,9 +172,9 @@
                             Generate
                         </button>
                     </div>
-                    <div id="password-strength" class="mt-2 hidden" aria-live="polite">
-                        <div class="honey-track">
-                            <div id="password-strength-bar" class="pw-fill" style="width: 0%"></div>
+                    <div id="password-strength" class="mt-2" aria-live="polite" hidden>
+                        <div id="password-strength-meter" class="honey-track" role="meter" aria-label="Password strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="password-strength-text" style="--strength-fill: 0%">
+                            <div id="password-strength-bar" class="pw-fill" style="width: var(--strength-fill)"></div>
                         </div>
                         <p id="password-strength-text" class="field-help"></p>
                     </div>
@@ -233,7 +233,7 @@
                         </svg>
                     </button>
                 </div>
-                <div id="share-progress-container" class="mt-4 w-full items-center gap-3" style="display:none;">
+                <div id="share-progress-container" class="mt-4 w-full items-center gap-3" role="progressbar" aria-label="Upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="display:none;">
                     <div class="honey-track">
                         <div id="share-progress-bar" class="honey-bar" style="width: 0%"></div>
                     </div>

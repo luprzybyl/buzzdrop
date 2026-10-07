@@ -2,7 +2,7 @@
 // decrypted, its link is spent. The page no longer offers it, the ciphertext
 // is gone, and /release answers 410 even to the right password.
 import { test, expect } from './fixtures.js';
-import { clickDecryptForDownload, expectDeadLink, flash, logIn, openShare, releaseStatus, shareFile, shareUrl, uniqueFile } from './support.js';
+import { decryptFile, expectDeadLink, flash, logIn, openShare, releaseStatus, shareFile, shareStatus, shareUrl, uniqueFile } from './support.js';
 
 test('a second visit to a consumed link fails', async ({ page, recipient, sharePassword }) => {
     const password = sharePassword();
@@ -11,9 +11,8 @@ test('a second visit to a consumed link fails', async ({ page, recipient, shareP
     const link = await shareFile(page, uniqueFile(), password);
 
     const blob = await openShare(recipient, link);
-    await recipient.locator('#password-input').fill(password);
-    await clickDecryptForDownload(recipient);
-    await expect(recipient.locator('#status')).toHaveText('Download complete.');
+    await decryptFile(recipient, password);
+    await expect(shareStatus(recipient)).toHaveText('Download complete.');
 
     await expectDeadLink(recipient, link);
 

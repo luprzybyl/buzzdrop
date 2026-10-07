@@ -38,12 +38,12 @@
                             <path d="M24 32V17m0 0-6.5 6.5M24 17l6.5 6.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                         <div class="space-y-1">
-                            <p class="text-base font-semibold text-white">
+                            <p id="dropzone-label" class="text-base font-semibold text-white">
                                 Drop a file here, or <span class="text-honey-300 underline decoration-honey-400/40 underline-offset-4">browse</span>
                             </p>
                             <p class="dropzone-hint text-sm text-slate-400">It is encrypted on this device before a single byte leaves it.</p>
                         </div>
-                        <p id="file-selected" class="hidden">
+                        <p id="file-selected" hidden>
                             <span class="file-chip">
                                 <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm6 0v3a1 1 0 0 0 1 1h3l-4-4Z" clip-rule="evenodd"/>
@@ -56,7 +56,7 @@
                             <p class="mx-auto max-w-sm text-xs leading-5 text-slate-600">{{ allowed_extensions|join(' · ')|upper }}</p>
                         </div>
                     </div>
-                    <input id="file" name="file" type="file" class="sr-only" required>
+                    <input id="file" name="file" type="file" class="sr-only" aria-labelledby="dropzone-label" aria-describedby="file-error" required>
                 </label>
                 <p id="file-error" class="file-error" role="alert"></p>
             </form>
@@ -73,7 +73,7 @@
                 <div>
                     <label for="shared-password" class="field-label">Password</label>
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                        <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" required autocomplete="new-password">
+                        <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" aria-describedby="password-error" required autocomplete="new-password">
                         <button id="generate-password-btn" type="button" class="btn-secondary shrink-0 whitespace-nowrap px-4 py-3 text-xs sm:w-auto" title="Generate a 6-word passphrase (about 77 bits of entropy)">
                             <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.451a.75.75 0 0 0 0-1.5H4.5a.75.75 0 0 0-.75.75v3.75a.75.75 0 0 0 1.5 0v-2.033l.364.363a7 7 0 0 0 11.712-3.15.75.75 0 0 0-1.449-.388 5.51 5.51 0 0 1-.435 1.063ZM8.858 8.576a5.5 5.5 0 0 1 9.201-2.466l.312.311H15.92a.75.75 0 0 0 0 1.5h3.75a.75.75 0 0 0 .75-.75V3.421a.75.75 0 0 0-1.5 0v2.033l-.364-.363A7 7 0 0 0 6.894 8.24a.75.75 0 0 0 1.449.388c.14-.021.28-.042.415-.052Z" clip-rule="evenodd"/>
@@ -81,9 +81,9 @@
                             Generate
                         </button>
                     </div>
-                    <div id="password-strength" class="mt-2 hidden" aria-live="polite">
-                        <div class="honey-track">
-                            <div id="password-strength-bar" class="pw-fill" style="width: 0%"></div>
+                    <div id="password-strength" class="mt-2" aria-live="polite" hidden>
+                        <div id="password-strength-meter" class="honey-track" role="meter" aria-label="Password strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="password-strength-text" style="--strength-fill: 0%">
+                            <div id="password-strength-bar" class="pw-fill" style="width: var(--strength-fill)"></div>
                         </div>
                         <p id="password-strength-text" class="field-help"></p>
                     </div>
@@ -144,7 +144,7 @@
                         </svg>
                     </button>
                 </div>
-                <div id="share-progress-container" class="mt-4 w-full items-center gap-3" style="display:none;">
+                <div id="share-progress-container" class="mt-4 w-full items-center gap-3" role="progressbar" aria-label="Upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="display:none;">
                     <div class="honey-track">
                         <div id="share-progress-bar" class="honey-bar" style="width: 0%"></div>
                     </div>
@@ -196,7 +196,7 @@
         {# Hero walkthrough: the six stages a drop goes through, cycled by hero-flow.js.
            Artwork is aria-hidden; the captions stay readable as an ordered list. #}
         <div class="animate-zoom-in delay-2 flex justify-center lg:justify-end">
-            <div id="flow-stage" class="flow-stage" data-step="0">
+            <div id="flow-stage" class="flow-stage" data-step="0" role="region" aria-label="How a drop works">
                 <div class="flow-window">
                     <div class="flow-topbar" aria-hidden="true">
                         <span class="flow-title">How a drop works</span>
@@ -211,7 +211,7 @@
                     </div>
 
                     <ol class="flow-body">
-                        <li class="flow-step is-active">
+                        <li class="flow-step is-active" aria-current="step">
                             <div class="flow-art" aria-hidden="true">
                                 <div class="flow-seg">
                                     <span class="flow-seg-thumb"></span>
@@ -307,7 +307,7 @@
                         <svg data-flow-icon="pause" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path d="M6 4h3v12H6zM11 4h3v12h-3z"/>
                         </svg>
-                        <svg data-flow-icon="play" class="hidden h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <svg data-flow-icon="play" class="h-3.5 w-3.5" hidden viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path d="M7 4.5v11l9-5.5z"/>
                         </svg>
                     </button>
@@ -451,10 +451,10 @@
 {% if session.get('username') and user_files %}
 {# ------------------------------------------------------------ Drop list #}
 <div class="mx-auto mt-10 max-w-5xl">
-    <div class="surface-card animate-fade-up delay-2 p-6 sm:p-8">
+    <section class="surface-card animate-fade-up delay-2 p-6 sm:p-8" aria-labelledby="shared-files-heading">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h2 class="text-xl font-semibold tracking-tight text-white">Your drops</h2>
+                <h2 id="shared-files-heading" class="text-xl font-semibold tracking-tight text-white">Your drops</h2>
                 <p class="mt-1 text-sm text-slate-400">Track every buzz and copy links without exposing your private notes.</p>
             </div>
             <span class="status-badge status-badge-slate">{{ user_files|length }} total</span>
@@ -480,17 +480,17 @@
 
         <div id="shared-files-list" class="mt-5 space-y-3" data-page-size="5" data-status-url="{{ url_for('user_file_statuses') }}">
             {% for file in user_files %}
-            <article class="dashboard-item shared-file-row" data-file-id="{{ file.id }}" data-search-base="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or ''))|lower }}" data-uploaded-at="{{ file.created_at or '' }}" data-expiry-at="{{ file.expiry_at or '' }}" data-downloaded-at="{{ file.downloaded_at or '' }}" data-search-text="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.status ~ ' ' ~ file.status_display ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or '') ~ ' ' ~ (file.downloaded_by_ip or ''))|lower }}">
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-{{ file.id }}" data-file-id="{{ file.id }}" data-search-base="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or ''))|lower }}" data-uploaded-at="{{ file.created_at or '' }}" data-expiry-at="{{ file.expiry_at or '' }}" data-downloaded-at="{{ file.downloaded_at or '' }}" data-search-text="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.status ~ ' ' ~ file.status_display ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or '') ~ ' ' ~ (file.downloaded_by_ip or ''))|lower }}">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
-                        <a href="#" class="copy-url group inline-flex max-w-full items-center gap-2 text-base font-semibold text-white transition hover:text-honey-300" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}" title="Copy share link">
-                            <span class="truncate">{{ file.original_name }}</span>
+                        <button type="button" class="copy-url group inline-flex max-w-full cursor-pointer items-center gap-2 text-left text-base font-semibold text-white transition hover:text-honey-300" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}" aria-label="Copy the share link for {{ file.original_name }}" title="Copy share link">
+                            <span id="shared-file-name-{{ file.id }}" class="truncate">{{ file.original_name }}</span>
                             <svg class="h-4 w-4 shrink-0 text-slate-600 transition group-hover:text-honey-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
                                 <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
                             </svg>
-                            <span class="copy-flash hidden" aria-hidden="true">Copied</span>
-                        </a>
+                            <span class="copy-flash" aria-hidden="true" hidden>Copied</span>
+                        </button>
                         {% if file.private_note %}
                             <p class="mt-2 text-sm text-slate-500">{{ file.private_note }}</p>
                         {% endif %}
@@ -527,7 +527,7 @@
             {% endfor %}
         </div>
 
-        <p id="copy-status" class="sr-only" role="status"></p>
+        <p id="copy-status" class="sr-only" role="status" aria-label="Clipboard"></p>
 
         <p id="shared-files-empty-state" class="mt-4 hidden rounded-2xl border border-white/6 bg-white/2 px-5 py-6 text-center text-sm text-slate-500">No drops match this search.</p>
 
@@ -538,7 +538,7 @@
                 <button id="shared-files-next" type="button" class="btn-secondary px-4 py-2 disabled:pointer-events-none disabled:opacity-40">Next</button>
             </div>
         </div>
-    </div>
+    </section>
 </div>
 {% endif %}
 

@@ -3,12 +3,15 @@
 Vitest + happy-dom, one page module against its rendered template fixture
 (`tests/js/fixtures/html/`). The spec is `docs/frontend-test-strategy.md`.
 
-- **Import the page module** (`static/js/<page>-page.js`), never the entry script.
-- **Drive it through `browserView(page)`** (`support/dom-fixture.js`) and look
-  elements up with `required()` (`static/js/required.js`), so the tests
-  type-check without casts (spec §2–§3).
-- **Selector rule:** find elements by `id`, ARIA role, `data-*` attribute or
-  visible text — never by Tailwind or other styling classes, so restyling a
-  template doesn't break tests. The one exception is a class the page JS itself
-  toggles to show state (status-badge classes, `hidden`, …): asserting on that
-  class is asserting on behaviour.
+- **Drive the page through its driver** (`tests/js/support/pages/`, spec §7a):
+  open it with `openShare`, `openUploadPage`, `openSuccessPage`, … and act
+  through verbs named after what the user does. A test never loads a fixture,
+  calls `init<Page>()`, stubs `fetch` or crypto, or dispatches an event itself.
+- **Set the situation with options in app terms** (`maxAttempts: 3`,
+  `server: 'claimed'`, `link: 'one-click'`), never with HTTP statuses.
+- **Find elements as a user does** (spec §7b): by role, then label, then text,
+  through the `screen` the driver module exports. Never by id, class,
+  `data-testid` or selector.
+- **Assert on what is perceivable**: `toBeDisabled`, `toBeVisible`,
+  `toHaveFocus`, `toHaveAccessibleName`… — not `.disabled`, `.style` or
+  `.classList`. If no role-based query can find something, fix the template.

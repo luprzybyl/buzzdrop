@@ -2,7 +2,7 @@
 // in a fresh context, and read the plaintext on the page.
 import { randomUUID } from 'node:crypto';
 import { test, expect } from './fixtures.js';
-import { logIn, openShare, shareNote } from './support.js';
+import { decryptMessage, logIn, openShare, shareNote } from './support.js';
 
 test('a shared note decrypts to the original text on the page', async ({ page, recipient, sharePassword }) => {
     // Several lines and non-ASCII text, so a decoding or trimming slip shows.
@@ -15,9 +15,5 @@ test('a shared note decrypts to the original text on the page', async ({ page, r
 
     await openShare(recipient, link);
     // Enter in the field submits, as on any form (#227).
-    await recipient.getByLabel('Password').fill(password);
-    await recipient.getByLabel('Password').press('Enter');
-
-    await expect(recipient.locator('#status')).toHaveText('Text decrypted successfully.');
-    expect(await recipient.locator('#text-content').textContent()).toBe(note);
+    expect(await decryptMessage(recipient, password)).toBe(note);
 });

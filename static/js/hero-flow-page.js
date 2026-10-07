@@ -44,7 +44,13 @@ export function initHeroFlow(root, deps) {
     const render = (index) => {
         current = index;
         stage.dataset.step = String(index);
-        steps.forEach((step, i) => step.classList.toggle('is-active', i === index));
+        steps.forEach((step, i) => {
+            step.classList.toggle('is-active', i === index);
+            // Which caption is on screen, for assistive tech; the list keeps
+            // every caption readable either way.
+            if (i === index) step.setAttribute('aria-current', 'step');
+            else step.removeAttribute('aria-current');
+        });
         dots.forEach((dot, i) => {
             dot.classList.toggle('is-active', i === index);
             dot.classList.toggle('is-done', i < index);
@@ -81,8 +87,8 @@ export function initHeroFlow(root, deps) {
         const setPaused = (value) => {
             paused = value;
             toggle.setAttribute('aria-label', paused ? 'Play walkthrough' : 'Pause walkthrough');
-            if (pauseIcon) pauseIcon.classList.toggle('hidden', paused);
-            if (playIcon) playIcon.classList.toggle('hidden', !paused);
+            if (pauseIcon) pauseIcon.toggleAttribute('hidden', paused);
+            if (playIcon) playIcon.toggleAttribute('hidden', !paused);
             // Pressing play while the pointer rests on the stage resumes it:
             // an explicit press outranks the hover heuristic.
             if (paused) stop(); else play();

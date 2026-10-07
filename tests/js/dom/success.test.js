@@ -1,157 +1,108 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { initSuccess } from '../../../static/js/success-page.js';
-import { required } from '../../../static/js/required.js';
-import { browserView, loadFixture } from '../support/dom-fixture.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { PAGE_PATH, SHARE_LINK, openSuccessPage, screen } from '../support/pages/success.js';
 
-const SHARE_LINK = 'http://localhost/view/00000000-0000-4000-8000-0000000000f1';
-const PAGE_URL = 'http://localhost/success/00000000-0000-4000-8000-0000000000f1';
+const PAGE_URL = `http://localhost${PAGE_PATH}`;
+const copyLinkButton = () => screen.getByRole('button', { name: 'Copy link' });
+const passwordField = () => screen.getByLabelText('Password');
+const clipboardStatus = () => screen.getByRole('status', { name: 'Clipboard' });
 
 describe('success page', () => {
-    /** @type {import('happy-dom').Window | undefined} */
-    let page;
-
     beforeEach(() => {
         vi.useFakeTimers();
     });
 
-    afterEach(async () => {
-        vi.useRealTimers();
-        await page?.happyDOM.close();
-        page = undefined;
-    });
+    it('Copy copies the share link and flashes confirmation', async () => {
+        const success = openSuccessPage();
 
-    const start = (url = PAGE_URL) => {
-        page = loadFixture('success--file', {}, url);
-        const window = browserView(page);
-        // happy-dom doesn't implement the copy command; the spy stands in for
-        // it and records what was selected when it ran. happy-dom's select()
-        // doesn't focus the input either, so the last one selected is tracked.
-        /** @type {[string, string][]} */
-        const copied = [];
-        /** @type {HTMLInputElement | null} */
-        let selected = null;
-        const select = window.HTMLInputElement.prototype.select;
-        window.HTMLInputElement.prototype.select = function () {
-            selected = this;
-            return select.call(this);
-        };
-        window.document.execCommand = vi.fn((/** @type {string} */ command) => {
-            // The page always selects an input before copying.
-            const input = /** @type {HTMLInputElement} */ (selected);
-            copied.push([command, input.value.substring(
-                /** @type {number} */ (input.selectionStart), /** @type {number} */ (input.selectionEnd))]);
-            return true;
-        });
-        initSuccess(window.document, {});
-        // Every id the tests look up is in the fixture.
-        const byId = (/** @type {string} */ id) => /** @type {HTMLElement} */ (window.document.getElementById(id));
-        const field = (/** @type {string} */ id) => required(window.document, `#${id}`, 'input');
-        return {
-            window,
-            copied,
-            byId,
-            field,
-            label: (/** @type {string} */ buttonId) => byId(buttonId).querySelector('.copy-label')?.textContent,
-            status: () => byId('copy-status').textContent,
-        };
-    };
+        await success.copyShareLink();
 
-    it('Copy copies the share link and flashes confirmation', () => {
-        const { copied, byId, label, status } = start();
-
-        byId('copy-link-btn').click();
-
-        expect(copied).toEqual([['copy', SHARE_LINK]]);
-        expect(label('copy-link-btn')).toBe('Copied!');
-        expect(status()).toBe('Link copied to clipboard.');
+        expect(await success.clipboardText()).toBe(SHARE_LINK);
+        expect(copyLinkButton()).toHaveTextContent('Copied!');
+        expect(clipboardStatus()).toHaveTextContent('Link copied to clipboard.');
 
         vi.advanceTimersByTime(2000);
 
-        expect(label('copy-link-btn')).toBe('Copy');
-        expect(status()).toBe('');
+        expect(copyLinkButton()).toHaveTextContent('Copy');
+        expect(clipboardStatus()).toBeEmptyDOMElement();
     });
 
-    it('a second Copy mid-flash still restores the original label', () => {
-        const { byId, label } = start();
+    it('a second Copy mid-flash still restores the original label', async () => {
+        const success = openSuccessPage();
 
-        byId('copy-link-btn').click();
+        await success.copyShareLink();
         vi.advanceTimersByTime(1000);
-        byId('copy-link-btn').click();
+        await success.copyShareLink();
         vi.advanceTimersByTime(2000);
 
-        expect(label('copy-link-btn')).toBe('Copy');
+        expect(copyLinkButton()).toHaveTextContent('Copy');
     });
 
-    it('Copy on the one-click link copies the link with the password', () => {
-        const { copied, byId, label, status } = start(`${PAGE_URL}#correct%20horse`);
+    it('Copy on the one-click link copies the link with the password', async () => {
+        const success = openSuccessPage({ link: 'one-click', password: 'correct horse' });
 
-        byId('copy-one-click-btn').click();
+        await success.copyOneClickLink();
 
-        expect(copied).toEqual([['copy', `${SHARE_LINK}#correct%20horse`]]);
-        expect(label('copy-one-click-btn')).toBe('Copied!');
-        expect(status()).toBe('One-click link copied to clipboard.');
+        expect(await success.clipboardText()).toBe(`${SHARE_LINK}#correct%20horse`);
+        expect(screen.getByRole('button', { name: 'Copy one-click link' })).toHaveTextContent('Copied!');
+        expect(clipboardStatus()).toHaveTextContent('One-click link copied to clipboard.');
     });
 
-    it('Show reveals the password, then hides it again', () => {
-        const { byId, field } = start();
-        const input = field('password-display');
-        const toggle = byId('toggle-password');
+    it('Show reveals the password, then hides it again', async () => {
+        const success = openSuccessPage();
 
-        toggle.click();
+        await success.revealPassword();
 
-        expect(input.type).toBe('text');
-        expect(toggle.textContent).toBe('Hide');
+        expect(passwordField()).toHaveAttribute('type', 'text');
 
-        toggle.click();
+        await success.hidePassword();
 
-        expect(input.type).toBe('password');
-        expect(toggle.textContent).toBe('Show');
+        expect(passwordField()).toHaveAttribute('type', 'password');
+        expect(screen.getByRole('button', { name: 'Show' })).toBeVisible();
     });
 
-    it('a revealed password hides itself after five seconds', () => {
-        const { byId, field } = start();
+    it('a revealed password hides itself after five seconds', async () => {
+        const success = openSuccessPage();
 
-        byId('toggle-password').click();
+        await success.revealPassword();
         vi.advanceTimersByTime(5000);
 
-        expect(field('password-display').type).toBe('password');
-        expect(byId('toggle-password').textContent).toBe('Show');
+        expect(passwordField()).toHaveAttribute('type', 'password');
+        expect(screen.getByRole('button', { name: 'Show' })).toBeVisible();
     });
 
-    it('showing the password again restarts the five seconds', () => {
-        const { byId, field } = start();
-        const toggle = byId('toggle-password');
+    it('showing the password again restarts the five seconds', async () => {
+        const success = openSuccessPage();
 
-        toggle.click();
+        await success.revealPassword();
         vi.advanceTimersByTime(3000);
-        toggle.click();
-        toggle.click();
+        await success.hidePassword();
+        await success.revealPassword();
         // The first reveal's five seconds are up; the second's are not.
         vi.advanceTimersByTime(3000);
 
-        expect(field('password-display').type).toBe('text');
-        expect(toggle.textContent).toBe('Hide');
+        expect(passwordField()).toHaveAttribute('type', 'text');
+        expect(screen.getByRole('button', { name: 'Hide' })).toBeVisible();
     });
 
     it('fills the password and one-click link from a well-formed fragment', () => {
-        const { field } = start(`${PAGE_URL}#correct%20horse`);
+        openSuccessPage({ link: 'one-click', password: 'correct horse' });
 
-        expect(field('password-display').value).toBe('correct horse');
-        expect(field('share-link-with-password').value).toBe(`${SHARE_LINK}#correct%20horse`);
+        expect(passwordField()).toHaveValue('correct horse');
+        expect(screen.getByLabelText('One-click link with password')).toHaveValue(`${SHARE_LINK}#correct%20horse`);
     });
 
     it('scrubs the fragment from the URL without adding a history entry', () => {
-        const { window } = start(`${PAGE_URL}?x=1#correct%20horse`);
+        const success = openSuccessPage({ link: 'one-click', query: 'x=1' });
 
-        expect(window.location.href).toBe(`${PAGE_URL}?x=1`);
-        expect(window.history.length).toBe(1);
+        expect(success.url()).toBe(`${PAGE_URL}?x=1`);
+        expect(success.historyLength()).toBe(1);
     });
 
-    it('scrubs a malformed fragment and leaves the fields empty', () => {
-        const { window, field } = start(`${PAGE_URL}#%ZZ`);
+    it('scrubs a mangled fragment and leaves the fields empty', () => {
+        const success = openSuccessPage({ link: 'mangled' });
 
-        expect(window.location.href).toBe(PAGE_URL);
-        expect(field('password-display').value).toBe('');
-        expect(field('share-link-with-password').value).toBe('');
+        expect(success.url()).toBe(PAGE_URL);
+        expect(passwordField()).toHaveValue('');
+        expect(screen.getByLabelText('One-click link with password')).toHaveValue('');
     });
 });

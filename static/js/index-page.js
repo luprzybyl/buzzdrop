@@ -211,19 +211,17 @@ export function initIndex(root, deps) {
     const passwordInput = /** @type {HTMLInputElement | null} */ (root.getElementById('shared-password'));
     const generatePasswordBtn = root.getElementById('generate-password-btn');
     const strengthRegion = root.getElementById('password-strength');
+    const strengthMeter = root.getElementById('password-strength-meter');
     const strengthBar = root.getElementById('password-strength-bar');
     const strengthText = root.getElementById('password-strength-text');
     const passwordError = root.getElementById('password-error');
 
-    const STRENGTH_FILL = {
-        weak: 'pw-fill-weak',
-        fair: 'pw-fill-fair',
-        strong: 'pw-fill-strong',
-    };
-    const STRENGTH_TEXT = {
-        weak: 'pw-text-weak',
-        fair: 'pw-text-fair',
-        strong: 'pw-text-strong',
+    // Per level: the bar's and the message's colour, and the word the meter
+    // reports to assistive tech (the colour carries it on screen).
+    const STRENGTH = {
+        weak: { fill: 'pw-fill-weak', text: 'pw-text-weak', label: 'Weak' },
+        fair: { fill: 'pw-fill-fair', text: 'pw-text-fair', label: 'Fair' },
+        strong: { fill: 'pw-fill-strong', text: 'pw-text-strong', label: 'Strong' },
     };
 
     /**
@@ -235,19 +233,25 @@ export function initIndex(root, deps) {
     }
 
     function updatePasswordStrength() {
-        if (!passwordInput || !strengthRegion || !strengthBar || !strengthText) {
+        if (!passwordInput || !strengthRegion || !strengthMeter || !strengthBar || !strengthText) {
             return;
         }
         const result = assessPassword(passwordInput.value);
         if (result.level === 'empty') {
-            strengthRegion.classList.add('hidden');
+            strengthRegion.hidden = true;
             return;
         }
-        strengthRegion.classList.remove('hidden');
-        strengthBar.className = `pw-fill ${STRENGTH_FILL[result.level]}`;
+        strengthRegion.hidden = false;
+        const level = STRENGTH[result.level];
+        strengthBar.className = `pw-fill ${level.fill}`;
         // Scale ~90 bits to a full bar so "fair" doesn't read as nearly done.
-        strengthBar.style.width = `${Math.min(100, Math.round((result.bits / 90) * 100))}%`;
-        strengthText.className = `field-help ${STRENGTH_TEXT[result.level]}`;
+        // The meter holds the fill once, for the bar's width and for
+        // assistive tech alike.
+        const fill = Math.min(100, Math.round((result.bits / 90) * 100));
+        strengthMeter.style.setProperty('--strength-fill', `${fill}%`);
+        strengthMeter.setAttribute('aria-valuenow', String(fill));
+        strengthMeter.setAttribute('aria-valuetext', level.label);
+        strengthText.className = `field-help ${level.text}`;
         strengthText.textContent = result.message;
     }
 
@@ -386,6 +390,7 @@ export function initIndex(root, deps) {
         progressContainer.style.display = 'flex';
         progressBar.style.width = '0%';
         progressText.textContent = '0%';
+        progressContainer.setAttribute('aria-valuenow', '0');
 
         const xhr = new deps.XMLHttpRequest();
         xhr.open('POST', uploadEndpoints.uploadUrl, true);
@@ -397,6 +402,7 @@ export function initIndex(root, deps) {
                 const percent = Math.round((e.loaded / e.total) * 100);
                 progressBar.style.width = percent + '%';
                 progressText.textContent = percent + '%';
+                progressContainer.setAttribute('aria-valuenow', String(percent));
             }
         };
 
@@ -455,7 +461,7 @@ export function initIndex(root, deps) {
         const chipName = root.getElementById('file-selected-name');
         if (!chip || !chipName) return;
         chipName.textContent = file ? file.name : '';
-        chip.classList.toggle('hidden', !file);
+        chip.hidden = !file;
     }
 
     /**
@@ -639,7 +645,7 @@ export function initIndex(root, deps) {
     }
 
     root.querySelectorAll('.copy-url').forEach(el => {
-        const flash = el.querySelector('.copy-flash');
+        const flash = /** @type {HTMLElement | null} */ (el.querySelector('.copy-flash'));
         /** @type {ReturnType<typeof setTimeout> | undefined} */
         let flashTimer;
 
@@ -656,11 +662,11 @@ export function initIndex(root, deps) {
             if (flash) {
                 flash.textContent = label;
                 flash.classList.toggle('copy-flash-error', failed);
-                flash.classList.remove('hidden');
+                flash.hidden = false;
             }
             clearTimeout(flashTimer);
             flashTimer = setTimeout(() => {
-                if (flash) flash.classList.add('hidden');
+                if (flash) flash.hidden = true;
                 // Emptying it means the next copy writes fresh text, which is
                 // what makes assistive tech announce it again.
                 setCopyStatus('');

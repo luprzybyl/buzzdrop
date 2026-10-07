@@ -85,10 +85,13 @@ export async function initView(root, deps) {
 
     // Shuts the password step while a try is in flight, or for good when the
     // share can't be opened; the attempts warning doesn't come back either way.
+    // The field stops pointing at it too: a description reference reads even
+    // hidden text, so it would keep announcing the count it no longer shows.
     function lockForm() {
         decryptBtn.disabled = true;
         passInput.disabled = true;
         attemptsWarning.hidden = true;
+        passInput.removeAttribute('aria-describedby');
     }
 
     /** @type {Bytes} */
@@ -142,12 +145,14 @@ export async function initView(root, deps) {
             status.textContent = 'Text decrypted successfully.';
             decryptForm.style.display = 'none';
 
-            // Add copy functionality
+            // Add copy functionality. The button's name stays "Copy text", so
+            // the flash on it is visual; the status line announces the copy.
             const btn = required(root, '#copy-text-btn', 'button');
             btn.addEventListener('click', () => {
                 window.navigator.clipboard.writeText(text).then(() => {
                     const originalText = btn.textContent;
                     btn.textContent = 'Copied!';
+                    status.textContent = 'Text copied to clipboard.';
                     setTimeout(() => {
                         btn.textContent = originalText;
                     }, 2000);

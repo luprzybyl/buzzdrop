@@ -34,19 +34,28 @@ export function browserDeps() {
 export function initUsers(root, deps) {
     const csrfToken = /** @type {HTMLMetaElement | null} */ (root.querySelector('meta[name="csrf-token"]'))?.content || '';
 
-    /** @param {HTMLButtonElement} button */
+    /**
+     * The button's name stays "Copy token", so the flash on its label is
+     * visual; the status region announces the copy.
+     * @param {HTMLButtonElement} button
+     */
     function flashCopied(button) {
         const label = button.querySelector('.copy-label');
+        const status = root.getElementById('copy-status');
         if (!label) return;
         label.textContent = 'Copied!';
+        if (status) status.textContent = 'Token copied to clipboard.';
         setTimeout(() => {
             label.textContent = 'Copy';
+            // Emptying it means the next copy writes fresh text, which is
+            // what makes assistive tech announce it again.
+            if (status) status.textContent = '';
         }, 2000);
     }
 
     /** @param {HTMLButtonElement} button */
     async function generateToken(button) {
-        const card = requiredClosest(button, '.token-card', 'div');
+        const card = requiredClosest(button, '.token-card', 'section');
         const result = required(card, '.token-result', 'div');
         const input = required(card, '.generated-token-input', 'input');
         const expires = required(card, '.token-expires', 'p');

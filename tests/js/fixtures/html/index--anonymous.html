@@ -117,7 +117,7 @@
 
         
         <div class="animate-zoom-in delay-2 flex justify-center lg:justify-end">
-            <div id="flow-stage" class="flow-stage" data-step="0">
+            <div id="flow-stage" class="flow-stage" data-step="0" role="region" aria-label="How a drop works">
                 <div class="flow-window">
                     <div class="flow-topbar" aria-hidden="true">
                         <span class="flow-title">How a drop works</span>
@@ -132,7 +132,7 @@
                     </div>
 
                     <ol class="flow-body">
-                        <li class="flow-step is-active">
+                        <li class="flow-step is-active" aria-current="step">
                             <div class="flow-art" aria-hidden="true">
                                 <div class="flow-seg">
                                     <span class="flow-seg-thumb"></span>
@@ -228,7 +228,7 @@
                         <svg data-flow-icon="pause" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path d="M6 4h3v12H6zM11 4h3v12h-3z"/>
                         </svg>
-                        <svg data-flow-icon="play" class="hidden h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <svg data-flow-icon="play" class="h-3.5 w-3.5" hidden viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path d="M7 4.5v11l9-5.5z"/>
                         </svg>
                     </button>
