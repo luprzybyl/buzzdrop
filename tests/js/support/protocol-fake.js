@@ -731,12 +731,13 @@ export function makeProtocolFake(opts = {}) {
 
     /**
      * Build a valid, uploaded share directly — for view-only tests, which
-     * start where the index page left off. Returns its file_id.
+     * start where the index page left off. Returns its file_id. The DOM
+     * layer passes its stub crypto, so the share matches what its page derives.
      * @param {{ password: string, plaintext: string | Bytes, name?: string, expiry?: string }} share
+     * @param {Pick<CryptoService, 'encrypt' | 'receiptHash'>} [cryptoService]
      * @returns {Promise<string>}
      */
-    async function seedShare({ password, plaintext, name = 'report.pdf', expiry }) {
-        const cryptoService = new CryptoService();
+    async function seedShare({ password, plaintext, name = 'report.pdf', expiry }, cryptoService = new CryptoService()) {
         /** @type {Bytes} */
         const h = crypto.getRandomValues(new Uint8Array(32));
         const data = typeof plaintext === 'string' ? new TextEncoder().encode(plaintext) : plaintext;

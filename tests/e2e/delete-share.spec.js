@@ -13,8 +13,8 @@ test('the uploader deletes a file and the link is dead', async ({ page, recipien
 
     // Other tests' files share the list, so search for this one's own row.
     await page.goto('/');
-    await page.locator('#shared-files-search').fill(file.name);
-    const row = page.locator('.shared-file-row', { hasText: file.name });
+    await page.getByRole('searchbox', { name: 'Quick search' }).fill(file.name);
+    const row = page.getByRole('article', { name: file.name });
     await expect(row).toHaveCount(1);
 
     page.once('dialog', (dialog) => dialog.accept());

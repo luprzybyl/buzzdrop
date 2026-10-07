@@ -6,6 +6,8 @@ export default defineConfig({
     test: {
         environment: 'happy-dom',
         include: ['tests/js/dom/**/*.test.js', 'tests/js/integration/**/*.test.js'],
+        // jest-dom's matchers, and closing every page a driver opened.
+        setupFiles: ['tests/js/support/setup.js'],
         coverage: {
             provider: 'v8',
             include: ['static/js/**'],

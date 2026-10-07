@@ -26,7 +26,9 @@ From [Choose the runner and DOM environment for DOM + JS-integration tests](http
 - **Node 24** via a committed `.nvmrc`.
 - **npm scripts:** `test:unit` (today's `test:js`, renamed), `test:dom` (`vitest run --coverage`), `test` (both), `fixtures` (regenerates the DOM fixtures and the protocol contract), `typecheck` (`tsc -p jsconfig.json`).
 - **Type checking** (from [#203](https://github.com/luprzybyl/buzzdrop/issues/203)): `tsc --checkJs` under `strict` checks `static/js/` and `tests/js/` from their JSDoc, with no build step and no `.ts` files (`noEmit`; the browser loads the same `.js`). Config: root `jsconfig.json`; devDeps `typescript` and `@types/node`. Its `include` is all of `static/js/**/*.js` and `tests/js/**/*.js`. No `@ts-ignore`/`@ts-nocheck`; an `@ts-expect-error` carries a one-line reason.
-- **Typed DOM tests:** page modules are typed against lib.dom, happy-dom's window against its own classes. Tests drive the page through `browserView(window)` from `tests/js/support/dom-fixture.js`, the one bridge between the two.
+- **Typed DOM tests:** page modules are typed against lib.dom, happy-dom's window against its own classes. The page drivers (§7a) open each page through `browserView(window)` from `tests/js/support/dom-fixture.js`, the one bridge between the two.
+- **Testing Library** (from [#235](https://github.com/luprzybyl/buzzdrop/issues/235)): devDeps `@testing-library/dom` (queries), `@testing-library/jest-dom` (matchers such as `toBeDisabled`, `toBeVisible`, `toHaveAccessibleName`) and `@testing-library/user-event` (typing, clicking, keys, file upload), plus `dom-accessibility-api` for the accessible names a driver lists. `tests/js/support/setup.js` is Vitest's `setupFiles` entry: it registers the jest-dom matchers and, after each test, restores timers and mocks and closes every page a driver opened. Queries go through the driver's page, never Testing Library's own `screen`, which is bound to the global document rather than to a fixture's window.
+- **happy-dom and visibility:** happy-dom ignores CSS inside `@layer`, which is all Tailwind v4 emits, and has no built-in style for `[hidden]`. Testing Library and jest-dom do check the `hidden` attribute themselves, and inline `style="display: none"` is honoured. So page scripts show and hide with the `hidden` attribute (Tailwind's preflight hides `[hidden]` with `!important` in the browser) or inline `display`, never by toggling the `.hidden` class. A test that has to see an element appear or disappear depends on this.
 - **Coverage** is reported, not gated.
 
 ## 3. Testability refactor of page scripts
@@ -45,7 +47,7 @@ From [What shape should the testability refactor of page scripts take?](https://
 
   **Not passed in:** the DOM (it comes in as `root`), `history`, `clipboard`, and reads of `location`. happy-dom models these, and tests assert on them directly.
 - **`success.js` and `confirm-download.js` become ES modules** (`type="module"` in their templates).
-- **Template-guaranteed elements** are looked up with `required(parent, selector, tag)` / `requiredClosest(element, selector, tag)` from `static/js/required.js`: a missing element or wrong tag throws a named error, and the tag gives the element's type with no cast. Elements a template may really lack keep a plain null check.
+- **Template-guaranteed elements** are looked up with `required(parent, selector, tag)` / `requiredClosest(element, selector, tag)` from `static/js/required.js`: a missing element or wrong tag throws a named error, and the tag gives the element's type with no cast. Elements a template may really lack keep a plain null check. This is page code only; tests and drivers find elements by role, label or text (§7b).
 - **Upload `FormData`:** the file and note copies in the index page are merged into one local `appendShareOptions(formData, opts)`.
 
 ### Pure-module extraction
@@ -152,16 +154,16 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 ### DOM (Vitest + happy-dom, against the template fixtures)
 - **Index page (`main.js`):**
   - Tab switching, including arrow/Home/End keys and ARIA state.
-  - Strength meter: one scenario per level (weak/fair/strong); empty → hidden; width capped at 100% for ≥90 bits.
+  - Strength meter (`role="meter"`): one scenario per level (weak/fair/strong, its `aria-valuetext`); empty → hidden; `aria-valuenow` capped at 100 for ≥90 bits.
   - The generate-passphrase button.
   - Dropzone: a disallowed extension shows the error and no chip; the selected-file chip; the error regions.
   - Copy-to-clipboard status.
   - Delete confirmation via `data-confirm-message`.
   - Shared files: search, sort, pagination and their URL sync. Status refresh updates the row and re-renders (one row, stubbed `fetch`).
-- **View page (`view.js`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment, submitting the form (what Enter does) without navigating, the status line as a live region.
+- **View page (`view.js`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment, Enter in the field decrypting without navigating, Decrypt disabled until the share has downloaded, the attempts warning (and the field's description of it) going after the first try, the status line as a live region.
 - **Success page (`success.js`):** copy link and one-click link, password visibility toggle, the field filled from a well-formed fragment.
 - **Confirm page (`confirm-download.js`):** the fragment password carried across the confirm POST (one well-formed case).
-- **Hero flow (`hero-flow.js`):** reduced motion means no autoplay; the toggle pauses it.
+- **Hero flow (`hero-flow.js`):** reduced motion means no autoplay; the toggle pauses it. The stage on screen is the list item with `aria-current="step"`.
 - **Users page (`users.js`, admin):** Generate shows the token and its expiry and re-enables the button; a server error shows its message; the request carries the CSRF header; Copy shows "Copied!".
 
 ### JS integration (page modules + real `crypto.js` + protocol fake)
@@ -210,6 +212,40 @@ Each row is a small mistake and the layer that must catch it. A test that owns a
 | 10 | Progress display removed | Integration |
 | 11 | Key derivation or envelope diverges between browser and CLI | Unit (byte-identical BKV3 fixtures) |
 | 12 | Server releases H twice, or skips the lockout | Python (`tests/integration/test_key_release.py`) |
+
+## 7a. Page drivers
+
+From [Frontend tests: drive pages through user-behaviour helpers instead of setup details](https://github.com/luprzybyl/buzzdrop/issues/235).
+
+**Tests say what the user does; one driver per page says how.** A DOM or JS-integration test never loads a fixture, calls `init<Page>()`, stubs `fetch` or crypto, builds an event, or looks an element up by selector. It opens the page through its driver, acts through the driver's verbs, and asserts on what the user can perceive.
+
+- **Where:** `tests/js/support/pages/`, one module per page, on a shared core:
+
+  | Module | Opens | Verbs (examples) |
+  |---|---|---|
+  | `page.js` | the core: a fixture in its own happy-dom window, Testing Library queries bound to it, a user-event session | `openPage`, `screen`, `waitUntil`, `typeable` |
+  | `upload.js` | `openUploadPage(options)` (index, logged in), `openLandingPage(options)` (index, anonymous, with the hero) | `switchToNote`, `writeMessage`, `selectFile`, `dropFile`, `enterPassword`, `generatePassword`, `setShareOptions`, `share`, `shareFile`, `shareMessage`, `press`, `searchShares`, `sortSharesBy`, `nextSharesPage`, `copyShareLink`, `deleteShare`; `pauseWalkthrough`, `pointAtWalkthrough` |
+  | `success.js` | `openSuccessPage(options)` | `copyShareLink`, `copyOneClickLink`, `revealPassword`, `hidePassword` |
+  | `confirm.js` | `openConfirmPage(options)` | `proceedToView` |
+  | `view.js` | `openShare(options)` | `decryptWithPassword`, `decryptWithEnter`, `copyMessage`, `finishDownload` |
+  | `users.js` | `openUsersPage(options)` | `generateToken`, `startGeneratingToken`, `finishTokenRequest`, `copyToken` |
+
+- **Naming rule:** verbs are what a user does, in the app's own words ("share", "decrypt", "proceed", "Copy one-click link"), not what the code does. Options describe the user's situation in app terms, and the driver turns them into fixtures, fixture edits, protocol-fake state and crypto stubs: `openShare({ type: 'message', link: 'one-click', maxAttempts: 3, server: 'claimed', download: 'in-progress', share: 'unsupported-format' })`, `openUploadPage({ account: 'with-email', sharesPerPage: 2, clipboard: 'blocked' })`, `enterPassword({ strength: 'weak' })`, `share({ server: 'too-large' })`. No test spells out an HTTP status or body.
+- **Server situations come from the protocol fake** (§5–§6). The view and upload drivers put the page in front of a fake in both layers; a situation is produced by the fake's own state where it can be (a wrong password, a share someone already claimed or burned, a lockout) and by `failNext` otherwise (500, network, 413, rate limits). Drivers add no hand-written responses for the five protocol routes. Routes outside the fake (the shared-files status poll, `/api/token`) are answered by their driver.
+- **One driver, two layers.** A driver takes `crypto: 'stub' | 'real'`: DOM tests run the stub (`tests/js/support/stub-crypto.js`: no PBKDF2, but a verifier the fake can check and a receipt matching the share's `receipt_hash`), JS-integration tests run the real `crypto.js`. An integration test can hand one fake from the upload driver to `openShare({ uploaded: { backend, fileId } })` for a browser-only round trip.
+- **What a driver returns:** verbs, plus the outcomes a test can't see on screen: `url()`, `historyLength()`, `clipboardText()`, `formsSubmitted()` (submissions the page let through, which would navigate), `storage()`, `reportsSent()`, `requestsSent()`, `navigatedTo()`, `alerts()`, `sharesIssued()`, `progressShown()`, `savedFile()`, and the fake itself (`backend`) for checks on server state. It hands out **no element handles**: everything on screen is asserted through Testing Library (§7b).
+- **Lifecycle:** each `open…` call is a fresh page; `screen` queries the page opened last; the setup file closes them all after each test.
+- Drivers are JSDoc-typed and pass `npm run typecheck`.
+
+## 7b. Querying through accessibility
+
+From [#235](https://github.com/luprzybyl/buzzdrop/issues/235). Tests and drivers find elements the way a user or a screen reader does, and assert what that user perceives.
+
+- **Query order:** role first (`getByRole('button', { name: 'Decrypt and view' })`, `getByRole('tab', { name: 'Text note' })`, `getByRole('status')`, `getByRole('region', { name: 'Decrypted text' })`, `getByRole('article', { name })` for a share row), label next (`getByLabelText('Password')`), text last, and only for plain prose with no role (`getByText('Page 1 of 2')`). **Never** by `#id`, `data-testid`, class or `querySelector`; `within(element)` scopes a query to a row or card.
+- **Assertions on perceivable state:** `toBeDisabled`/`toBeEnabled`, `toBeVisible`, `toHaveFocus`, `toHaveValue`, `toHaveTextContent`, `toHaveAccessibleName`, `toHaveAccessibleDescription`, `toHaveAttribute('aria-…')`. **Not** `.disabled`, `.style.display`, `.classList`, `.hidden` or `.textContent` on elements found by id. Role queries leave out hidden elements, so "no longer shown" is `queryByRole(…)` returning null, or `not.toBeVisible()` for text.
+- **When a query can't find something, fix the page, not the test.** #235 gave the pages the semantics the tests (and users) rely on: live regions with a role (the view page's `status`, the named `Clipboard` status on index and success, `alert` for the token error), a `meter` for password strength and a `progressbar` for uploads, named regions for the decrypted note, the walkthrough, the drop list and each token card, named share rows, real `<button>`s for copying a share link, stable names for copy buttons (`Copy link`, `Copy one-click link`, `Copy token`), errors tied to their fields with `aria-describedby`, and `aria-current="step"` on the walkthrough. Page scripts may keep looking elements up by id internally; this is about what the page exposes.
+- **Visual-only state** (a badge's colour, which icon a toggle shows) has nothing to perceive beyond its text or name, and is asserted through those.
+- **E2E** uses Playwright's equivalents (`getByRole`, `getByLabel`, `getByText`), never `page.locator('#…')` or a class, and the recipient's steps go through the verbs in `tests/e2e/support.js` (`proceedToView`, `decryptWithPassword`, `decryptWithEnter`, `decryptFile`, `decryptMessage`, `oneClickLink`).
 
 ## 8. E2E harness and test profile
 

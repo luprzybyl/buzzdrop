@@ -46,7 +46,7 @@ export function initUsers(root, deps) {
 
     /** @param {HTMLButtonElement} button */
     async function generateToken(button) {
-        const card = requiredClosest(button, '.token-card', 'div');
+        const card = requiredClosest(button, '.token-card', 'section');
         const result = required(card, '.token-result', 'div');
         const input = required(card, '.generated-token-input', 'input');
         const expires = required(card, '.token-expires', 'p');

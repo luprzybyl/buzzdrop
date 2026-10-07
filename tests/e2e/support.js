@@ -35,13 +35,13 @@ export function uniqueFile() {
  */
 export async function logIn(page) {
     await page.goto('/login');
-    await page.locator('#username').fill(USER.username);
-    await page.locator('#password').fill(USER.password);
-    await page.locator('button[type="submit"]').click();
+    await page.getByLabel('Username').fill(USER.username);
+    await page.getByLabel('Password').fill(USER.password);
+    await page.getByRole('button', { name: 'Login' }).click();
     // Module scripts run before DOMContentLoaded: from then on the composer's
     // listeners are wired, and a click is not lost on a half-booted page.
     await page.waitForURL((url) => url.pathname === '/', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('#share-action-btn')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Share file' })).toBeVisible();
 }
 
 /**
@@ -53,9 +53,9 @@ export async function logIn(page) {
  * @returns {Promise<string>}
  */
 export async function shareFile(page, file, password) {
-    await page.locator('#file').setInputFiles(file);
-    await page.locator('#shared-password').fill(password);
-    await page.locator('#share-action-btn').click();
+    await page.getByLabel('Drop a file here, or browse').setInputFiles(file);
+    await page.getByLabel('Password', { exact: true }).fill(password);
+    await page.getByRole('button', { name: 'Share file' }).click();
     return shareLink(page);
 }
 
@@ -67,10 +67,10 @@ export async function shareFile(page, file, password) {
  * @returns {Promise<string>}
  */
 export async function shareNote(page, text, password) {
-    await page.locator('#text-tab').click();
-    await page.locator('#note-text').fill(text);
-    await page.locator('#shared-password').fill(password);
-    await page.locator('#share-action-btn').click();
+    await page.getByRole('tab', { name: 'Text note' }).click();
+    await page.getByLabel('Secret text').fill(text);
+    await page.getByLabel('Password', { exact: true }).fill(password);
+    await page.getByRole('button', { name: 'Share note' }).click();
     return shareLink(page);
 }
 
@@ -79,30 +79,125 @@ export async function shareNote(page, text, password) {
  * @returns {Promise<string>}
  */
 async function shareLink(page) {
-    const link = page.locator('#share-link');
+    const link = page.getByLabel('Link', { exact: true });
     await expect(link).toHaveValue(/\/view\//);
     return link.inputValue();
 }
 
 /**
- * Opens a share link and confirms, which consumes the share. Returns the
- * ciphertext the view page fetched, for tests that go on to talk to
+ * The one-click link the success page builds, password in the fragment.
+ * @param {Page} page - the success page
+ * @returns {Promise<string>}
+ */
+export async function oneClickLink(page) {
+    // success.js builds the link from the fragment once the page has loaded.
+    const field = page.getByLabel('One-click link with password');
+    await expect(field).toHaveValue(/\/view\/[^#]+#./);
+    return field.inputValue();
+}
+
+/**
+ * Presses Proceed on the confirm page, which consumes the share. Returns the
+ * ciphertext the view page then fetches, for tests that go on to talk to
  * /release themselves.
+ * @param {Page} page - the confirm page
+ * @returns {Promise<Bytes>}
+ */
+export async function proceedToView(page) {
+    const [download] = await Promise.all([
+        page.waitForResponse((response) => new URL(response.url()).pathname.startsWith('/download/')),
+        page.getByRole('button', { name: /^Proceed to / }).click(),
+    ]);
+    return new Uint8Array(await download.body());
+}
+
+/**
+ * Opens a share link and proceeds, which consumes the share. Returns the
+ * ciphertext, as proceedToView does.
  * @param {Page} page
  * @param {string} link
  * @returns {Promise<Bytes>}
  */
 export async function openShare(page, link) {
     await page.goto(link);
-    const [download] = await Promise.all([
-        page.waitForResponse((response) => new URL(response.url()).pathname.startsWith('/download/')),
-        page.locator('#confirm-form button[type="submit"]').click(),
-    ]);
-    return new Uint8Array(await download.body());
+    return proceedToView(page);
 }
 
 /**
- * Opens a share link, confirms, and decrypts with the password. Returns the
+ * The view page's password field.
+ * @param {Page} page
+ */
+export function passwordField(page) {
+    return page.getByLabel('Password');
+}
+
+/**
+ * The view page's Decrypt button, for files and notes alike.
+ * @param {Page} page
+ */
+export function decryptButton(page) {
+    return page.getByRole('button', { name: /^Decrypt and / });
+}
+
+/**
+ * The view page's status line, which reports each outcome.
+ * @param {Page} page
+ */
+export function shareStatus(page) {
+    return page.getByRole('status');
+}
+
+/**
+ * Types the password and presses Decrypt.
+ * @param {Page} page - the view page
+ * @param {string} password
+ */
+export async function decryptWithPassword(page, password) {
+    await passwordField(page).fill(password);
+    await decryptButton(page).click();
+}
+
+/**
+ * Types the password and presses Enter in the field.
+ * @param {Page} page - the view page
+ * @param {string} password
+ */
+export async function decryptWithEnter(page, password) {
+    await passwordField(page).fill(password);
+    await passwordField(page).press('Enter');
+}
+
+/**
+ * Decrypts a file and returns the download it triggers. Without a password,
+ * presses Decrypt with the field as it is (a one-click link filled it in).
+ * @param {Page} page - the view page
+ * @param {string} [password]
+ * @returns {Promise<import('@playwright/test').Download>}
+ */
+export async function decryptFile(page, password) {
+    const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        password === undefined ? decryptButton(page).click() : decryptWithPassword(page, password),
+    ]);
+    return download;
+}
+
+/**
+ * Decrypts a note, submitting the password with Enter, and returns the text
+ * the page shows. Exact, not whitespace-normalised, so a decoding or
+ * trimming slip shows.
+ * @param {Page} page - the view page
+ * @param {string} password
+ * @returns {Promise<string | null>}
+ */
+export async function decryptMessage(page, password) {
+    await decryptWithEnter(page, password);
+    await expect(shareStatus(page)).toHaveText('Text decrypted successfully.');
+    return page.getByRole('region', { name: 'Decrypted text' }).textContent();
+}
+
+/**
+ * Opens a share link, proceeds, and decrypts with the password. Returns the
  * download the decrypt triggers.
  * @param {Page} page
  * @param {string} link
@@ -111,20 +206,7 @@ export async function openShare(page, link) {
  */
 export async function decryptShare(page, link, password) {
     await openShare(page, link);
-    await page.locator('#password-input').fill(password);
-    return clickDecryptForDownload(page);
-}
-
-/**
- * @param {Page} page - the view page, password filled in
- * @returns {Promise<import('@playwright/test').Download>}
- */
-export async function clickDecryptForDownload(page) {
-    const [download] = await Promise.all([
-        page.waitForEvent('download'),
-        page.locator('#decrypt-btn').click(),
-    ]);
-    return download;
+    return decryptFile(page, password);
 }
 
 /**
@@ -172,17 +254,19 @@ export function shareUrl(link, route) {
  * @returns {import('@playwright/test').Locator}
  */
 export function flash(page) {
-    return page.locator('.alert-banner');
+    // A success flash is a status, an error flash an alert; the page's own
+    // live regions are the same roles, and empty until something happens.
+    return page.getByRole('status').or(page.getByRole('alert')).filter({ hasText: /\S/ });
 }
 
 /**
  * The share link leads nowhere: the index bounces it with "File not found"
- * and offers no confirm form.
+ * and offers no way to proceed.
  * @param {Page} page
  * @param {string} link
  */
 export async function expectDeadLink(page, link) {
     await page.goto(link);
     await expect(flash(page)).toHaveText('File not found');
-    await expect(page.locator('#confirm-form')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Proceed to / })).toHaveCount(0);
 }

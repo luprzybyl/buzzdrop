@@ -11,15 +11,18 @@ const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixture
  * fresh happy-dom window, so listeners and state from one test can't leak into
  * the next. `settings` are happy-dom browser settings, e.g.
  * { device: { prefersReducedMotion: 'reduce' } }; `url` is the page's address,
- * for pages that read it (a password fragment, say).
+ * for pages that read it (a password fragment, say). `edit` rewrites the
+ * fixture's HTML before it loads, for what the server would render differently
+ * (another share's id, a smaller page size).
  * @param {string} name
  * @param {import('happy-dom').IOptionalBrowserSettings} [settings]
  * @param {string} [url]
+ * @param {(html: string) => string} [edit]
  * @returns {Window}
  */
-export function loadFixture(name, settings = {}, url = 'http://localhost/') {
+export function loadFixture(name, settings = {}, url = 'http://localhost/', edit = (html) => html) {
     const window = new Window({ url, settings });
-    window.document.write(readFileSync(join(FIXTURE_DIR, `${name}.html`), 'utf8'));
+    window.document.write(edit(readFileSync(join(FIXTURE_DIR, `${name}.html`), 'utf8')));
     return window;
 }
 

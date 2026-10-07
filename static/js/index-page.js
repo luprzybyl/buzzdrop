@@ -211,6 +211,7 @@ export function initIndex(root, deps) {
     const passwordInput = /** @type {HTMLInputElement | null} */ (root.getElementById('shared-password'));
     const generatePasswordBtn = root.getElementById('generate-password-btn');
     const strengthRegion = root.getElementById('password-strength');
+    const strengthMeter = root.getElementById('password-strength-meter');
     const strengthBar = root.getElementById('password-strength-bar');
     const strengthText = root.getElementById('password-strength-text');
     const passwordError = root.getElementById('password-error');
@@ -225,6 +226,12 @@ export function initIndex(root, deps) {
         fair: 'pw-text-fair',
         strong: 'pw-text-strong',
     };
+    // What the meter reports to assistive tech; the colour carries it on screen.
+    const STRENGTH_LABEL = {
+        weak: 'Weak',
+        fair: 'Fair',
+        strong: 'Strong',
+    };
 
     /**
      * Same always-present-region pattern as #file-error: only the text swaps.
@@ -235,18 +242,21 @@ export function initIndex(root, deps) {
     }
 
     function updatePasswordStrength() {
-        if (!passwordInput || !strengthRegion || !strengthBar || !strengthText) {
+        if (!passwordInput || !strengthRegion || !strengthMeter || !strengthBar || !strengthText) {
             return;
         }
         const result = assessPassword(passwordInput.value);
         if (result.level === 'empty') {
-            strengthRegion.classList.add('hidden');
+            strengthRegion.hidden = true;
             return;
         }
-        strengthRegion.classList.remove('hidden');
+        strengthRegion.hidden = false;
         strengthBar.className = `pw-fill ${STRENGTH_FILL[result.level]}`;
         // Scale ~90 bits to a full bar so "fair" doesn't read as nearly done.
-        strengthBar.style.width = `${Math.min(100, Math.round((result.bits / 90) * 100))}%`;
+        const fill = Math.min(100, Math.round((result.bits / 90) * 100));
+        strengthBar.style.width = `${fill}%`;
+        strengthMeter.setAttribute('aria-valuenow', String(fill));
+        strengthMeter.setAttribute('aria-valuetext', STRENGTH_LABEL[result.level]);
         strengthText.className = `field-help ${STRENGTH_TEXT[result.level]}`;
         strengthText.textContent = result.message;
     }
@@ -386,6 +396,7 @@ export function initIndex(root, deps) {
         progressContainer.style.display = 'flex';
         progressBar.style.width = '0%';
         progressText.textContent = '0%';
+        progressContainer.setAttribute('aria-valuenow', '0');
 
         const xhr = new deps.XMLHttpRequest();
         xhr.open('POST', uploadEndpoints.uploadUrl, true);
@@ -397,6 +408,7 @@ export function initIndex(root, deps) {
                 const percent = Math.round((e.loaded / e.total) * 100);
                 progressBar.style.width = percent + '%';
                 progressText.textContent = percent + '%';
+                progressContainer.setAttribute('aria-valuenow', String(percent));
             }
         };
 
@@ -455,7 +467,7 @@ export function initIndex(root, deps) {
         const chipName = root.getElementById('file-selected-name');
         if (!chip || !chipName) return;
         chipName.textContent = file ? file.name : '';
-        chip.classList.toggle('hidden', !file);
+        chip.hidden = !file;
     }
 
     /**
@@ -639,7 +651,7 @@ export function initIndex(root, deps) {
     }
 
     root.querySelectorAll('.copy-url').forEach(el => {
-        const flash = el.querySelector('.copy-flash');
+        const flash = /** @type {HTMLElement | null} */ (el.querySelector('.copy-flash'));
         /** @type {ReturnType<typeof setTimeout> | undefined} */
         let flashTimer;
 
@@ -656,11 +668,11 @@ export function initIndex(root, deps) {
             if (flash) {
                 flash.textContent = label;
                 flash.classList.toggle('copy-flash-error', failed);
-                flash.classList.remove('hidden');
+                flash.hidden = false;
             }
             clearTimeout(flashTimer);
             flashTimer = setTimeout(() => {
-                if (flash) flash.classList.add('hidden');
+                if (flash) flash.hidden = true;
                 // Emptying it means the next copy writes fresh text, which is
                 // what makes assistive tech announce it again.
                 setCopyStatus('');

@@ -3,7 +3,7 @@
 // fragment is scrubbed from the address bar on the way.
 import { readFile } from 'node:fs/promises';
 import { test, expect } from './fixtures.js';
-import { clickDecryptForDownload, logIn, shareFile, uniqueFile } from './support.js';
+import { decryptFile, logIn, oneClickLink, passwordField, proceedToView, shareFile, shareStatus, uniqueFile } from './support.js';
 
 test('a one-click link decrypts without typing and loses its fragment', async ({ page, recipient, sharePassword }) => {
     const file = uniqueFile();
@@ -11,22 +11,19 @@ test('a one-click link decrypts without typing and loses its fragment', async ({
 
     await logIn(page);
     await shareFile(page, file, password);
-    // success.js builds the link from the fragment once the page has loaded.
-    const oneClickField = page.locator('#share-link-with-password');
-    await expect(oneClickField).toHaveValue(/\/view\/[^#]+#./);
-    const oneClickLink = await oneClickField.inputValue();
+    const link = await oneClickLink(page);
 
-    await recipient.goto(oneClickLink);
-    await expect(recipient.locator('#password-hint')).toContainText('This link already carries the key');
+    await recipient.goto(link);
+    await expect(recipient.getByText('This link already carries the key', { exact: false })).toBeVisible();
     expect(recipient.url()).not.toContain('#');
 
-    await recipient.locator('#confirm-form button[type="submit"]').click();
-    await expect(recipient.locator('#password-status')).toBeVisible();
-    await expect(recipient.locator('#password-input')).toHaveValue(password);
+    await proceedToView(recipient);
+    await expect(recipient.getByText('Your link included the password', { exact: false })).toBeVisible();
+    await expect(passwordField(recipient)).toHaveValue(password);
     expect(recipient.url()).not.toContain('#');
 
-    const download = await clickDecryptForDownload(recipient);
+    const download = await decryptFile(recipient);
     expect((await readFile(await download.path())).equals(file.buffer)).toBe(true);
-    await expect(recipient.locator('#status')).toHaveText('Download complete.');
+    await expect(shareStatus(recipient)).toHaveText('Download complete.');
     expect(recipient.url()).not.toContain('#');
 });

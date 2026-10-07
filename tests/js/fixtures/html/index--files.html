@@ -127,12 +127,12 @@
                             <path d="M24 32V17m0 0-6.5 6.5M24 17l6.5 6.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                         <div class="space-y-1">
-                            <p class="text-base font-semibold text-white">
+                            <p id="dropzone-label" class="text-base font-semibold text-white">
                                 Drop a file here, or <span class="text-honey-300 underline decoration-honey-400/40 underline-offset-4">browse</span>
                             </p>
                             <p class="dropzone-hint text-sm text-slate-400">It is encrypted on this device before a single byte leaves it.</p>
                         </div>
-                        <p id="file-selected" class="hidden">
+                        <p id="file-selected" hidden>
                             <span class="file-chip">
                                 <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M4 4a2 2 0 0 1 2-2h4.586A2 2 0 0 1 12 2.586L15.414 6A2 2 0 0 1 16 7.414V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Zm6 0v3a1 1 0 0 0 1 1h3l-4-4Z" clip-rule="evenodd"/>
@@ -145,7 +145,7 @@
                             <p class="mx-auto max-w-sm text-xs leading-5 text-slate-600">DOC · DOCX · GIF · JPEG · JPG · MP4 · PDF · PNG · TXT · XLS · XLSX</p>
                         </div>
                     </div>
-                    <input id="file" name="file" type="file" class="sr-only" required>
+                    <input id="file" name="file" type="file" class="sr-only" aria-labelledby="dropzone-label" aria-describedby="file-error" required>
                 </label>
                 <p id="file-error" class="file-error" role="alert"></p>
             </form>
@@ -162,7 +162,7 @@
                 <div>
                     <label for="shared-password" class="field-label">Password</label>
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                        <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" required autocomplete="new-password">
+                        <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" aria-describedby="password-error" required autocomplete="new-password">
                         <button id="generate-password-btn" type="button" class="btn-secondary shrink-0 whitespace-nowrap px-4 py-3 text-xs sm:w-auto" title="Generate a 6-word passphrase (about 77 bits of entropy)">
                             <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.451a.75.75 0 0 0 0-1.5H4.5a.75.75 0 0 0-.75.75v3.75a.75.75 0 0 0 1.5 0v-2.033l.364.363a7 7 0 0 0 11.712-3.15.75.75 0 0 0-1.449-.388 5.51 5.51 0 0 1-.435 1.063ZM8.858 8.576a5.5 5.5 0 0 1 9.201-2.466l.312.311H15.92a.75.75 0 0 0 0 1.5h3.75a.75.75 0 0 0 .75-.75V3.421a.75.75 0 0 0-1.5 0v2.033l-.364-.363A7 7 0 0 0 6.894 8.24a.75.75 0 0 0 1.449.388c.14-.021.28-.042.415-.052Z" clip-rule="evenodd"/>
@@ -170,8 +170,8 @@
                             Generate
                         </button>
                     </div>
-                    <div id="password-strength" class="mt-2 hidden" aria-live="polite">
-                        <div class="honey-track">
+                    <div id="password-strength" class="mt-2" aria-live="polite" hidden>
+                        <div id="password-strength-meter" class="honey-track" role="meter" aria-label="Password strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="password-strength-text">
                             <div id="password-strength-bar" class="pw-fill" style="width: 0%"></div>
                         </div>
                         <p id="password-strength-text" class="field-help"></p>
@@ -231,7 +231,7 @@
                         </svg>
                     </button>
                 </div>
-                <div id="share-progress-container" class="mt-4 w-full items-center gap-3" style="display:none;">
+                <div id="share-progress-container" class="mt-4 w-full items-center gap-3" role="progressbar" aria-label="Upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="display:none;">
                     <div class="honey-track">
                         <div id="share-progress-bar" class="honey-bar" style="width: 0%"></div>
                     </div>
@@ -246,10 +246,10 @@
 
 
 <div class="mx-auto mt-10 max-w-5xl">
-    <div class="surface-card animate-fade-up delay-2 p-6 sm:p-8">
+    <section class="surface-card animate-fade-up delay-2 p-6 sm:p-8" aria-labelledby="shared-files-heading">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h2 class="text-xl font-semibold tracking-tight text-white">Your drops</h2>
+                <h2 id="shared-files-heading" class="text-xl font-semibold tracking-tight text-white">Your drops</h2>
                 <p class="mt-1 text-sm text-slate-400">Track every buzz and copy links without exposing your private notes.</p>
             </div>
             <span class="status-badge status-badge-slate">4 total</span>
@@ -275,17 +275,17 @@
 
         <div id="shared-files-list" class="mt-5 space-y-3" data-page-size="5" data-status-url="/api/user/files/status">
             
-            <article class="dashboard-item shared-file-row" data-file-id="00000000-0000-4000-8000-000000000001" data-search-base="report.pdf  2025-01-01 12:00:00 cet 2099-01-01 00:00:00 cet" data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="2099-01-01 00:00:00 CET" data-downloaded-at="" data-search-text="report.pdf  active  2025-01-01 12:00:00 cet 2099-01-01 00:00:00 cet ">
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000001" data-file-id="00000000-0000-4000-8000-000000000001" data-search-base="report.pdf  2025-01-01 12:00:00 cet 2099-01-01 00:00:00 cet" data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="2099-01-01 00:00:00 CET" data-downloaded-at="" data-search-text="report.pdf  active  2025-01-01 12:00:00 cet 2099-01-01 00:00:00 cet ">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
-                        <a href="#" class="copy-url group inline-flex max-w-full items-center gap-2 text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000001" title="Copy share link">
-                            <span class="truncate">report.pdf</span>
+                        <button type="button" class="copy-url group inline-flex max-w-full cursor-pointer items-center gap-2 text-left text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000001" aria-label="Copy the share link for report.pdf" title="Copy share link">
+                            <span id="shared-file-name-00000000-0000-4000-8000-000000000001" class="truncate">report.pdf</span>
                             <svg class="h-4 w-4 shrink-0 text-slate-600 transition group-hover:text-honey-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
                                 <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
                             </svg>
-                            <span class="copy-flash hidden" aria-hidden="true">Copied</span>
-                        </a>
+                            <span class="copy-flash" aria-hidden="true" hidden>Copied</span>
+                        </button>
                         
                         <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
                             <div class="flex gap-1.5">
@@ -318,17 +318,17 @@
                 </div>
             </article>
             
-            <article class="dashboard-item shared-file-row" data-file-id="00000000-0000-4000-8000-000000000002" data-search-base="secret note for the auditor 2025-01-01 12:00:00 cet " data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="" data-downloaded-at="" data-search-text="secret note for the auditor active  2025-01-01 12:00:00 cet  ">
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000002" data-file-id="00000000-0000-4000-8000-000000000002" data-search-base="secret note for the auditor 2025-01-01 12:00:00 cet " data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="" data-downloaded-at="" data-search-text="secret note for the auditor active  2025-01-01 12:00:00 cet  ">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
-                        <a href="#" class="copy-url group inline-flex max-w-full items-center gap-2 text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000002" title="Copy share link">
-                            <span class="truncate">Secret Note</span>
+                        <button type="button" class="copy-url group inline-flex max-w-full cursor-pointer items-center gap-2 text-left text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000002" aria-label="Copy the share link for Secret Note" title="Copy share link">
+                            <span id="shared-file-name-00000000-0000-4000-8000-000000000002" class="truncate">Secret Note</span>
                             <svg class="h-4 w-4 shrink-0 text-slate-600 transition group-hover:text-honey-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
                                 <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
                             </svg>
-                            <span class="copy-flash hidden" aria-hidden="true">Copied</span>
-                        </a>
+                            <span class="copy-flash" aria-hidden="true" hidden>Copied</span>
+                        </button>
                         
                             <p class="mt-2 text-sm text-slate-500">For the auditor</p>
                         
@@ -363,17 +363,17 @@
                 </div>
             </article>
             
-            <article class="dashboard-item shared-file-row" data-file-id="00000000-0000-4000-8000-000000000003" data-search-base="photo.png  2025-01-01 12:00:00 cet " data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="" data-downloaded-at="2025-01-02 09:30:00 CET" data-search-text="photo.png  active downloaded 2025-01-01 12:00:00 cet  203.0.113.7">
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000003" data-file-id="00000000-0000-4000-8000-000000000003" data-search-base="photo.png  2025-01-01 12:00:00 cet " data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="" data-downloaded-at="2025-01-02 09:30:00 CET" data-search-text="photo.png  active downloaded 2025-01-01 12:00:00 cet  203.0.113.7">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
-                        <a href="#" class="copy-url group inline-flex max-w-full items-center gap-2 text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000003" title="Copy share link">
-                            <span class="truncate">photo.png</span>
+                        <button type="button" class="copy-url group inline-flex max-w-full cursor-pointer items-center gap-2 text-left text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000003" aria-label="Copy the share link for photo.png" title="Copy share link">
+                            <span id="shared-file-name-00000000-0000-4000-8000-000000000003" class="truncate">photo.png</span>
                             <svg class="h-4 w-4 shrink-0 text-slate-600 transition group-hover:text-honey-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
                                 <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
                             </svg>
-                            <span class="copy-flash hidden" aria-hidden="true">Copied</span>
-                        </a>
+                            <span class="copy-flash" aria-hidden="true" hidden>Copied</span>
+                        </button>
                         
                         <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
                             <div class="flex gap-1.5">
@@ -406,17 +406,17 @@
                 </div>
             </article>
             
-            <article class="dashboard-item shared-file-row" data-file-id="00000000-0000-4000-8000-000000000004" data-search-base="old.txt  2025-01-01 12:00:00 cet 2000-01-01 00:00:00 cet" data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="2000-01-01 00:00:00 CET" data-downloaded-at="" data-search-text="old.txt  expired expired 2025-01-01 12:00:00 cet 2000-01-01 00:00:00 cet ">
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000004" data-file-id="00000000-0000-4000-8000-000000000004" data-search-base="old.txt  2025-01-01 12:00:00 cet 2000-01-01 00:00:00 cet" data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="2000-01-01 00:00:00 CET" data-downloaded-at="" data-search-text="old.txt  expired expired 2025-01-01 12:00:00 cet 2000-01-01 00:00:00 cet ">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
-                        <a href="#" class="copy-url group inline-flex max-w-full items-center gap-2 text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000004" title="Copy share link">
-                            <span class="truncate">old.txt</span>
+                        <button type="button" class="copy-url group inline-flex max-w-full cursor-pointer items-center gap-2 text-left text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000004" aria-label="Copy the share link for old.txt" title="Copy share link">
+                            <span id="shared-file-name-00000000-0000-4000-8000-000000000004" class="truncate">old.txt</span>
                             <svg class="h-4 w-4 shrink-0 text-slate-600 transition group-hover:text-honey-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
                                 <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
                             </svg>
-                            <span class="copy-flash hidden" aria-hidden="true">Copied</span>
-                        </a>
+                            <span class="copy-flash" aria-hidden="true" hidden>Copied</span>
+                        </button>
                         
                         <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
                             <div class="flex gap-1.5">
@@ -451,7 +451,7 @@
             
         </div>
 
-        <p id="copy-status" class="sr-only" role="status"></p>
+        <p id="copy-status" class="sr-only" role="status" aria-label="Clipboard"></p>
 
         <p id="shared-files-empty-state" class="mt-4 hidden rounded-2xl border border-white/6 bg-white/2 px-5 py-6 text-center text-sm text-slate-500">No drops match this search.</p>
 
@@ -462,7 +462,7 @@
                 <button id="shared-files-next" type="button" class="btn-secondary px-4 py-2 disabled:pointer-events-none disabled:opacity-40">Next</button>
             </div>
         </div>
-    </div>
+    </section>
 </div>
 
 

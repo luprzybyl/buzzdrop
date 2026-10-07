@@ -2,7 +2,7 @@
 // (KEY_RELEASE_MAX_ATTEMPTS=1, burn on lockout) one wrong password locks the
 // share and burns the server's key share, so the right password fails too.
 import { test, expect } from './fixtures.js';
-import { logIn, openShare, releaseStatus, shareFile, uniqueFile } from './support.js';
+import { decryptButton, decryptWithPassword, logIn, openShare, releaseStatus, shareFile, shareStatus, uniqueFile } from './support.js';
 
 test('one wrong password burns the file', async ({ page, recipient, sharePassword }) => {
     const password = sharePassword();
@@ -12,11 +12,10 @@ test('one wrong password burns the file', async ({ page, recipient, sharePasswor
     const link = await shareFile(page, uniqueFile(), password);
 
     const blob = await openShare(recipient, link);
-    await recipient.locator('#password-input').fill(wrongPassword);
-    await recipient.locator('#decrypt-btn').click();
+    await decryptWithPassword(recipient, wrongPassword);
 
-    await expect(recipient.locator('#status')).toHaveText('Too many incorrect attempts — this share is locked.');
-    await expect(recipient.locator('#decrypt-btn')).toBeDisabled();
+    await expect(shareStatus(recipient)).toHaveText('Too many incorrect attempts — this share is locked.');
+    await expect(decryptButton(recipient)).toBeDisabled();
 
     // The page has given up; ask /release directly. The share is gone, so
     // the right password gets the uniform 404.
