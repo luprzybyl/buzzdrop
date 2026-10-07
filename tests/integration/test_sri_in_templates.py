@@ -42,10 +42,11 @@ def test_view_page_has_sri_for_view_js(client, db_instance, files_store, csrf_fo
         sess['username'] = 'testuser'
         sess['is_admin'] = False
 
-    # Upload a test file via the two-phase key-release flow
+    # Upload a test file via the two-phase key-release flow — a BKV3
+    # envelope, since the confirm page reads the salt out of the blob.
     file_id, _h = key_share()
     client.post('/upload', data={
-        'file': (BytesIO(b'test content'), 'test.txt'),
+        'file': (BytesIO(b'BKV3' + b'\x00' * 28 + b'test content'), 'test.txt'),
         'expiry': '',
         'file_id': file_id,
         'key_verifier': 'cc' * 32,

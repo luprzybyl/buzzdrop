@@ -233,17 +233,29 @@ Notes:
 ### 6.4. Download flow
 
 ```
-1. GET /download/<id>      → ciphertext + salt   (H is NOT released)
-2. client enters password → master → V'
-3. POST /release/<id> {V'}   (harder variant: HMAC(V', nonce) challenge)
-4. server, in a transaction:
+1. client enters password → master → V'   (salt comes from the
+   view-config, read by the server out of the blob's BKV3 prefix)
+2. POST /release/<id> {V'}   (harder variant: HMAC(V', nonce) challenge)
+3. server, in a transaction:
      - compare_digest(V', V) — constant time
-     - MATCH → releases H, atomically burns the record
-               (UPDATE ... WHERE h_released IS NULL — exactly one winner)
+     - MATCH → releases H + a one-time download ticket, atomically burns
+               the record's h/v (UPDATE ... WHERE h_released IS NULL —
+               exactly one winner)
      - MISS  → attempts++, exponential backoff, per-file_id limit;
                optionally burns the record after N failures
+4. GET /download/<id>  (X-Download-Ticket)  → ciphertext, served once
 5. client: Kp ‖ H → file_key → decrypts locally
 ```
+
+The ciphertext is deliberately fetched **after** the release, not before:
+the one-time claim lives in the atomic release, so a prefetch protected
+nothing — it only consumed the share for every JS-capable visitor who
+opened the page and bounced (and stalled the Decrypt button behind a
+whole-blob download). Serving the blob to whoever proved the password
+closes both: the claim now happens at `/release`, and `/download` is
+gated by a ticket minted in the same transaction, so a bare link holder
+can neither consume the share nor slip a claim between someone else's
+release and download.
 
 **H leaves the server exactly once, at one moment:** in response to
 the winning `/release`, after a successful `V' == V` check. No match —

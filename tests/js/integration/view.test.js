@@ -34,18 +34,23 @@ const requestText = (request) => {
 };
 
 describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
-    it('fetches the blob, releases H, decrypts the file and reports the receipt', async () => {
+    it('releases H, fetches the blob with the ticket, decrypts the file and reports the receipt', async () => {
         const share = await openShare({ crypto: 'real', type: 'file', password: PASSWORD, content: FILE_BYTES });
 
         await share.decryptWithPassword(PASSWORD);
 
         expect(await share.decryptionRecorded()).toBe(true);
         expect(await share.savedFile()).toEqual({ name: 'contract.pdf', bytes: FILE_BYTES });
-        expect(share.requestsSent().map((request) => `${request.method} ${pathOf(request)}`)).toEqual([
-            `GET /download/${share.fileId}`,
+        const requests = share.requestsSent();
+        expect(requests.map((request) => `${request.method} ${pathOf(request)}`)).toEqual([
             `POST /release/${share.fileId}`,
+            `GET /download/${share.fileId}`,
             `POST /report_decryption/${share.fileId}`,
         ]);
+        // The download went out under the ticket the release minted.
+        const ticketHeader = Object.entries(requests[1].headers)
+            .find(([name]) => name.toLowerCase() === 'x-download-ticket')?.[1];
+        expect(ticketHeader).toMatch(/^[0-9a-f]{64}$/);
         expect(share.backend.state.keys.get(share.fileId)?.releasedAt).not.toBeNull();
     });
 
@@ -62,7 +67,7 @@ describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
         expect(screen.getByRole('region', { name: 'Decrypted text' })).toHaveTextContent(NOTE);
         expect(share.backend.log.map(pathOf)).toEqual([
             '/upload/begin', '/upload',
-            `/download/${fileId}`, `/release/${fileId}`, `/report_decryption/${fileId}`,
+            `/release/${fileId}`, `/download/${fileId}`, `/report_decryption/${fileId}`,
         ]);
     });
 

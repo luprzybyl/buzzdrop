@@ -56,15 +56,48 @@ class StorageBackend(ABC):
     def delete(self, path: str) -> None:
         """
         Delete file from storage.
-        
+
         Args:
             path: Storage path/key for the file
-        
+
         Raises:
             StorageError: If deletion fails (file not found is not an error)
         """
         pass
-    
+
+    @abstractmethod
+    def read_prefix(self, path: str, length: int) -> bytes:
+        """
+        Read the first ``length`` bytes of a stored object.
+
+        Args:
+            path: Storage path/key for the file
+            length: Number of bytes to read from the start
+
+        Returns:
+            Up to ``length`` bytes from the beginning of the object
+
+        Raises:
+            StorageError: If the object is missing or the read fails
+        """
+        pass
+
+    @abstractmethod
+    def size(self, path: str) -> int:
+        """
+        Return the stored object's size in bytes.
+
+        Args:
+            path: Storage path/key for the file
+
+        Returns:
+            Object size in bytes
+
+        Raises:
+            StorageError: If the object is missing or the check fails
+        """
+        pass
+
     @abstractmethod
     def exists(self, path: str) -> bool:
         """
@@ -137,7 +170,24 @@ class LocalStorage(StorageBackend):
         except Exception as e:
             # Log error but don't raise - file might already be deleted
             pass
-    
+
+    def read_prefix(self, path: str, length: int) -> bytes:
+        """Read the first ``length`` bytes of a local file."""
+        try:
+            with open(path, 'rb') as f:
+                return f.read(length)
+        except FileNotFoundError as e:
+            raise StorageError(f"File not found: {path}") from e
+        except Exception as e:
+            raise StorageError(f"Failed to read file {path}: {str(e)}") from e
+
+    def size(self, path: str) -> int:
+        """Return a local file's size in bytes."""
+        try:
+            return os.path.getsize(path)
+        except OSError as e:
+            raise StorageError(f"Cannot stat file {path}: {str(e)}") from e
+
     def exists(self, path: str) -> bool:
         """Check if file exists on local filesystem."""
         return os.path.exists(path)
@@ -222,7 +272,31 @@ class S3Storage(StorageBackend):
         except Exception:
             # Log error but don't raise - file might already be deleted
             pass
-    
+
+    def read_prefix(self, s3_key: str, length: int) -> bytes:
+        """Read the first ``length`` bytes via a range GET."""
+        try:
+            response = self.client.get_object(
+                Bucket=self.bucket, Key=s3_key,
+                Range=f'bytes=0-{max(length, 1) - 1}')
+            return response['Body'].read()
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey':
+                raise StorageError(f"File not found in S3: {s3_key}") from e
+            raise StorageError(f"S3 prefix read failed for {s3_key}: {str(e)}") from e
+        except Exception as e:
+            raise StorageError(f"Failed to read {s3_key}: {str(e)}") from e
+
+    def size(self, s3_key: str) -> int:
+        """Return an S3 object's size via HEAD."""
+        try:
+            response = self.client.head_object(Bucket=self.bucket, Key=s3_key)
+            return int(response['ContentLength'])
+        except ClientError as e:
+            raise StorageError(f"Cannot stat S3 object {s3_key}: {str(e)}") from e
+        except Exception as e:
+            raise StorageError(f"Failed to stat {s3_key}: {str(e)}") from e
+
     def exists(self, s3_key: str) -> bool:
         """Check if file exists in S3."""
         try:

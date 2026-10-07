@@ -11,7 +11,7 @@ test('one wrong password burns the file', async ({ page, recipient, sharePasswor
     await logIn(page);
     const link = await shareFile(page, uniqueFile(), password);
 
-    const blob = await openShare(recipient, link);
+    const config = await openShare(recipient, link);
     await decryptWithPassword(recipient, wrongPassword);
 
     await expect(shareStatus(recipient)).toHaveText('Too many incorrect attempts — this share is locked.');
@@ -19,5 +19,5 @@ test('one wrong password burns the file', async ({ page, recipient, sharePasswor
 
     // The page has given up; ask /release directly. The share is gone, so
     // the right password gets the uniform 404.
-    expect(await releaseStatus(recipient, link, blob, password)).toBe(404);
+    expect(await releaseStatus(recipient, link, config, password)).toBe(404);
 });

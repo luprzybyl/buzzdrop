@@ -23,7 +23,8 @@ def upload_note(client, files_store, data=None, headers=None, xhr=True):
     receipt = secrets.token_bytes(32)
     files_store.create_key_share(file_id, secrets.token_hex(32), created_by='testuser')
     form = {
-        'note_text': base64.b64encode(b"Test note").decode('utf-8'),
+        # A BKV3 envelope: confirm_view_file reads the salt from the blob.
+        'note_text': base64.b64encode(b'BKV3' + b'\x00' * 28 + b'Test note').decode('utf-8'),
         'type': 'text',
         'file_id': file_id,
         'key_verifier': 'cc' * 32,
@@ -150,6 +151,8 @@ def test_confirm_view_text_note(client, app, files_store, csrf_form_data):
     # not an inline window.* script.
     assert b'"fileType": "text"' in response.data
     assert b'text-display' in response.data  # Text display div should be present
+    # The salt the page needs before proving the password is in the config.
+    assert b'"salt": "00000000000000000000000000000000"' in response.data
 
 def test_text_note_type_field_in_database(client, app, files_store):
     """Test that text notes have correct type field in database."""
@@ -203,7 +206,7 @@ def test_text_note_success_page(client, app, files_store):
     assert b'Note is in the hive' in response.data
     assert b'is destroyed as soon as the recipient continues' in response.data
 
-def test_text_note_deletion_after_view(client, app, files_store):
+def test_text_note_deletion_after_view(client, app, files_store, download_share):
     """Test that text note is marked as downloaded after viewing."""
     login_user(client, 'testuser', 'password')
 
@@ -212,7 +215,7 @@ def test_text_note_deletion_after_view(client, app, files_store):
     note_id = response.get_json()['file_id']
 
     # Download the note
-    response = client.get(url_for('download_file', file_id=note_id))
+    response = download_share(note_id)
     assert response.status_code == 200
 
     # Verify it's marked as downloaded
@@ -289,7 +292,7 @@ def test_report_decryption_for_text_note(client, app, files_store):
     assert note_info['decryption_success'] is True
 
 
-def test_report_decryption_for_text_note_sends_failed_notification(client, app, files_store, monkeypatch):
+def test_report_decryption_for_text_note_sends_failed_notification(client, app, files_store, monkeypatch, download_share):
     """Test reporting a failed decryption sends one notification for text notes."""
     monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     from auth import get_users
@@ -306,7 +309,7 @@ def test_report_decryption_for_text_note_sends_failed_notification(client, app, 
     note_id = response.get_json()['file_id']
     receipt = response.receipt
 
-    client.get(url_for('download_file', file_id=note_id))
+    download_share(note_id)
 
     response = client.post(
         url_for('report_decryption', file_id=note_id),
@@ -320,7 +323,7 @@ def test_report_decryption_for_text_note_sends_failed_notification(client, app, 
     assert 'Decryption status: failed' in sent_messages[0][2]
 
 
-def test_text_note_notifications_can_use_verified_account_email(client, app, files_store, monkeypatch):
+def test_text_note_notifications_can_use_verified_account_email(client, app, files_store, monkeypatch, download_share):
     login_user(client, 'testuser', 'password')
     app.config.update({
         'SMTP_HOST': 'smtp.example.com',
@@ -336,7 +339,7 @@ def test_text_note_notifications_can_use_verified_account_email(client, app, fil
     response = upload_note(client, files_store, data={'notify_on_open': 'true'})
     note_id = response.get_json()['file_id']
 
-    client.get(url_for('download_file', file_id=note_id))
+    download_share(note_id)
     response = client.post(
         url_for('report_decryption', file_id=note_id),
         json={'success': True, 'receipt': response.receipt}

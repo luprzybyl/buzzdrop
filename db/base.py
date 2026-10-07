@@ -129,7 +129,8 @@ class FileStore(ABC):
         Return the key-share record for a file_id, or None.
 
         Dict shape: ``{file_id, h, v, attempts, released_at, created_at,
-        created_by}``. ``v is None`` marks a pending (unfinished) share.
+        created_by, download_ticket}``. ``v is None`` marks a pending
+        (unfinished) share.
         """
 
     @abstractmethod
@@ -148,8 +149,9 @@ class FileStore(ABC):
 
         The verifier comparison MUST be constant-time
         (``secrets.compare_digest``). On a match the implementation sets
-        ``released_at`` AND wipes ``h``/``v`` in the same write, returning
-        H exactly once across all callers.
+        ``released_at``, wipes ``h``/``v`` AND mints a one-time
+        ``download_ticket`` (the /download credential) in the same write,
+        returning H and the ticket exactly once across all callers.
 
         Args:
             file_id: Public file id.
@@ -167,8 +169,8 @@ class FileStore(ABC):
             terminal never-decrypted outcome), ``'expired'`` (share row
             deleted, files row marked expired, ``path`` included for
             blob cleanup),
-            ``'ok'`` (with ``h``), or ``'denied'`` (with ``attempts``
-            and ``attempts_remaining``).
+            ``'ok'`` (with ``h`` and ``download_ticket``), or ``'denied'``
+            (with ``attempts`` and ``attempts_remaining``).
         """
 
     @abstractmethod

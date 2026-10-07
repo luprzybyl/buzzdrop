@@ -223,7 +223,8 @@ CREATE TABLE IF NOT EXISTS file_keys (
     attempts INTEGER NOT NULL DEFAULT 0,
     released_at TEXT,
     created_at TEXT,
-    created_by TEXT
+    created_by TEXT,
+    download_ticket TEXT
 )
 """
 
@@ -233,6 +234,7 @@ CREATE TABLE IF NOT EXISTS file_keys (
 _MIGRATABLE_COLUMNS = (
     ('files', 'receipt_hash', 'TEXT'),
     ('file_keys', 'created_by', 'TEXT'),
+    ('file_keys', 'download_ticket', 'TEXT'),
 )
 
 
@@ -494,7 +496,7 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
     def get_key_share(self, file_id: str) -> Optional[Dict[str, Any]]:
         row = self._conn().execute(
             'SELECT file_id, h, v, attempts, released_at, created_at, '
-            'created_by FROM file_keys WHERE file_id = ?',
+            'created_by, download_ticket FROM file_keys WHERE file_id = ?',
             (file_id,),
         ).fetchone()
         return dict(row) if row else None
@@ -517,7 +519,9 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
                             marked expired; caller deletes the blob via
                             the returned ``path``)
           'ok'            — verifier matched; ``h`` released once and
-                            h/v wiped from the row
+                            h/v wiped from the row; ``download_ticket``
+                            is the one-time /download credential minted
+                            in the same write
           'denied'        — verifier miss; ``attempts``/``attempts_remaining``
                             describe the counted failure
         """
@@ -565,15 +569,26 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
             # leak timing. Everything above and below runs under the write
             # lock, so only this attempt observes this share state.
             elif secrets.compare_digest(row['v'], v_hex):
+                # The download ticket is minted in the same write as the
+                # release: the only holder of H is also the only holder of
+                # the credential /download demands — a racing stranger with
+                # the link can no longer consume mark_downloaded between
+                # the release and the fetch.
+                download_ticket = secrets.token_hex(32)
                 conn.execute(
                     'UPDATE file_keys SET released_at = ?, '
-                    'h = NULL, v = NULL WHERE file_id = ?',
-                    (datetime.now().isoformat(), file_id),
+                    'h = NULL, v = NULL, download_ticket = ? '
+                    'WHERE file_id = ?',
+                    (datetime.now().isoformat(), download_ticket, file_id),
                 )
                 # H and V are wiped with the claim: post-release the row
                 # keeps only bookkeeping, so a later DB theft yields
                 # nothing crackable.
-                result = {'status': 'ok', 'h': row['h']}
+                result = {
+                    'status': 'ok',
+                    'h': row['h'],
+                    'download_ticket': download_ticket,
+                }
             else:
                 conn.execute(
                     'UPDATE file_keys SET attempts = attempts + 1 '

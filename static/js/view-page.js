@@ -1,11 +1,15 @@
 // --- Secure File Download & Decryption Logic ---
-// This script handles the process of downloading, decrypting, and saving the file client-side
+// This script handles the process of proving the password, downloading, and
+// decrypting the file client-side (docs/true-one-time.md §6.4).
 // Steps:
-// 1. Download the encrypted file from the server
-// 2. Wait for user to enter password and click 'Decrypt'
-// 3. Prove the password to /release, receive the server share H,
-//    then decrypt with Kp ‖ H (docs/true-one-time.md §6.4)
-// 4. Save file to disk and notify server
+// 1. The visitor types the password; the client derives V and proves it
+//    to /release, receiving the server share H plus a one-time download
+//    ticket. The ciphertext is NOT fetched upfront — opening the page
+//    must not consume the share.
+// 2. With the ticket, the client streams /download (progress in the
+//    status line), derives file_key = HKDF(Kp ‖ H) and decrypts locally.
+// 3. The plaintext is saved as a download and the receipt reported to
+//    /report_decryption.
 
 import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
 import { readFragmentPassword } from './fragment-password.js';
@@ -16,7 +20,7 @@ import { required, requiredWindow } from './required.js';
 /**
  * @typedef {object} ViewDeps
  * @property {typeof fetch} fetch
- * @property {Pick<CryptoService, 'parseBlob' | 'deriveVerifier' | 'decrypt'>} crypto
+ * @property {Pick<CryptoService, 'deriveKeyReleaseKeys' | 'deriveFileKey' | 'decryptWithKey'>} crypto
  */
 
 /**
@@ -27,14 +31,18 @@ import { required, requiredWindow } from './required.js';
  * @property {string} reportDecryptionUrl
  * @property {string} originalName
  * @property {'file' | 'text'} fileType
+ * @property {string} salt - hex BKV3 salt: the only non-secret the
+ *   envelope carries, handed over so V can be derived before the download
  */
 
 /**
- * What POST /release answers: `{h}` (the server share, hex) on a verifier
- * match; otherwise `{error}`, plus `attempts_remaining` on a 403 miss.
- * 404 means the file or its share is gone (deleted, expired or burned).
+ * What POST /release answers: `{h, ticket}` (the server share and the
+ * one-time /download credential, hex) on a verifier match; otherwise
+ * `{error}`, plus `attempts_remaining` on a 403 miss. 404 means the file
+ * or its share is gone (deleted, expired or burned).
  * @typedef {object} ReleaseResponse
  * @property {string} [h]
+ * @property {string} [ticket]
  * @property {number} [attempts_remaining]
  * @property {string} [error]
  */
@@ -49,8 +57,8 @@ export function browserDeps() {
 }
 
 /**
- * Downloads the share, then wires up decryption. Resolves once the page is
- * ready for a password.
+ * Wires up password → release → download → decrypt. Resolves once the
+ * page is ready for a password — no share traffic happens before then.
  * @param {Document} root - the view.html document
  * @param {ViewDeps} deps
  * @returns {Promise<void>}
@@ -70,11 +78,9 @@ export async function initView(root, deps) {
         reportDecryptionUrl,
         originalName,
         fileType,
+        salt: saltHex,
     } = JSON.parse(required(root, '#view-config-json', 'script').text);
 
-    // Download the encrypted file as a single Uint8Array
-    const res = await deps.fetch(downloadUrl);
-    const encryptedData = new Uint8Array(await res.arrayBuffer());
     const decryptForm = required(root, '#decrypt-form', 'form');
     const decryptBtn = required(root, '#decrypt-btn', 'button');
     const passInput = required(root, '#password-input', 'input');
@@ -97,7 +103,7 @@ export async function initView(root, deps) {
     /** @type {Bytes} */
     let salt;
     try {
-        ({ salt } = cryptoService.parseBlob(encryptedData));
+        salt = hexToBytes(saltHex);
     } catch (err) {
         lockForm();
         status.textContent =
@@ -173,15 +179,17 @@ export async function initView(root, deps) {
     }
 
     /**
-     * The blob alone is mathematically dead — the password must be proven
-     * to /release, which hands out the server share H once. Returns the
-     * decrypted bytes, or null when the attempt failed in a recoverable
-     * way (wrong password with attempts left).
+     * Derives V and asks /release for H — the blob itself stays on the
+     * server until the password is proven. Errors marked `retryable`
+     * (network drop, 5xx) let the visitor press Decrypt again; the rest
+     * are terminal. Returns {kp, h, ticket}, or null on a counted miss
+     * with attempts left.
      * @param {string} password
-     * @returns {Promise<{data: Bytes, receipt: Bytes} | null>}
+     * @returns {Promise<{kp: Bytes, h: Bytes, ticket: string} | null>}
      */
-    async function decryptKeyRelease(password) {
-        const v = await cryptoService.deriveVerifier(password, salt);
+    async function attemptRelease(password) {
+        status.textContent = 'Checking password…';
+        const { kp, v } = await cryptoService.deriveKeyReleaseKeys(password, salt);
 
         let res;
         try {
@@ -194,7 +202,9 @@ export async function initView(root, deps) {
                 body: JSON.stringify({ v: bytesToHex(v) }),
             });
         } catch (err) {
-            throw new Error('Could not reach the server to release the key.');
+            throw Object.assign(
+                new Error('Could not reach the server to release the key.'),
+                { retryable: true });
         }
 
         /** @type {ReleaseResponse} */
@@ -226,51 +236,142 @@ export async function initView(root, deps) {
                 'This share no longer exists — it was deleted, has expired, '
                 + 'or was locked by wrong password attempts.');
         }
-        if (!res.ok || typeof body.h !== 'string') {
-            throw new Error('The server refused to release the key.');
+        if (
+            !res.ok
+            || typeof body.h !== 'string'
+            || typeof body.ticket !== 'string'
+        ) {
+            throw Object.assign(
+                new Error('The server refused to release the key.'),
+                { retryable: res.status >= 500 });
         }
 
-        const h = hexToBytes(body.h);
-        const { data, receipt } = await cryptoService.decrypt(
-            encryptedData, password, h);
-        return { data, receipt };
+        return { kp, h: hexToBytes(body.h), ticket: body.ticket };
     }
+
+    /**
+     * Streams the ciphertext behind the release ticket, reporting progress
+     * in the status line. A failed read leaves the ticket usable, so the
+     * same Decrypt press can retry — the server claims the share only when
+     * the fetch reaches it.
+     * @param {string} ticket
+     * @returns {Promise<Bytes>}
+     */
+    async function downloadCiphertext(ticket) {
+        let res;
+        try {
+            res = await deps.fetch(downloadUrl, {
+                headers: { 'X-Download-Ticket': ticket },
+            });
+        } catch (err) {
+            throw new Error('The download failed — press Decrypt to retry.');
+        }
+        if (res.redirected || res.status === 404 || res.status === 410) {
+            throw Object.assign(new Error(
+                'This share no longer exists — it was deleted, has expired, '
+                + 'or was already claimed.'), { terminal: true });
+        }
+        if (!res.ok) {
+            throw new Error('The download failed — press Decrypt to retry.');
+        }
+
+        const total = Number(res.headers.get('Content-Length')) || 0;
+        const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+        if (!reader) {
+            status.textContent = 'Downloading encrypted file…';
+            return new Uint8Array(await res.arrayBuffer());
+        }
+
+        /** @type {Bytes[]} */
+        const chunks = [];
+        let received = 0;
+        let shown = '';
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            received += value.length;
+            const progress = total
+                ? `Downloading encrypted file… ${Math.floor((received * 100) / total)}%`
+                : `Downloading encrypted file… ${(received / 1048576).toFixed(1)} MB`;
+            if (progress !== shown) {
+                shown = progress;
+                status.textContent = progress;
+            }
+        }
+
+        const data = new Uint8Array(received);
+        let offset = 0;
+        for (const chunk of chunks) {
+            data.set(chunk, offset);
+            offset += chunk.length;
+        }
+        return data;
+    }
+
+    /** @type {{kp: Bytes, h: Bytes, ticket: string} | null} */
+    let released = null;
+    /** @type {Bytes | null} */
+    let encryptedData = null;
 
     // Submitting the form (the Decrypt button or Enter in the field) attempts
     // the decryption in place; the form never navigates.
     decryptForm.addEventListener('submit', async (event) => {
         event.preventDefault();
-        const password = passInput.value;
-        if (!password) return;
+        if (!released && !passInput.value) return;
         lockForm();
 
         try {
-            const result = await decryptKeyRelease(password);
-            if (result === null) {
-                // Wrong password, attempts remaining — let them retry.
-                decryptBtn.disabled = false;
-                passInput.disabled = false;
-                passInput.select();
-                return;
+            if (!released) {
+                released = await attemptRelease(passInput.value);
+                if (!released) {
+                    // Wrong password, attempts remaining — let them retry.
+                    decryptBtn.disabled = false;
+                    passInput.disabled = false;
+                    passInput.select();
+                    return;
+                }
             }
 
-            showPlaintext(result.data);
+            if (!encryptedData) {
+                encryptedData = await downloadCiphertext(released.ticket);
+            }
+
+            status.textContent = 'Decrypting…';
+            const fileKey = await cryptoService.deriveFileKey(
+                released.kp, released.h, salt);
+            const { data, receipt } = await cryptoService.decryptWithKey(
+                encryptedData, fileKey);
+
+            showPlaintext(data);
 
             // Notify server that decryption was successful — the receipt
             // proves it (it's only reachable inside the plaintext).
-            reportDecryption(true, bytesToHex(result.receipt));
+            reportDecryption(true, bytesToHex(receipt));
         } catch (err) {
-            const error = /** @type {Error | undefined} */ (err);
-            status.textContent =
-                error && error.message
-                    ? error.message
-                    : 'Incorrect password or corrupted file. Ask the author to upload the file again.';
+            const error = /** @type {Error & { retryable?: boolean, terminal?: boolean } | undefined} */ (err);
+            const message = error && error.message ? error.message : '';
+            status.textContent = /unsupported share format/i.test(message)
+                ? 'This share uses an unsupported format. Ask the author to upload it again.'
+                : message || 'Incorrect password or corrupted file. Ask the author to upload the file again.';
             // Notify server that decryption failed
             reportDecryption(false);
+            if (!released) {
+                // A retryable release failure (dropped request, 5xx) —
+                // the password may be right; give it another press.
+                if (error && error.retryable) {
+                    decryptBtn.disabled = false;
+                    passInput.disabled = false;
+                }
+            } else if (!encryptedData && !(error && error.terminal)) {
+                // The ticket survives a failed fetch — Decrypt retries the
+                // download without re-proving the password.
+                decryptBtn.disabled = false;
+            }
         }
     });
     // The template renders the button disabled so nothing submits natively
-    // while the share downloads; only now does submit stay on the page.
+    // before this listener exists; the share stays untouched until then.
     decryptBtn.disabled = false;
     // Focus the decrypt button so user can easily press Enter to proceed
     if (fragmentPassword) decryptBtn.focus();

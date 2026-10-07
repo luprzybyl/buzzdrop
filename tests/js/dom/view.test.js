@@ -29,15 +29,28 @@ describe('view page', () => {
     });
 
     // A submit before the page's listener exists would navigate natively (a
-    // GET of the POST-only confirm page) and lose the share, whose download
-    // is served once — so Decrypt stays disabled until the download is in.
-    it('Decrypt stays disabled until the share has downloaded', async () => {
+    // GET of the POST-only confirm page), so the template renders Decrypt
+    // disabled — but nothing is fetched upfront: the ciphertext only moves
+    // once the password has been proven, so the button is ready right away.
+    it('Decrypt is ready immediately — nothing is fetched until the password is proven', async () => {
         const share = await openShare({ download: 'in-progress' });
+        expect(screen.getByRole('button', { name: 'Decrypt and view' })).toBeEnabled();
+        expect(share.requestsSent()).toEqual([]);
+
+        const pending = share.decryptWithPassword(DEFAULT_PASSWORD);
+        await vi.waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Checking password…'));
+        // While the release+download run, the form stays shut.
         expect(screen.getByRole('button', { name: 'Decrypt and view' })).toBeDisabled();
 
         await share.finishDownload();
+        await pending;
 
-        expect(screen.getByRole('button', { name: 'Decrypt and view' })).toBeEnabled();
+        expect(decryptedText()).toHaveTextContent(DEFAULT_MESSAGE);
+        expect(share.requestsSent().map((request) => new URL(request.url).pathname)).toEqual([
+            `/release/${share.fileId}`,
+            `/download/${share.fileId}`,
+            `/report_decryption/${share.fileId}`,
+        ]);
     });
 
     it('the status line is a live region, so outcomes are announced', async () => {
@@ -121,10 +134,11 @@ describe('view page', () => {
         expect(share.reportsSent()).toEqual([{ success: false, receipt: null }]);
     });
 
-    it('an unsupported share format disables the form', async () => {
-        await openShare({ share: 'unsupported-format' });
+    it('an unsupported share format fails the decrypt and disables the form', async () => {
+        const share = await openShare({ share: 'unsupported-format' });
 
-        expect(screen.getByText(/^You have one attempt/)).not.toBeVisible();
+        await share.decryptWithPassword(DEFAULT_PASSWORD);
+
         expect(screen.getByRole('status')).toHaveTextContent(
             'This share uses an unsupported format. Ask the author to upload it again.');
         expect(passwordField()).toBeDisabled();

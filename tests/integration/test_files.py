@@ -144,7 +144,7 @@ def test_upload_file_too_large(client, app):
 
     app.config['MAX_CONTENT_LENGTH'] = original_max_length # Reset
 
-def test_download_file_success(client, app, files_store, key_release_upload):
+def test_download_file_success(client, app, files_store, key_release_upload, download_share):
     login_user(client, 'testuser', 'password')
 
     file_content = b"Downloadable content."
@@ -159,10 +159,11 @@ def test_download_file_success(client, app, files_store, key_release_upload):
     file_path_on_disk = file_info['path']
     assert os.path.exists(file_path_on_disk)
 
-    response = client.get(url_for('download_file', file_id=file_id))
+    response = download_share(file_id)
     assert response.status_code == 200
     assert response.data == file_content
     assert response.headers['Content-Disposition'] == f'attachment; filename="{file_name}"'
+    assert int(response.headers['Content-Length']) == len(file_content)
 
     updated_file_info = files_store.get_by_id(file_id)
     assert updated_file_info is not None
@@ -170,20 +171,44 @@ def test_download_file_success(client, app, files_store, key_release_upload):
     # File should be deleted after download
     assert not os.path.exists(file_path_on_disk)
 
+def test_download_file_requires_release_ticket(client, app, files_store, key_release_upload):
+    """A bare link must not consume the share: /download without the
+    release-minted ticket is a 403, and the share stays alive."""
+    login_user(client, 'testuser', 'password')
+
+    file_id, _h, _rcpt, _resp = key_release_upload()
+
+    response = client.get(url_for('download_file', file_id=file_id))
+    assert response.status_code == 403
+
+    bad_ticket = client.get(
+        url_for('download_file', file_id=file_id),
+        headers={'X-Download-Ticket': 'ef' * 32})
+    assert bad_ticket.status_code == 403
+
+    # Nothing was claimed — the share can still be proven and served.
+    good = client.post(url_for('release_key', file_id=file_id), json={'v': 'cc' * 32})
+    assert good.status_code == 200
+    ticket = good.get_json()['ticket']
+    served = client.get(
+        url_for('download_file', file_id=file_id),
+        headers={'X-Download-Ticket': ticket})
+    assert served.status_code == 200
+
 def test_download_file_not_found(client):
     login_user(client, 'testuser', 'password')
     response = client.get(url_for('download_file', file_id='nonexistentid'), follow_redirects=True)
     assert b'File not found' in response.data
     assert url_for('index') in response.request.path
 
-def test_download_file_already_downloaded(client, app, files_store, key_release_upload):
+def test_download_file_already_downloaded(client, app, files_store, key_release_upload, download_share):
     login_user(client, 'testuser', 'password')
 
     file_content = b"Already downloaded."
     file_name = "download_once.txt"
     file_id, _h, _rcpt, _resp = key_release_upload(
         data={'file': (io.BytesIO(file_content), file_name)})
-    client.get(url_for('download_file', file_id=file_id))
+    download_share(file_id)
 
     response = client.get(url_for('download_file', file_id=file_id), follow_redirects=True)
     assert b'This file has already been downloaded' in response.data
@@ -206,7 +231,6 @@ def test_public_views_do_not_show_private_note(client, files_store, csrf_form_da
 
     file_id, _h, receipt, response = key_release_upload(
         data={
-            'file': (io.BytesIO(b"view content"), "private_view.txt"),
             'private_note': 'Only uploader should see this'
         },
     )
@@ -266,11 +290,11 @@ def test_delete_file_requires_csrf(client, app, files_store):
     assert files_store.get_by_id(file_id) is not None
 
 
-def test_delete_file_after_download(client, app, files_store, csrf_form_data):
+def test_delete_file_after_download(client, app, files_store, csrf_form_data, download_share):
     login_user(client, 'testuser', 'password')
 
     file_id, _rc = upload_file_for_user(client, app, files_store, 'del_after.txt', 'content', 'testuser')
-    download_response = client.get(url_for('download_file', file_id=file_id))
+    download_response = download_share(file_id)
     assert download_response.status_code == 200
     _ = download_response.data
 
@@ -302,13 +326,13 @@ def test_view_file_expired(client, app, files_store, key_release_upload):
     assert not os.path.exists(updated['path'])
 
 
-def test_view_file_shows_filename_to_recipient(client, app, files_store, key_release_upload):
+def test_view_file_shows_filename_to_recipient(client, app, files_store, key_release_upload, download_share):
     """Recipients see the real filename on view/confirm and in the
     download's Content-Disposition."""
     login_user(client, 'testuser', 'password')
 
     file_id, _h, _rcpt, response = key_release_upload(
-        data={'file': (io.BytesIO(b'content'), 'medical-records.txt')})
+        filename='medical-records.txt')
     assert response.status_code == 200
 
     view = client.get(url_for('view_file', file_id=file_id))
@@ -320,16 +344,19 @@ def test_view_file_shows_filename_to_recipient(client, app, files_store, key_rel
         data={'csrf_token': 'test-csrf-token'})
     assert confirm.status_code == 200
     assert b'"originalName": "medical-records.txt"' in confirm.data
+    # The PBKDF2 salt the page needs before proving the password travels
+    # in the same data island.
+    assert b'"salt": "00000000000000000000000000000000"' in confirm.data
 
-    download = client.get(url_for('download_file', file_id=file_id))
+    download = download_share(file_id)
     assert download.headers['Content-Disposition'] == 'attachment; filename="medical-records.txt"'
 
-def test_report_decryption_success(client, app, files_store):
+def test_report_decryption_success(client, app, files_store, download_share):
     login_user(client, 'testuser', 'password')
 
     file_id, receipt = upload_file_for_user(client, app, files_store, 'dec.txt', 'content', 'testuser')
 
-    client.get(url_for('download_file', file_id=file_id))
+    download_share(file_id)
 
     res = client.post(
         url_for('report_decryption', file_id=file_id),
@@ -365,7 +392,7 @@ def test_upload_file_uses_verified_account_notification_email(client, app, files
     assert info['notification_email'] == 'testuser@example.com'
 
 
-def test_report_decryption_sends_notification_once(client, app, files_store, monkeypatch, key_release_upload):
+def test_report_decryption_sends_notification_once(client, app, files_store, monkeypatch, key_release_upload, download_share):
     monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     get_users.cache_clear()
     login_user(client, 'testuser', 'password')
@@ -383,7 +410,7 @@ def test_report_decryption_sends_notification_once(client, app, files_store, mon
         },
     )
 
-    client.get(url_for('download_file', file_id=file_id))
+    download_share(file_id)
 
     res = client.post(
         url_for('report_decryption', file_id=file_id),

@@ -76,7 +76,7 @@ npx playwright test
 3. `file_key = HKDF(Kp ‖ H, salt, 'file')`; plaintext is `BKP-FILE ‖ receipt(32B random) ‖ data` (the receipt is the decryption proof — the server stores only its SHA-256), then AES-GCM encrypted
 4. Envelope: `BKV3 ‖ salt(16) ‖ iv(12) ‖ ciphertext`, uploaded with `file_id` + `key_verifier` (hex V) + `receipt_hash` — the server binds V to the pending share atomically (only the account that ran `begin` may finish: `created_by` check, 403 otherwise)
 
-Decryption in `static/js/view-page.js` (`initView`, run by the `view.js` entry): fetch the blob, derive `V` from the password, `POST /release/<file_id>` `{v}` → the server returns `H` exactly once (the whole read→check→count→release cycle is one transaction, `attempt_key_release`); the client derives `file_key`, decrypts, extracts the receipt, and reports it to `/report_decryption` — which validates `SHA-256(receipt)` and writes `decryption_success` once (first valid report wins). **`BKV3` is the only supported format** — legacy v1/v2 shares are rejected (deliberate pre-production format break, no backward compatibility).
+Decryption in `static/js/view-page.js` (`initView`, run by the `view.js` entry): derive `V` from the password (the salt comes from the view-config — the server reads it out of the blob's unencrypted BKV3 prefix when rendering `view.html`), `POST /release/<file_id>` `{v}` → the server returns `H` + a one-time `download_ticket` exactly once (the whole read→check→count→release cycle is one transaction, `attempt_key_release`); only then does the client fetch the blob — `GET /download` with the `X-Download-Ticket` header, streamed with progress — derives `file_key`, decrypts, extracts the receipt, and reports it to `/report_decryption` — which validates `SHA-256(receipt)` and writes `decryption_success` once (first valid report wins). **`BKV3` is the only supported format** — legacy v1/v2 shares are rejected (deliberate pre-production format break, no backward compatibility).
 
 ### Storage Architecture
 
@@ -107,7 +107,7 @@ Storage abstraction is handled inline in `app.py` with conditional checks on `ST
 - `file_id` (UUID minted by `/upload/begin`, unique), `h` (server key share, 32 bytes as hex)
 - `v` (password verifier, hex — NULL until `/upload` binds it atomically)
 - `created_by` (uploader username — only that account may finish the pending share)
-- `attempts` (failed-release counter), `released_at` (set once by the atomic `attempt_key_release` transaction, which also wipes `h`/`v`), `created_at`
+- `attempts` (failed-release counter), `released_at` (set once by the atomic `attempt_key_release` transaction, which also wipes `h`/`v` and mints `download_ticket` — the credential `/download` demands), `created_at`
 - `FileRepository.delete()` drops the row with the file; `burn_key_share()` deletes it alone (crypto-shredding H — SQLite runs `secure_delete=ON` + WAL `TRUNCATE` checkpoint); expiry burns the share; stale pending shares are swept after `KEY_SHARE_PENDING_TTL_SECONDS` (startup + each `/upload/begin`)
 
 **Database Helper Functions**:
@@ -163,8 +163,8 @@ Encrypts files using the same `BKV3` format as the browser client and runs the s
 - `/upload` (POST): Completes the key-release upload — requires `file_id` + `key_verifier` + `receipt_hash` form fields, refuses to finish another account's share (403), binds V to the pending share atomically, stores the encrypted blob, returns share link. On storage/DB failure the pending share is burned
 - `/view/<file_id>` (GET): Shows download confirmation page
 - `/view/<file_id>/confirm` (POST): Shows decryption interface
-- `/download/<file_id>` (GET): Serves the ciphertext once, marks as downloaded, deletes file
-- `/release/<file_id>` (POST): Server-gated key release — JSON `{v}` → `{h}` on a constant-time match inside one atomic `attempt_key_release` transaction (403 on a wrong verifier, 410 after release or expiry, 429 on the attempt that locks the share, a uniform 404 when the file or share is missing, pending or burned — so with burn-on-lockout, calls after the lockout get 404). Misses increment `attempts`; lockout at `KEY_RELEASE_MAX_ATTEMPTS` (optional burn). Rate-limited per `file_id`, not per IP. `Cache-Control: no-store`
+- `/download/<file_id>` (GET): Serves the ciphertext once, marks as downloaded, deletes file — only to whoever proved the password: requires the `X-Download-Ticket` header minted by the winning `/release` (403 without a live share + matching ticket), so a bare link can no longer consume the share
+- `/release/<file_id>` (POST): Server-gated key release — JSON `{v}` → `{h, ticket}` on a constant-time match inside one atomic `attempt_key_release` transaction (403 on a wrong verifier, 410 after release or expiry, 429 on the attempt that locks the share, a uniform 404 when the file or share is missing, pending or burned — so with burn-on-lockout, calls after the lockout get 404). Misses increment `attempts`; lockout at `KEY_RELEASE_MAX_ATTEMPTS` (optional burn). Rate-limited per `file_id`, not per IP. `Cache-Control: no-store`
 - `/delete/<file_id>` (POST): Manual deletion by uploader (also drops the `file_keys` row)
 - `/report_decryption/<file_id>` (POST): Records if client-side decryption succeeded — requires the plaintext `receipt` matching the stored `receipt_hash` (403 otherwise), and only the first valid report takes effect. Unauthenticated but rate-limited per file_id via `REPORT_DECRYPTION_RATE_LIMIT`
 
@@ -174,8 +174,8 @@ Encrypts files using the same `BKV3` format as the browser client and runs the s
 2. Browser derives `file_key = HKDF(Kp ‖ H)` (see Client-Side Encryption) and encrypts the file
 3. `POST /upload` carries the blob + `file_id` + `key_verifier`; server binds V to the pending share atomically, stores the blob (local/S3), DB entry created with `status: active`
 4. Share link generated: `/view/{uuid}`
-5. Recipient visits link → confirms → JS fetches the ciphertext via `/download/<id>` (served once; `downloaded_at` set, storage deleted)
-6. JS derives `V` from the password and posts it to `/release/<id>` → server returns `H` exactly once (later calls get 410)
+5. Recipient visits link → confirms → JS derives `V` from the password (salt is in the view-config) and posts it to `/release/<id>` → server returns `H` + `download_ticket` exactly once (later calls get 410)
+6. JS streams `/download/<id>` with the `X-Download-Ticket` header (progress in the status line; `downloaded_at` set, storage deleted)
 7. JS derives `file_key`, decrypts, triggers browser download; wrong passwords consume `attempts` → lockout at `KEY_RELEASE_MAX_ATTEMPTS` (with `KEY_RELEASE_BURN_ON_LOCKOUT` — the default — the `file_keys` row is deleted and H is gone)
 8. Optional: Files with `expiry_at` are auto-deleted by `check_and_handle_expiry()` — which also burns the `file_keys` row inside the same transaction so H never outlives the file
 

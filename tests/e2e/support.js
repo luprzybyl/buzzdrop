@@ -2,7 +2,7 @@
 // because every test in the run shares one container and its database.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect } from '@playwright/test';
-import { CryptoService, bytesToHex } from '../../static/js/crypto.js';
+import { CryptoService, bytesToHex, hexToBytes } from '../../static/js/crypto.js';
 
 // crypto.js uses `window.crypto`; Node exposes Web Crypto on globalThis.
 globalThis.window ??= /** @type {Window & typeof globalThis} */ (globalThis);
@@ -97,26 +97,38 @@ export async function oneClickLink(page) {
 }
 
 /**
- * Presses Proceed on the confirm page, which consumes the share. Returns the
- * ciphertext the view page then fetches, for tests that go on to talk to
- * /release themselves.
+ * The per-share config the view page renders: URLs plus the PBKDF2 salt
+ * the page derives the verifier with.
+ * @typedef {object} ViewConfig
+ * @property {string} downloadUrl
+ * @property {string} releaseUrl
+ * @property {string} reportDecryptionUrl
+ * @property {string} originalName
+ * @property {'file' | 'text'} fileType
+ * @property {string} salt
+ */
+
+/**
+ * Presses Proceed on the confirm page. Nothing is fetched or consumed yet —
+ * the ciphertext only moves after the password is proven. Returns the
+ * view-config the page was rendered with (its salt is what releaseStatus
+ * needs to derive V from outside the page).
  * @param {Page} page - the confirm page
- * @returns {Promise<Bytes>}
+ * @returns {Promise<ViewConfig>}
  */
 export async function proceedToView(page) {
-    const [download] = await Promise.all([
-        page.waitForResponse((response) => new URL(response.url()).pathname.startsWith('/download/')),
-        page.getByRole('button', { name: /^Proceed to / }).click(),
-    ]);
-    return new Uint8Array(await download.body());
+    await page.getByRole('button', { name: /^Proceed to / }).click();
+    await expect(passwordField(page)).toBeVisible();
+    const config = await page.locator('#view-config-json').textContent();
+    return JSON.parse(/** @type {string} */ (config));
 }
 
 /**
- * Opens a share link and proceeds, which consumes the share. Returns the
- * ciphertext, as proceedToView does.
+ * Opens a share link and proceeds. Returns the view-config, as
+ * proceedToView does.
  * @param {Page} page
  * @param {string} link
- * @returns {Promise<Bytes>}
+ * @returns {Promise<ViewConfig>}
  */
 export async function openShare(page, link) {
     await page.goto(link);
@@ -215,13 +227,13 @@ export async function decryptShare(page, link, password) {
  * with the app's own crypto.js, under Node's Web Crypto.
  * @param {Page} page - its request context carries the call
  * @param {string} link
- * @param {Bytes} blob - the ciphertext from openShare
+ * @param {ViewConfig} config - from openShare; its salt drives the verifier
  * @param {string} password
  * @returns {Promise<number>} the response status
  */
-export async function releaseStatus(page, link, blob, password) {
+export async function releaseStatus(page, link, config, password) {
     const service = new CryptoService();
-    const v = await service.deriveVerifier(password, service.parseBlob(blob).salt);
+    const v = await service.deriveVerifier(password, hexToBytes(config.salt));
     return verifierStatus(page, link, bytesToHex(v));
 }
 

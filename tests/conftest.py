@@ -171,6 +171,29 @@ def receipt_pair():
     return receipt.hex(), hashlib.sha256(receipt).hexdigest()
 
 
+# A blob that passes the BKV3 envelope check the view page relies on:
+# 'BKV3' magic + 16-byte salt + 12-byte iv + a dummy ciphertext tail.
+BKV3_BLOB = b'BKV3' + b'\x00' * 28 + b'payload'
+
+
+@pytest.fixture
+def download_share(client):
+    """
+    Prove a verifier at /release and fetch the blob with the download
+    ticket it mints — the only way /download serves since the blob moved
+    behind key release.
+    """
+    def _download(file_id, verifier='cc' * 32):
+        release = client.post(
+            f'/release/{file_id}', json={'v': verifier})
+        assert release.status_code == 200
+        ticket = release.get_json()['ticket']
+        return client.get(
+            f'/download/{file_id}',
+            headers={'X-Download-Ticket': ticket})
+    return _download
+
+
 @pytest.fixture
 def key_release_settings(app):
     """Mutate key-release config and restore it afterwards."""
@@ -212,7 +235,7 @@ def key_release_upload(client, key_share):
     notes. ``verifier`` defaults to a fixed valid hex string — the real
     V is only meaningful to crypto tests, not to route tests.
     """
-    def _upload(data=None, filename='test.txt', content=b'content',
+    def _upload(data=None, filename='test.txt', content=BKV3_BLOB,
                 headers=None, verifier='cc' * 32, xhr=True):
         file_id, h_hex = key_share()
         receipt_hex, receipt_hash = receipt_pair()

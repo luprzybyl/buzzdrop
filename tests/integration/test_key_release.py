@@ -335,6 +335,8 @@ def test_release_returns_h_once(client, files_store):
     first = client.post(url_for('release_key', file_id=file_id), json={'v': v})
     assert first.status_code == 200
     assert first.get_json()['h'] == h
+    # The same response carries the one-time /download credential.
+    assert len(first.get_json()['ticket']) == 64
 
     second = client.post(url_for('release_key', file_id=file_id), json={'v': v})
     assert second.status_code == 410
@@ -462,22 +464,41 @@ def test_release_expired_file_is_410(client, files_store):
     assert files_store.get_key_share('exp-1') is None
 
 
-def test_release_works_after_blob_download(client, files_store, app):
-    """The real order: blob first (claims download), then /release."""
+def test_download_served_after_release(client, files_store, app):
+    """The real order: /release proves V and mints the ticket, then
+    /download serves the blob to the ticket holder."""
     login_user(client)
     file_id, h, _rcpt, finish = _key_release_upload(client, content=b'real blob')
     assert finish.status_code == 200
     v = 'cc' * 32
 
-    # download claims + serves the blob; release must still work
-    download = client.get(url_for('download_file', file_id=file_id))
-    assert download.status_code == 200
-    assert download.data == b'real blob'
+    # Without the ticket the blob stays put — a bare link consumes nothing.
+    early = client.get(url_for('download_file', file_id=file_id))
+    assert early.status_code == 403
 
     release = client.post(
         url_for('release_key', file_id=file_id), json={'v': v})
     assert release.status_code == 200
     assert release.get_json()['h'] == h
+
+    download = client.get(
+        url_for('download_file', file_id=file_id),
+        headers={'X-Download-Ticket': release.get_json()['ticket']})
+    assert download.status_code == 200
+    assert download.data == b'real blob'
+
+
+def test_view_bounces_a_released_share(client, files_store, app, download_share):
+    """Released-but-not-downloaded is terminal for the public pages: the
+    next visitor gets 'already downloaded', not a live-looking form."""
+    login_user(client)
+    file_id, _h, _rcpt, finish = _key_release_upload(client)
+    assert finish.status_code == 200
+
+    client.post(url_for('release_key', file_id=file_id), json={'v': 'cc' * 32})
+
+    view = client.get(url_for('view_file', file_id=file_id), follow_redirects=True)
+    assert b'This file has already been downloaded' in view.data
 
 
 def test_delete_file_drops_key_share(client, files_store, csrf_form_data):
@@ -568,15 +589,17 @@ def test_key_release_end_to_end(client, files_store, key_release_settings):
     )
     assert miss.status_code == 403
 
-    download = client.get(url_for('download_file', file_id=file_id))
-    assert download.status_code == 200
-    served = download.data
-
     release = client.post(
         url_for('release_key', file_id=file_id), json={'v': v_hex})
     assert release.status_code == 200
     released_h = bytes.fromhex(release.get_json()['h'])
     assert released_h == h
+
+    download = client.get(
+        url_for('download_file', file_id=file_id),
+        headers={'X-Download-Ticket': release.get_json()['ticket']})
+    assert download.status_code == 200
+    served = download.data
 
     data, receipt = buzz.decrypt_file(served, password, h=released_h)
     assert data == plaintext

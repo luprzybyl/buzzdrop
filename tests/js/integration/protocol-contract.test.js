@@ -181,16 +181,28 @@ describe('fetch adapter', () => {
         const fake = makeProtocolFake();
         const fileId = await fake.seedShare({ password: 'pw', plaintext: 'hello' });
 
-        const first = await fake.fetch(`/download/${fileId}`);
+        // /download demands the ticket a release mints — prove V first.
+        const key = fake.state.keys.get(fileId);
+        const release = await fake.handle({
+            method: 'POST', url: `/release/${fileId}`,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ v: key?.v }),
+        });
+        const { ticket } = JSON.parse(String(release.body));
+        const headers = { 'X-Download-Ticket': ticket };
+
+        const first = await fake.fetch(`/download/${fileId}`, { headers });
         expect(first.status).toBe(200);
         expect(first.redirected).toBe(false);
 
-        const second = await fake.fetch(`/download/${fileId}`);
+        const second = await fake.fetch(`/download/${fileId}`, { headers });
         expect(second.status).toBe(200);
         expect(second.redirected).toBe(true);
         expect(second.url).toBe('http://localhost/');
         expect(fake.log.map((r) => r.url)).toEqual([
-            `http://localhost/download/${fileId}`, `http://localhost/download/${fileId}`]);
+            `http://localhost/release/${fileId}`,
+            `http://localhost/download/${fileId}`,
+            `http://localhost/download/${fileId}`]);
     });
 
     it('rejects like a dropped connection on an injected network failure', async () => {

@@ -289,10 +289,24 @@ export class CryptoService {
      */
     async decrypt(encryptedData, password, h) {
         this._checkServerShare(h);
-        const { salt, iv, ciphertext } = this.parseBlob(encryptedData);
-
+        const { salt } = this.parseBlob(encryptedData);
         const { kp } = await this.deriveKeyReleaseKeys(password, salt);
         const fileKey = await this.deriveFileKey(kp, h, salt);
+        return this.decryptWithKey(encryptedData, fileKey);
+    }
+
+    /**
+     * Decrypt a blob with the already-derived file key — for callers that
+     * derived Kp earlier (e.g. to prove V before the download) and must
+     * not pay for a second PBKDF2.
+     * @param {Bytes} encryptedData - 'BKV3' + salt + iv + ciphertext
+     * @param {Bytes} fileKey - HKDF(Kp ‖ H) as deriveFileKey returns
+     * @returns {Promise<{data: Bytes, receipt: Bytes}>}
+     *   data = payload without header/receipt; receipt = decryption proof
+     * @throws {Error} If the key is wrong or data is corrupted
+     */
+    async decryptWithKey(encryptedData, fileKey) {
+        const { iv, ciphertext } = this.parseBlob(encryptedData);
 
         const key = await window.crypto.subtle.importKey(
             'raw', fileKey, 'AES-GCM', false, ['decrypt']

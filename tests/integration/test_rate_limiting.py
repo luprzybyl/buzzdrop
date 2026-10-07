@@ -111,7 +111,8 @@ def test_public_file_rate_limit_is_shared_across_view_and_download(client, app, 
     upload = client.post(
         url_for('upload_file'),
         data={
-            'file': (io.BytesIO(b'downloadable content'), 'shared.txt'),
+            # A BKV3 envelope — confirm reads the salt out of the blob.
+            'file': (io.BytesIO(b'BKV3' + b'\x00' * 28 + b'downloadable'), 'shared.txt'),
             'file_id': file_id,
             'key_verifier': 'cc' * 32,
             'receipt_hash': 'aa' * 32,

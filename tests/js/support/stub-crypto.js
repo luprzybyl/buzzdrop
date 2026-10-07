@@ -7,7 +7,7 @@
 import { bytesToHex } from '../../../static/js/crypto.js';
 
 /** @typedef {import('../../../static/js/crypto.js').Bytes} Bytes */
-/** @typedef {Pick<import('../../../static/js/crypto.js').CryptoService, 'encrypt' | 'receiptHash' | 'parseBlob' | 'deriveVerifier' | 'decrypt'>} StubCrypto */
+/** @typedef {Pick<import('../../../static/js/crypto.js').CryptoService, 'encrypt' | 'receiptHash' | 'parseBlob' | 'deriveVerifier' | 'deriveKeyReleaseKeys' | 'deriveFileKey' | 'decrypt' | 'decryptWithKey'>} StubCrypto */
 
 const MAGIC = new TextEncoder().encode('STUB');
 const RECEIPT = new Uint8Array(32).fill(7);
@@ -48,7 +48,18 @@ export function makeStubCrypto({ unsupportedFormat = false, corrupted = false } 
             return { version: 3, salt: new Uint8Array(16), iv: new Uint8Array(12), ciphertext: blob.slice(MAGIC.length) };
         },
         deriveVerifier: (password) => sha256(password),
+        async deriveKeyReleaseKeys(password) {
+            return { kp: new Uint8Array(32), v: await sha256(password) };
+        },
+        async deriveFileKey() {
+            return new Uint8Array(32);
+        },
         async decrypt(blob) {
+            if (corrupted) throw new Error('');
+            return { data: blob.slice(MAGIC.length), receipt: RECEIPT };
+        },
+        async decryptWithKey(blob) {
+            if (unsupportedFormat) throw new Error('Unsupported share format');
             if (corrupted) throw new Error('');
             return { data: blob.slice(MAGIC.length), receipt: RECEIPT };
         },

@@ -41,6 +41,7 @@ import { CryptoService, bytesToHex } from '../../../static/js/crypto.js';
  *   owner: string,
  *   attempts: number,
  *   releasedAt: string | null,
+ *   downloadTicket: string | null,
  * }} KeyRow - a file_keys row: the server share H and the bound verifier V
  * @typedef {{
  *   name: string,
@@ -120,7 +121,8 @@ export const EMITS = [
     ['/upload/begin', 429, 'injected'],
     ['/upload', 200, 'state'], ['/upload', 400, 'state'], ['/upload', 403, 'state'],
     ['/upload', 409, 'state'], ['/upload', 413, 'injected'], ['/upload', 429, 'injected'],
-    ['/download', 200, 'state'], ['/download', 302, 'state'], ['/download', 429, 'injected'],
+    ['/download', 200, 'state'], ['/download', 302, 'state'],
+    ['/download', 403, 'state'], ['/download', 429, 'injected'],
     ['/release', 200, 'state'], ['/release', 400, 'state'], ['/release', 403, 'state'],
     ['/release', 404, 'state'], ['/release', 410, 'state'], ['/release', 429, 'state'],
     ['/release', 429, 'injected'],
@@ -422,7 +424,9 @@ export function makeProtocolFake(opts = {}) {
         }
         const fileId = crypto.randomUUID();
         const h = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
-        state.keys.set(fileId, { h, v: null, owner, attempts: 0, releasedAt: null });
+        state.keys.set(fileId, {
+            h, v: null, owner, attempts: 0, releasedAt: null, downloadTicket: null,
+        });
         return json(200, { file_id: fileId, h });
     }
 
@@ -487,8 +491,13 @@ export function makeProtocolFake(opts = {}) {
         });
     }
 
-    /** @param {string} fileId */
-    function download(fileId) {
+    /**
+     * The blob goes only to whoever holds the download ticket minted by
+     * the winning /release — a bare link holder must not consume it.
+     * @param {string} fileId
+     * @param {Record<string, string>} headers
+     */
+    function download(fileId, headers) {
         const file = state.files.get(fileId);
         if (!file || file.downloaded) {
             return redirectHome();
@@ -496,6 +505,14 @@ export function makeProtocolFake(opts = {}) {
         if (isExpired(file)) {
             expire(fileId, file);
             return redirectHome();
+        }
+        const key = state.keys.get(fileId);
+        if (
+            !key
+            || key.releasedAt === null
+            || key.downloadTicket !== headers['x-download-ticket']
+        ) {
+            return json(403, { error: 'Forbidden' });
         }
         const blob = file.blob ?? new Uint8Array();
         file.downloaded = true;
@@ -505,6 +522,7 @@ export function makeProtocolFake(opts = {}) {
             headers: {
                 'Content-Type': 'application/octet-stream',
                 'Content-Disposition': `attachment; filename="${file.name}"`,
+                'Content-Length': String(blob.length),
             },
             body: blob,
         };
@@ -558,10 +576,12 @@ export function makeProtocolFake(opts = {}) {
         }
         if (key.v === v) {
             const h = /** @type {string} */ (key.h);
+            const ticket = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
             key.releasedAt = new Date().toISOString();
             key.h = null;
             key.v = null;
-            return json(200, { h });
+            key.downloadTicket = ticket;
+            return json(200, { h, ticket });
         }
         key.attempts += 1;
         if (key.attempts >= maxAttempts) {
@@ -636,7 +656,7 @@ export function makeProtocolFake(opts = {}) {
         } else if (route === '/upload') {
             response = await upload(headers, body);
         } else if (route === '/download') {
-            response = download(fileId);
+            response = download(fileId, headers);
         } else if (route === '/release') {
             response = release(fileId, headers, body);
         } else {
@@ -755,6 +775,7 @@ export function makeProtocolFake(opts = {}) {
         state.keys.set(fileId, {
             h: bytesToHex(h), v: bytesToHex(verifier),
             owner: state.user ?? 'testuser', attempts: 0, releasedAt: null,
+            downloadTicket: null,
         });
         storeFile(fileId, {
             name, blob, expiry: expiry ?? null, receiptHash: await cryptoService.receiptHash(receipt),

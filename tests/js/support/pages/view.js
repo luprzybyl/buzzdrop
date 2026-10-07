@@ -31,6 +31,10 @@ export const DEFAULT_MESSAGE = 'meet at the hive at noon';
 /** A verifier no password derives, for someone else's wrong guesses. */
 const WRONG_VERIFIER = 'f'.repeat(64);
 
+// Status lines a still-running attempt writes; the driver's attempt waits
+// for anything else.
+const PROGRESS_STATUS = /^(Checking password|Downloading encrypted file|Decrypting)…/;
+
 /**
  * @typedef {object} ShareOptions
  * @property {'file' | 'message'} [type]
@@ -39,7 +43,8 @@ const WRONG_VERIFIER = 'f'.repeat(64);
  * @property {string} [password] - the share's password
  * @property {string | Bytes} [content] - what was shared
  * @property {'done' | 'in-progress'} [download] - in-progress holds the
- *   download until finishDownload()
+ *   /download fetch (which now runs inside the decrypt attempt) until
+ *   finishDownload()
  * @property {'ok' | 'unsupported-format' | 'corrupted'} [share] - DOM layer only
  * @property {'ok' | 'claimed' | 'burned' | 'error' | 'unreachable'} [server] -
  *   claimed: someone already decrypted it; burned: someone's wrong guesses
@@ -78,9 +83,21 @@ const WRONG_VERIFIER = 'f'.repeat(64);
  */
 
 /**
+ * The salt the page derives the verifier with: it comes from the rendered
+ * view-config, so the fixture must carry the seeded share's own salt — the
+ * same value the server reads from the blob's BKV3 prefix.
+ * @param {string} html
+ * @param {string} saltHex
+ */
+function replaceSalt(html, saltHex) {
+    const edited = html.replace(/"salt": "[0-9a-f]{32}"/, `"salt": "${saltHex}"`);
+    if (edited === html) throw new Error('fixture edit: no "salt" in the fixture');
+    return edited;
+}
+
+/**
  * Open a share's view page, the way the confirm page lands on it, and wait
- * until it is ready for a password (or, with download: 'in-progress', until
- * it is waiting for the share).
+ * until it is ready for a password.
  * @param {ShareOptions} [options]
  * @returns {Promise<ShareView>}
  */
@@ -105,12 +122,25 @@ export async function openShare({
     // Only what the page sends from here on is its own.
     const logStart = backend.log.length;
 
+    /** @type {string} */
+    let saltHex;
+    try {
+        const blob = /** @type {Bytes} */ (backend.state.files.get(fileId)?.blob);
+        saltHex = bytesToHex(cryptoService.parseBlob(blob).salt);
+    } catch {
+        // A share that can't be parsed has no honest salt; the page only
+        // needs a well-formed hex string to reach the decrypt stage.
+        saltHex = '00'.repeat(16);
+    }
+
     const { fixture, fileId: fixtureId } = FIXTURES[type];
     const page = openPage(fixture, {
         path: addressOf(`/view/${fileId}/confirm`, { link, password, query }),
         // As the server renders it for this share.
-        edit: (html) => replaceInFixture(replaceInFixture(html, fixtureId, fileId),
-            'You have one attempt', maxAttempts === 1 ? 'You have one attempt' : `You have ${maxAttempts} attempts`),
+        edit: (html) => replaceSalt(
+            replaceInFixture(replaceInFixture(html, fixtureId, fileId),
+                'You have one attempt', maxAttempts === 1 ? 'You have one attempt' : `You have ${maxAttempts} attempts`),
+            saltHex),
     });
     const { window, screen, user } = page;
 
@@ -139,17 +169,17 @@ export async function openShare({
         saved.push({ name: this.download, blob: blobs.get(this.href) });
     });
 
-    const ready = initView(window.document, { fetch, crypto: cryptoService });
-    if (download === 'done') await ready;
+    await initView(window.document, { fetch, crypto: cryptoService });
 
     const status = () => screen.getByRole('status');
     const passwordField = () => screen.getByLabelText('Password');
     const decryptButton = () => screen.getByRole('button', { name: /^Decrypt and / });
 
     /**
-     * Try a password and wait until the status line reports the outcome. It
-     * waits for the page to write the line, not for different text, so an
-     * outcome worded like the one before still counts.
+     * Try a password and wait until the status line reports the outcome. The
+     * attempt writes progress lines first (checking, downloading, decrypting),
+     * so the wait ends on the first status that is none of those — and only
+     * after the status has moved at all, or the prompt itself would count.
      * @param {(field: HTMLElement) => Promise<void>} submit
      */
     const attempt = async (submit) => {
@@ -160,7 +190,10 @@ export async function openShare({
             const field = passwordField();
             await user.clear(field);
             await submit(field);
-            await waitUntil(() => expect(reported).toBe(true), timeout);
+            await waitUntil(() => {
+                expect(reported).toBe(true);
+                expect(PROGRESS_STATUS.test(status().textContent)).toBe(false);
+            }, timeout);
         } finally {
             observer.disconnect();
         }
@@ -182,7 +215,6 @@ export async function openShare({
         copyMessage: () => user.click(screen.getByRole('button', { name: 'Copy text' })),
         async finishDownload() {
             finishDownload();
-            await ready;
         },
         async savedFile() {
             if (saved.length !== 1) throw new Error(`the page saved ${saved.length} files, not one`);

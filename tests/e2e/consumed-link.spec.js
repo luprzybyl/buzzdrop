@@ -10,7 +10,7 @@ test('a second visit to a consumed link fails', async ({ page, recipient, shareP
     await logIn(page);
     const link = await shareFile(page, uniqueFile(), password);
 
-    const blob = await openShare(recipient, link);
+    const config = await openShare(recipient, link);
     await decryptFile(recipient, password);
     await expect(shareStatus(recipient)).toHaveText('Download complete.');
 
@@ -19,5 +19,5 @@ test('a second visit to a consumed link fails', async ({ page, recipient, shareP
     await recipient.goto(shareUrl(link, 'download'));
     await expect(flash(recipient)).toContainText('This file has already been downloaded');
 
-    expect(await releaseStatus(recipient, link, blob, password)).toBe(410);
+    expect(await releaseStatus(recipient, link, config, password)).toBe(410);
 });

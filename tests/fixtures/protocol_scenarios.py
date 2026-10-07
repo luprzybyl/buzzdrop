@@ -87,9 +87,20 @@ def upload_note(name='upload', share='begin'):
     }
 
 
-def download(name='download', share='begin'):
-    return {'name': name, 'method': 'GET', 'as': None,
+def download(name='download', share='begin', ticket='release', raw=None):
+    """GET /download. ``ticket`` names the release step whose ``ticket``
+    response field goes into the X-Download-Ticket header — the credential
+    /download demands since the blob is served only after a key release.
+    ``raw`` sends a literal header value (a wrong ticket); ``ticket=None``
+    sends no header at all.
+    """
+    step = {'name': name, 'method': 'GET', 'as': None,
             'path': ['/download/', file_id(share)]}
+    if raw is not None:
+        step['headers'] = {'X-Download-Ticket': raw}
+    elif ticket is not None:
+        step['headers'] = {'X-Download-Ticket': ref(f'{ticket}.ticket')}
+    return step
 
 
 def release(name='release', share='begin', v=V):
@@ -107,12 +118,12 @@ SCENARIOS = [
     # --- Happy paths -------------------------------------------------------
     {
         'name': 'file-round-trip',
-        'steps': [begin(), upload_file(), download(), release(), report(),
+        'steps': [begin(), upload_file(), release(), download(), report(),
                   download('download-again'), release('release-again')],
     },
     {
         'name': 'note-round-trip',
-        'steps': [begin(), upload_note(), download(), release(), report()],
+        'steps': [begin(), upload_note(), release(), download(), report()],
     },
     {
         'name': 'report-first-valid-wins',
@@ -141,7 +152,7 @@ SCENARIOS = [
     {
         'name': 'release-expired',
         'steps': [begin(), upload_file(expiry=PAST_EXPIRY), release('expired'),
-                  release('expired-again'), download()],
+                  release('expired-again'), download(ticket=None)],
     },
     {
         'name': 'release-missing-or-pending',
@@ -201,8 +212,19 @@ SCENARIOS = [
     # --- Download / report edge cases --------------------------------------
     {
         'name': 'download-missing',
-        'steps': [download('missing-file', share=MISSING_ID), begin('begin-unfinished'),
-                  download('pending', share='begin-unfinished')],
+        'steps': [download('missing-file', share=MISSING_ID, ticket=None),
+                  begin('begin-unfinished'),
+                  download('pending', share='begin-unfinished', ticket=None)],
+    },
+    {
+        # The blob is gated by the one-time ticket the winning /release
+        # mints: no header or a wrong one is a 403, and the share is NOT
+        # consumed — the same ticket then serves it.
+        'name': 'download-requires-ticket',
+        'steps': [begin(), upload_file(),
+                  download('no-ticket', ticket=None),
+                  download('wrong-ticket', raw='ef' * 32),
+                  release(), download()],
     },
     {
         'name': 'report-enforcement',
@@ -230,7 +252,7 @@ SCENARIOS = [
     {
         'name': 'rate-limit-download',
         'config': {'PUBLIC_FILE_RATE_LIMIT': '1 per minute'},
-        'steps': [begin(), upload_file(), download(),
+        'steps': [begin(), upload_file(), release(), download(),
                   {**download('download-limited'), 'injected': True}],
     },
     {

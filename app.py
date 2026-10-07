@@ -1077,6 +1077,20 @@ def download_file(file_id):
         flash('File has expired')
         return redirect(url_for('index'))
 
+    # The blob is served only to whoever proved the password: the winning
+    # /release minted a one-time download ticket in the same transaction
+    # that handed out H. Without it, opening this URL must not consume
+    # the share — a bare link holder could otherwise burn it for the
+    # legitimate recipient.
+    share = file_repo.get_key_share(file_id)
+    ticket = request.headers.get('X-Download-Ticket') or ''
+    if (
+        share is None
+        or share.get('released_at') is None
+        or not secrets.compare_digest(share.get('download_ticket') or '', ticket)
+    ):
+        return {'error': 'Forbidden'}, 403
+
     # Get client IP address
     client_ip = get_client_ip()
 
@@ -1113,6 +1127,11 @@ def download_file(file_id):
         },
         mimetype='application/octet-stream'
     )
+    # The client streams this into a progress bar — give it a total.
+    try:
+        response.headers['Content-Length'] = str(storage.size(file_info['path']))
+    except Exception:
+        pass
     return response
 
 
@@ -1156,6 +1175,16 @@ def upload_success(file_id):
                            file_type=file_info.get('type'))
 
 
+def _live_key_share(file_id):
+    """The key share while it can still be claimed, or None. A files row
+    without one is a zombie — burned on lockout/expiry, or released but
+    never downloaded."""
+    share = file_repo.get_key_share(file_id)
+    if share is None or share.get('released_at') is not None:
+        return None
+    return share
+
+
 @app.route('/view/<file_id>', methods=['GET'])
 @limiter.shared_limit(
     lambda: current_app.config['PUBLIC_FILE_RATE_LIMIT'],
@@ -1170,6 +1199,9 @@ def view_file(file_id):
         return redirect(url_for('index'))
     if check_and_handle_expiry(file_info):
         flash('File has expired')
+        return redirect(url_for('index'))
+    if _live_key_share(file_id) is None:
+        flash('This file has already been downloaded')
         return redirect(url_for('index'))
     file_type = file_info.get('type', 'file')
     return render_template('confirm_download.html', file_id=file_id, original_name=file_info.get('original_name'), file_type=file_type)
@@ -1192,8 +1224,24 @@ def confirm_view_file(file_id):
     if not _is_valid_csrf_token():
         flash('Invalid request')
         return redirect(url_for('view_file', file_id=file_id))
+    if _live_key_share(file_id) is None:
+        flash('This file has already been downloaded')
+        return redirect(url_for('index'))
+
+    # The page proves the password BEFORE downloading: it needs the salt
+    # (the only non-secret the envelope carries) ahead of the blob, so the
+    # server reads the unencrypted BKV3 prefix and hands the salt over.
+    try:
+        prefix = storage.read_prefix(file_info['path'], 32)
+    except Exception:
+        prefix = b''
+    if len(prefix) < 20 or prefix[:4] != b'BKV3':
+        flash('File not found')
+        return redirect(url_for('index'))
+
     file_type = file_info.get('type', 'file')
     return render_template('view.html', file_id=file_id, original_name=file_info.get('original_name'), file_type=file_type,
+                           salt=prefix[4:20].hex(),
                            max_attempts=current_app.config['KEY_RELEASE_MAX_ATTEMPTS'])
 
 
@@ -1239,7 +1287,7 @@ def release_key(file_id):
     if status == 'ok':
         current_app.logger.info(
             'Key-release share %s released (ip=%s)', file_id, client_ip)
-        return {'h': result['h']}
+        return {'h': result['h'], 'ticket': result['download_ticket']}
     if status == 'denied':
         current_app.logger.warning(
             'Failed key-release attempt on %s (attempts=%s, ip=%s)',

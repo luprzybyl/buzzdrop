@@ -16,6 +16,7 @@ churn whenever a JS file changes; JSON config blocks are kept).
 
 Usage: python tests/fixtures/render_dom_fixtures.py   (or: npm run fixtures)
 """
+import os
 import re
 import sys
 import tempfile
@@ -72,6 +73,10 @@ API_TOKENS = [{
 }]
 SHARE_FILE = _file('00000000-0000-4000-8000-0000000000f1', 'contract.pdf')
 SHARE_TEXT = _file('00000000-0000-4000-8000-0000000000f2', 'Secret Note', type='text')
+# The view page gets the PBKDF2 salt from the stored blob's unencrypted
+# BKV3 prefix — share fixtures need a real blob in the uploads dir and a
+# bound key share, or confirm_view_file bounces the render.
+SHARE_BLOB = b'BKV3' + b'\xaa' * 16 + b'\xbb' * 12 + b'fixture ciphertext'
 
 SCRIPT_SRC_TAG = re.compile(r'[ \t]*<script\b[^>]*\bsrc=[^>]*>\s*</script>[ \t]*\n?')
 IMPORT_MAP_TAG = re.compile(r'[ \t]*<script type="importmap">.*?</script>[ \t]*\n?', re.DOTALL)
@@ -113,7 +118,7 @@ def _render(name, client, method, path, data=None):
     return name, _clean(response.get_data(as_text=True))
 
 
-def render_all():
+def render_all(upload_dir):
     fixtures = []
 
     _reset([])
@@ -129,7 +134,15 @@ def render_all():
     fixtures.append(_render('users--admin', _client('adminuser'), 'GET', '/users'))
 
     for kind, record in (('file', SHARE_FILE), ('text', SHARE_TEXT)):
+        blob_path = os.path.join(upload_dir, record['id'])
+        with open(blob_path, 'wb') as handle:
+            handle.write(SHARE_BLOB)
+        record['path'] = blob_path
         _reset([record])
+        with flask_app.app_context():
+            store = get_backend().files
+            store.create_key_share(record['id'], 'cc' * 32, created_by='testuser')
+            store.bind_key_verifier(record['id'], 'dd' * 32)
         view_path = f"/view/{record['id']}"
         fixtures.append(_render(f'confirm_download--{kind}', _client(), 'GET', view_path))
         fixtures.append(_render(f'view--{kind}', _client(), 'POST', f'{view_path}/confirm',
@@ -149,8 +162,8 @@ def main():
         with flask_app.app_context():
             flask_app.backend = get_backend()
         try:
-            fixtures = render_all()
-            if fixtures != render_all():
+            fixtures = render_all(tmp)
+            if fixtures != render_all(tmp):
                 sys.exit('render_dom_fixtures: output differs between two runs')
         finally:
             with flask_app.app_context():
