@@ -34,19 +34,6 @@ def _clear_csrf(client):
         session.pop('csrf_token', None)
 
 
-@pytest.fixture
-def key_release_settings(app):
-    """Mutate key-release config and restore it afterwards."""
-    keys = (
-        'KEY_RELEASE_RATE_LIMIT',
-        'KEY_RELEASE_MAX_ATTEMPTS',
-        'KEY_RELEASE_BURN_ON_LOCKOUT',
-    )
-    original = {key: app.config.get(key) for key in keys}
-    yield app.config
-    app.config.update(original)
-
-
 def _create_file_record(files_store, file_id='file-1', **overrides):
     doc = {
         'id': file_id,

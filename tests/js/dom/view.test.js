@@ -86,10 +86,11 @@ describe('view page', () => {
             status,
             input,
             decryptBtn,
+            form: required(window.document, '#decrypt-form', 'form'),
+            attemptsWarning: required(window.document, '#attempts-warning', 'p'),
             textDisplay: required(window.document, '#text-display', 'div'),
             textContent: required(window.document, '#text-content', 'pre'),
             copyBtn: required(window.document, '#copy-text-btn', 'button'),
-            passwordStatus: required(window.document, '#password-status', 'p'),
             // Types the password, clicks Decrypt and waits for the outcome.
             /** @param {string} password */
             async decrypt(password) {
@@ -102,16 +103,63 @@ describe('view page', () => {
     };
 
     it('a text note is shown in the page once decrypted', async () => {
-        const { decrypt, status, input, decryptBtn, textDisplay, textContent, reports } = await start();
+        const { decrypt, status, form, textDisplay, textContent, reports } = await start();
 
         await decrypt('correct horse');
 
         expect(textContent.textContent).toBe(NOTE);
         expect(textDisplay.style.display).toBe('block');
         expect(status.textContent).toBe('Text decrypted successfully.');
-        expect(input.style.display).toBe('none');
-        expect(decryptBtn.style.display).toBe('none');
+        expect(form.style.display).toBe('none');
         expect(reports).toEqual([{ success: true, receipt: RECEIPT_HEX }]);
+    });
+
+    // happy-dom has no implicit submission, so this submits the form the way
+    // Enter in the field does in a browser (the E2E note journey presses Enter).
+    it('submitting the form decrypts without navigating away', async () => {
+        const { form, input, status, textContent } = await start();
+        input.value = 'correct horse';
+        // Runs after the page's listener, so it sees whether that one
+        // cancelled the navigation (happy-dom wouldn't navigate either way).
+        let navigationCancelled = false;
+        form.addEventListener('submit', (event) => { navigationCancelled = event.defaultPrevented; });
+
+        form.requestSubmit();
+
+        await vi.waitFor(() => expect(status.textContent).toBe('Text decrypted successfully.'));
+        expect(textContent.textContent).toBe(NOTE);
+        expect(navigationCancelled).toBe(true);
+    });
+
+    // A submit before the page's listener exists would navigate natively (a
+    // GET of the POST-only confirm page) and lose the share, whose download
+    // is served once — so Decrypt stays disabled until the download is in.
+    it('Decrypt stays disabled until the share has downloaded', async () => {
+        page = loadFixture('view--text', {}, PAGE_URL);
+        const window = browserView(page);
+        const decryptBtn = required(window.document, '#decrypt-btn', 'button');
+        /** @type {(response: Response) => void} */
+        let finishDownload = () => {};
+        const fetch = /** @type {typeof globalThis.fetch} */ (vi.fn(
+            () => new Promise((resolve) => { finishDownload = resolve; })));
+        const crypto = {
+            parseBlob: () => ({ version: 3, salt: new Uint8Array(16), iv: new Uint8Array(12), ciphertext: new Uint8Array(0) }),
+            deriveVerifier: async () => new Uint8Array(32),
+            decrypt: async () => ({ data: new Uint8Array(0), receipt: RECEIPT }),
+        };
+
+        const ready = initView(window.document, { fetch, crypto });
+
+        expect(decryptBtn.disabled).toBe(true);
+        finishDownload(new window.Response(new Uint8Array(100)));
+        await ready;
+        expect(decryptBtn.disabled).toBe(false);
+    });
+
+    it('the status line is a live region, so outcomes are announced', async () => {
+        const { status } = await start();
+
+        expect(status.getAttribute('aria-live')).toBe('polite');
     });
 
     it('Copy copies the note and shows "Copied!"', async () => {
@@ -166,6 +214,19 @@ describe('view page', () => {
         expect(reports).toEqual([]);
     });
 
+    // The warning counts the attempts before the first one; afterwards the
+    // status line reports what is left, or that the share is gone.
+    it('the attempts warning goes once a password has been tried', async () => {
+        const { decrypt, attemptsWarning } = await start({
+            release: { status: 403, body: { error: 'Incorrect password', attempts_remaining: 2 } },
+        });
+        expect(attemptsWarning.hidden).toBe(false);
+
+        await decrypt('wrong');
+
+        expect(attemptsWarning.hidden).toBe(true);
+    });
+
     it('a failed decryption is reported to the server', async () => {
         const { decrypt, input, decryptBtn, reports } = await start({
             release: { status: 410, body: { error: 'Key already released' } },
@@ -179,7 +240,9 @@ describe('view page', () => {
     });
 
     it('an unsupported share format disables the form', async () => {
-        const { status, input, decryptBtn } = await start({ unsupported: true });
+        const { status, input, decryptBtn, attemptsWarning } = await start({ unsupported: true });
+
+        expect(attemptsWarning.hidden).toBe(true);
 
         expect(status.textContent).toBe(
             'This share uses an unsupported format. Ask the author to upload it again.');
@@ -188,10 +251,18 @@ describe('view page', () => {
     });
 
     it('fills the password from a well-formed fragment', async () => {
-        const { window, input, decryptBtn, passwordStatus } = await start({ url: `${PAGE_URL}#correct%20horse` });
+        const { window, input, decryptBtn } = await start({ fixture: 'view--file', url: `${PAGE_URL}#correct%20horse` });
 
         expect(input.value).toBe('correct horse');
-        expect(passwordStatus.style.display).toBe('flex');
+        expect(required(window.document, '#password-status', 'p').style.display).toBe('flex');
+        expect(window.document.activeElement).toBe(decryptBtn);
+    });
+
+    it('a note fills the password from the fragment without a press-Decrypt hint', async () => {
+        const { window, input, decryptBtn } = await start({ url: `${PAGE_URL}#correct%20horse` });
+
+        expect(input.value).toBe('correct horse');
+        expect(window.document.querySelector('#password-status')).toBeNull();
         expect(window.document.activeElement).toBe(decryptBtn);
     });
 
@@ -203,10 +274,10 @@ describe('view page', () => {
     });
 
     it('scrubs a malformed fragment and leaves the field empty', async () => {
-        const { window, input, passwordStatus } = await start({ url: `${PAGE_URL}#%ZZ` });
+        const { window, input } = await start({ fixture: 'view--file', url: `${PAGE_URL}#%ZZ` });
 
         expect(window.location.href).toBe(PAGE_URL);
         expect(input.value).toBe('');
-        expect(passwordStatus.style.display).toBe('none');
+        expect(required(window.document, '#password-status', 'p').style.display).toBe('none');
     });
 });

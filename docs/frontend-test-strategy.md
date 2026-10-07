@@ -158,7 +158,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
   - Copy-to-clipboard status.
   - Delete confirmation via `data-confirm-message`.
   - Shared files: search, sort, pagination and their URL sync. Status refresh updates the row and re-renders (one row, stubbed `fetch`).
-- **View page (`view.js`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment.
+- **View page (`view.js`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment, submitting the form (what Enter does) without navigating, the status line as a live region.
 - **Success page (`success.js`):** copy link and one-click link, password visibility toggle, the field filled from a well-formed fragment.
 - **Confirm page (`confirm-download.js`):** the fragment password carried across the confirm POST (one well-formed case).
 - **Hero flow (`hero-flow.js`):** reduced motion means no autoplay; the toggle pauses it.
@@ -172,7 +172,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 
 ### E2E journeys (Playwright, against the app container)
 1. File: upload → success → share link → confirm → decrypt → downloaded bytes equal the original.
-2. Text note round trip, with the plaintext shown on the page.
+2. Text note round trip, with the plaintext shown on the page; the password is submitted with Enter.
 3. A second visit to a consumed link fails (download gone, release returns 410).
 4. One wrong password burns the file under the default profile; a later correct password fails.
 5. A one-click `#password` link decrypts without typing, and the fragment is gone from the URL afterwards.

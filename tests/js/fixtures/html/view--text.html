@@ -84,36 +84,41 @@
 
             <span class="eyebrow">Recipient step</span>
             <h1 class="mt-5 wrap-break-word text-2xl font-semibold tracking-tight text-white">Secret Note</h1>
-            <p id="status" class="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-400">
+            <p id="status" class="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-400" aria-live="polite">
                 Enter the password to reveal this note.
             </p>
         </div>
 
-        <div class="mt-7 space-y-3">
-            <input id="password-input" type="password" placeholder="Password" autocomplete="off" class="field-input text-center">
-            <button id="decrypt-btn" class="btn-primary w-full">
+        <form id="decrypt-form" class="mt-7 space-y-3">
+            <div>
+                <label for="password-input" class="field-label">Password</label>
+                <input id="password-input" type="password" autocomplete="off" aria-describedby="attempts-warning" class="field-input text-center">
+            </div>
+            <p id="attempts-warning" class="field-help">
+                You have one attempt — check the password before you continue.
+            </p>
+            
+            <button id="decrypt-btn" type="submit" class="btn-primary w-full" disabled>
                 <span class="relative z-10">Decrypt and view</span>
             </button>
-        </div>
+        </form>
 
-        <p id="password-status" class="mt-4 flex items-center justify-center gap-2 text-sm font-medium text-emerald-300" style="display: none;">
-            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 0 1 0 1.414l-8 8a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L8 12.586l7.293-7.293a1 1 0 0 1 1.414 0Z" clip-rule="evenodd"/>
-            </svg>
-            Password auto-filled — click to proceed.
-        </p>
+        
 
-        <div id="text-display" class="mt-7 overflow-hidden rounded-2xl border border-white/[0.07] bg-hive-850/70" style="display: none;">
-            <div class="flex items-center justify-between gap-3 border-b border-white/6 px-4 py-3">
-                <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Decrypted text</h2>
-                <button id="copy-text-btn" class="btn-secondary px-3 py-1.5 text-xs">Copy</button>
+        <div id="text-display" class="mt-7" style="display: none;">
+            <h2 class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Decrypted text</h2>
+            <div class="overflow-hidden rounded-2xl border border-white/[0.07] bg-hive-850/70">
+                <div class="flex items-center justify-between gap-3 border-b border-white/6 px-4 py-3">
+                    <p class="text-xs text-honey-200/80">Copy it now — this page can’t be reopened.</p>
+                    <button id="copy-text-btn" class="btn-secondary shrink-0 px-3 py-1.5 text-xs">Copy</button>
+                </div>
+                <pre id="text-content" class="max-h-96 overflow-y-auto whitespace-pre-wrap wrap-break-word px-4 py-4 font-mono text-sm leading-6 text-slate-200"></pre>
             </div>
-            <pre id="text-content" class="max-h-96 overflow-y-auto whitespace-pre-wrap wrap-break-word px-4 py-4 font-mono text-sm leading-6 text-slate-200"></pre>
         </div>
     </div>
 
     <p class="mt-6 text-center text-xs text-slate-600">
-        Decryption happens entirely in your browser. The password is never sent to the server.
+        Decryption happens entirely in your browser. Your password stays in your browser; only a derived check value is sent.
     </p>
 </div>
 <script id="view-config-json" type="application/json">{"downloadUrl": "/download/00000000-0000-4000-8000-0000000000f2", "fileType": "text", "originalName": "Secret Note", "releaseUrl": "/release/00000000-0000-4000-8000-0000000000f2", "reportDecryptionUrl": "/report_decryption/00000000-0000-4000-8000-0000000000f2"}</script>
