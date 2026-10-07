@@ -248,8 +248,8 @@ export function shareUrl(link, route) {
 }
 
 /**
- * The flash message the next page shows after a redirect, e.g. when a dead
- * share link bounces to the index.
+ * The flash message the next page shows after a redirect, e.g. when a
+ * spent /download link bounces to the index.
  * @param {Page} page
  * @returns {import('@playwright/test').Locator}
  */
@@ -260,13 +260,14 @@ export function flash(page) {
 }
 
 /**
- * The share link leads nowhere: the index bounces it with "File not found"
+ * The share link leads nowhere: it answers 404 with the "drop is gone" page
  * and offers no way to proceed.
  * @param {Page} page
  * @param {string} link
  */
 export async function expectDeadLink(page, link) {
-    await page.goto(link);
-    await expect(flash(page)).toHaveText('File not found');
+    const response = await page.goto(link);
+    expect(response?.status()).toBe(404);
+    await expect(page.getByRole('heading', { name: 'This drop is gone' })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Proceed to / })).toHaveCount(0);
 }

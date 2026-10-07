@@ -5,6 +5,7 @@ import secrets
 import sys
 import tempfile
 import uuid
+from datetime import datetime
 import pytest
 from dotenv import load_dotenv
 
@@ -182,6 +183,35 @@ def key_release_settings(app):
     original = {key: app.config.get(key) for key in keys}
     yield app.config
     app.config.update(original)
+
+
+@pytest.fixture
+def file_record(files_store):
+    """
+    Insert a files row directly, bypassing the upload routes.
+
+    Returns a factory: _insert(file_id=None, **overrides) -> file_id.
+    The defaults describe an active, unopened, non-expiring file drop
+    uploaded by the test user whose blob is not in storage; ``overrides``
+    replace or add columns (e.g. ``type='text'``, ``downloaded_at=...``).
+    """
+    def _insert(file_id=None, **overrides):
+        file_id = file_id or str(uuid.uuid4())
+        record = {
+            'id': file_id,
+            'original_name': 'secret.txt',
+            'path': f'nonexistent/{file_id}',
+            'created_at': datetime.now().isoformat(),
+            'downloaded_at': None,
+            'uploaded_by': 'testuser',
+            'expiry_at': None,
+            'status': 'active',
+            'type': 'file',
+        }
+        record.update(overrides)
+        files_store.insert(record)
+        return file_id
+    return _insert
 
 
 @pytest.fixture

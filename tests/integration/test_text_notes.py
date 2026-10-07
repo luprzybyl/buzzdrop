@@ -221,8 +221,8 @@ def test_text_note_deletion_after_view(client, app, files_store):
     assert note_info['downloaded_at'] is not None
 
     # Try to view again - should fail
-    response = client.get(url_for('view_file', file_id=note_id), follow_redirects=False)
-    assert response.status_code == 302  # Redirect because already downloaded
+    response = client.get(url_for('view_file', file_id=note_id))
+    assert response.status_code == 404  # The uniform "drop is gone" page
 
 def test_delete_text_note_before_view(client, app, files_store, csrf_form_data):
     """Test manual deletion of text note before it's viewed."""

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{# Dead ends: a gone drop link, an unknown URL, a server error. #}
+{% block content %}
+<div class="mx-auto max-w-xl">
+    <div class="surface-card animate-zoom-in p-8 text-center sm:p-10">
+        <span class="relative mx-auto mb-6 block h-16 w-16">
+            <span class="absolute inset-0 animate-halo-pulse rounded-full bg-honey-400/25 blur-xl" aria-hidden="true"></span>
+            <svg viewBox="0 0 64 64" class="relative h-16 w-16 text-honey-300" fill="none" aria-hidden="true">
+                <path d="M32 4 54 16.7v25.6L32 55 10 42.3V16.7z" stroke="currentColor" stroke-width="1.5" opacity=".4"/>
+                <path d="M32 11 48 20.2v18.6L32 48l-16-9.2V20.2z" fill="currentColor" opacity=".08"/>
+                <path d="M25 22.5l14 14m0-14L25 36.5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+        </span>
+
+        <span class="eyebrow">{{ eyebrow }}</span>
+
+        <h1 class="mt-5 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{{ heading }}</h1>
+
+        <p class="mx-auto mt-3 max-w-sm text-sm text-slate-400">{{ message }}</p>
+
+        <a href="{{ url_for('index') }}" class="btn-primary mt-7 w-full">
+            <span class="relative z-10">Go to BuzzDrop</span>
+        </a>
+    </div>
+</div>
+{% endblock %}

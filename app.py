@@ -21,7 +21,7 @@ from flask import (
     current_app,
     has_app_context,
 )
-from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.exceptions import InternalServerError, NotFound, RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 from flask_limiter import Limiter
 from db import create_backend
@@ -531,17 +531,21 @@ def handle_large_file(error):
     return 'File too large', 413
 
 
-@app.errorhandler(429)
-def handle_rate_limit(error):
-    """Return consistent rate-limit responses for HTML, AJAX, and API clients."""
-    message = getattr(error, 'description', RATE_LIMIT_EXCEEDED_MESSAGE)
-    is_api_request = (
+def _is_api_request():
+    """True when the client expects JSON rather than an HTML page."""
+    return (
         request.path.startswith('/api/')
         or request.headers.get('Authorization', '').startswith('Bearer ')
         or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     )
 
-    if is_api_request:
+
+@app.errorhandler(429)
+def handle_rate_limit(error):
+    """Return consistent rate-limit responses for HTML, AJAX, and API clients."""
+    message = getattr(error, 'description', RATE_LIMIT_EXCEEDED_MESSAGE)
+
+    if _is_api_request():
         return {'error': message}, 429
 
     if request.endpoint == 'login':
@@ -549,6 +553,52 @@ def handle_rate_limit(error):
         return render_template('login.html'), 429
 
     return message, 429
+
+
+def _error_page(status, eyebrow, heading, message):
+    """A dead-end page in the card style, rendered from templates/error.html."""
+    return render_template('error.html', eyebrow=eyebrow, heading=heading,
+                           message=message), status
+
+
+@app.errorhandler(NotFound)
+def handle_not_found(error):
+    """A themed 404 page instead of Werkzeug's default (JSON for API clients)."""
+    if _is_api_request():
+        return {'error': 'Not found'}, 404
+    return _error_page(404, '404', 'Page not found',
+                       "There's nothing at this address.")
+
+
+@app.errorhandler(InternalServerError)
+def handle_server_error(error):
+    """A themed 500 page instead of Werkzeug's default (JSON for API clients)."""
+    if _is_api_request():
+        return {'error': 'Internal server error'}, 500
+    return _error_page(500, '500', 'Something went wrong',
+                       'The server hit an error. Please try again in a moment.')
+
+
+def _openable_drop(file_id):
+    """The drop's record while its link can still be opened, else None."""
+    file_info = file_repo.get_by_id(file_id)
+    if (not file_info or file_info['downloaded_at'] is not None
+            or check_and_handle_expiry(file_info)):
+        return None
+    return file_info
+
+
+def _drop_gone():
+    """
+    The /view page for a drop link that leads nowhere. It is the same whether
+    the drop was already opened, expired or never existed, so the page
+    reveals nothing about which, just as /release answers a uniform 404.
+    (/download still flashes the reason; only /view is uniform.)
+    """
+    return _error_page(404, 'Dead link', 'This drop is gone',
+                       'It was already opened, it expired, or it never existed. '
+                       'Ask the sender for a new one.')
+
 
 @app.route('/')
 def index():
@@ -1164,13 +1214,9 @@ def upload_success(file_id):
     error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
 )
 def view_file(file_id):
-    file_info = file_repo.get_by_id(file_id)
-    if not file_info or file_info['downloaded_at'] is not None:
-        flash('File not found')
-        return redirect(url_for('index'))
-    if check_and_handle_expiry(file_info):
-        flash('File has expired')
-        return redirect(url_for('index'))
+    file_info = _openable_drop(file_id)
+    if not file_info:
+        return _drop_gone()
     file_type = file_info.get('type', 'file')
     return render_template('confirm_download.html', file_id=file_id, original_name=file_info.get('original_name'), file_type=file_type)
 
@@ -1182,13 +1228,9 @@ def view_file(file_id):
     error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
 )
 def confirm_view_file(file_id):
-    file_info = file_repo.get_by_id(file_id)
-    if not file_info or file_info['downloaded_at'] is not None:
-        flash('File not found')
-        return redirect(url_for('index'))
-    if check_and_handle_expiry(file_info):
-        flash('File has expired')
-        return redirect(url_for('index'))
+    file_info = _openable_drop(file_id)
+    if not file_info:
+        return _drop_gone()
     if not _is_valid_csrf_token():
         flash('Invalid request')
         return redirect(url_for('view_file', file_id=file_id))
