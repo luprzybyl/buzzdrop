@@ -658,20 +658,21 @@ export function initIndex(root, deps) {
         if (region) region.textContent = message;
     }
 
-    const noteField = root.getElementById('note-text');
+    const noteField = /** @type {HTMLTextAreaElement | null} */ (root.getElementById('note-text'));
     if (noteField) {
         noteField.addEventListener('input', () => setNoteError(''));
     }
 
     async function uploadNote() {
         if (uploadInProgress) return;
-        const noteText = required(root, '#note-text', 'textarea').value;
+        if (!noteField) return;
+        const noteText = noteField.value;
         const password = required(root, '#shared-password', 'input').value;
         const shareOptions = readShareOptions();
 
         if (!noteText) {
             setNoteError('Write the note you want to share.');
-            required(root, '#note-text', 'textarea').focus();
+            noteField.focus();
             return;
         }
         if (!requirePassword(password) || !enforcePasswordStrength(password)) return;

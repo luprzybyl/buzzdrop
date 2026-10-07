@@ -248,8 +248,8 @@ export function openUploadPage({
         clearPassword: () => user.clear(passwordField()),
         generatePassword: () => user.click(screen.getByRole('button', { name: 'Generate' })),
         copyPassword: () => user.click(screen.getByRole('button', { name: 'Copy password' })),
-        /** Press Show, or Hide when the password is on view. */
-        togglePasswordVisibility: () => user.click(screen.getByRole('button', { name: /^(Show|Hide) password$/ })),
+        showPassword: () => user.click(screen.getByRole('button', { name: 'Show password' })),
+        hidePassword: () => user.click(screen.getByRole('button', { name: 'Hide password' })),
         /**
          * How full the strength meter's bar is drawn, e.g. '68%'. The width is
          * visual, so it is read from the meter that carries it for the bar

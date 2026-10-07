@@ -147,11 +147,11 @@ describe('index page', () => {
             await upload.enterPassword('correct horse');
             expect(passwordField()).toHaveAttribute('type', 'password');
 
-            await upload.togglePasswordVisibility();
+            await upload.showPassword();
             expect(passwordField()).toHaveAttribute('type', 'text');
             expect(screen.getByRole('button', { name: 'Hide password' })).toBeVisible();
 
-            await upload.togglePasswordVisibility();
+            await upload.hidePassword();
             expect(passwordField()).toHaveAttribute('type', 'password');
             expect(screen.getByRole('button', { name: 'Show password' })).toBeVisible();
         });
