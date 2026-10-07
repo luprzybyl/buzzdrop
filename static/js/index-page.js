@@ -265,7 +265,7 @@ export function initIndex(root, deps) {
     function setPasswordVisible(visible) {
         if (!passwordInput || !togglePasswordBtn) return;
         passwordInput.type = visible ? 'text' : 'password';
-        togglePasswordBtn.textContent = visible ? 'Hide' : 'Show';
+        required(togglePasswordBtn, '#toggle-password-label', 'span').textContent = visible ? 'Hide' : 'Show';
         togglePasswordBtn.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
     }
 
