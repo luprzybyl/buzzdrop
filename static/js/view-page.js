@@ -108,8 +108,6 @@ export async function initView(root, deps) {
             // Files show a press-Decrypt hint; notes render none.
             const passwordStatus = /** @type {HTMLElement | null} */ (root.querySelector('#password-status'));
             if (passwordStatus) passwordStatus.style.display = 'flex';
-            // Focus the decrypt button so user can easily press Enter to proceed
-            decryptBtn.focus();
         }
     }
 
@@ -262,4 +260,9 @@ export async function initView(root, deps) {
             reportDecryption(false);
         }
     });
+    // The template renders the button disabled so nothing submits natively
+    // while the share downloads; only now does submit stay on the page.
+    decryptBtn.disabled = false;
+    // Focus the decrypt button so user can easily press Enter to proceed
+    if (fragmentPassword) decryptBtn.focus();
 }

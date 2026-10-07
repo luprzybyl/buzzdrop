@@ -131,6 +131,31 @@ describe('view page', () => {
         expect(navigationCancelled).toBe(true);
     });
 
+    // A submit before the page's listener exists would navigate natively (a
+    // GET of the POST-only confirm page) and lose the share, whose download
+    // is served once — so Decrypt stays disabled until the download is in.
+    it('Decrypt stays disabled until the share has downloaded', async () => {
+        page = loadFixture('view--text', {}, PAGE_URL);
+        const window = browserView(page);
+        const decryptBtn = required(window.document, '#decrypt-btn', 'button');
+        /** @type {(response: Response) => void} */
+        let finishDownload = () => {};
+        const fetch = /** @type {typeof globalThis.fetch} */ (vi.fn(
+            () => new Promise((resolve) => { finishDownload = resolve; })));
+        const crypto = {
+            parseBlob: () => ({ version: 3, salt: new Uint8Array(16), iv: new Uint8Array(12), ciphertext: new Uint8Array(0) }),
+            deriveVerifier: async () => new Uint8Array(32),
+            decrypt: async () => ({ data: new Uint8Array(0), receipt: RECEIPT }),
+        };
+
+        const ready = initView(window.document, { fetch, crypto });
+
+        expect(decryptBtn.disabled).toBe(true);
+        finishDownload(new window.Response(new Uint8Array(100)));
+        await ready;
+        expect(decryptBtn.disabled).toBe(false);
+    });
+
     it('the status line is a live region, so outcomes are announced', async () => {
         const { status } = await start();
 

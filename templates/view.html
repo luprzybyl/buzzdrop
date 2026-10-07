@@ -29,7 +29,11 @@
             <p id="attempts-warning" class="field-help">
                 You have {% if max_attempts == 1 %}one attempt{% else %}{{ max_attempts }} attempts{% endif %} — check the password before you continue.
             </p>
-            <button id="decrypt-btn" type="submit" class="btn-primary w-full">
+            {# Disabled until view-page.js has the share and handles submit:
+               a native submit would GET this POST-only page and lose the
+               share, whose /download is served once. With the default
+               button disabled, Enter in the field does nothing either. #}
+            <button id="decrypt-btn" type="submit" class="btn-primary w-full" disabled>
                 <span class="relative z-10">{% if file_type == 'text' %}Decrypt and view{% else %}Decrypt and download{% endif %}</span>
             </button>
         </form>
