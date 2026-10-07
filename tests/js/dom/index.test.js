@@ -117,7 +117,7 @@ describe('index page', () => {
             const copy = screen.getByRole('button', { name: 'Copy password' });
             await vi.waitFor(() => expect(copy).toHaveTextContent('Copied!'));
             expect(passwordCopyStatus()).toHaveTextContent('Password copied to clipboard.');
-            expect(await upload.clipboardText()).toBe(/** @type {HTMLInputElement} */ (passwordField()).value);
+            expect(passwordField()).toHaveValue(await upload.clipboardText());
 
             vi.advanceTimersByTime(2000);
 
@@ -140,6 +140,17 @@ describe('index page', () => {
             vi.advanceTimersByTime(4000);
 
             expect(copy).toHaveTextContent('Copy');
+        });
+
+        it('flashes "Failed" when the browser has no clipboard at all', async () => {
+            const upload = openUploadPage({ clipboard: 'unavailable' });
+
+            await upload.enterPassword(SIX_WORDS);
+            await upload.copyPassword();
+
+            await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Copy password' })).toHaveTextContent('Failed'));
+            expect(passwordCopyStatus())
+                .toHaveTextContent('Your browser blocked clipboard access, so the password was not copied.');
         });
 
         it('Copy is unavailable while the field is empty', async () => {
@@ -242,10 +253,15 @@ describe('index page', () => {
             expect(screen.queryByText(/FLASK_USER/)).toBeNull();
         });
 
-        it('an account with an email shows where they go', () => {
-            openUploadPage({ account: 'with-email' });
+        it('an account with an email shows where they go once the box is ticked', async () => {
+            const upload = openUploadPage({ account: 'with-email' });
 
             expect(screen.getByRole('checkbox', { name: /^Notify me when this is opened/ })).toBeEnabled();
+            expect(screen.getByLabelText('Account email')).not.toBeVisible();
+
+            await upload.setShareOptions({ notify: true });
+
+            expect(screen.getByLabelText('Account email')).toBeVisible();
             expect(screen.getByLabelText('Account email')).toHaveValue('notify@example.test');
         });
     });

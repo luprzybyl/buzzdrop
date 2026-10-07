@@ -153,7 +153,9 @@
                     </span>
                 </label>
                 {% if configured_notification_email %}
-                <div>
+                {# Shown while the box is ticked (index-page.js): it says where the
+                   notification will go, which matters only once one is asked for. #}
+                <div id="notification-email-field" hidden>
                     <label for="notification-email" class="field-label">Account email</label>
                     <input
                         id="notification-email"
