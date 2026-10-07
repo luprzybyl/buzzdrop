@@ -91,7 +91,6 @@ describe('view page', () => {
             textDisplay: required(window.document, '#text-display', 'div'),
             textContent: required(window.document, '#text-content', 'pre'),
             copyBtn: required(window.document, '#copy-text-btn', 'button'),
-            passwordStatus: required(window.document, '#password-status', 'p'),
             // Types the password, clicks Decrypt and waits for the outcome.
             /** @param {string} password */
             async decrypt(password) {
@@ -227,21 +226,20 @@ describe('view page', () => {
     });
 
     it('fills the password from a well-formed fragment', async () => {
-        const { window, input, decryptBtn, passwordStatus } = await start({ url: `${PAGE_URL}#correct%20horse` });
+        const { window, input, decryptBtn } = await start({ fixture: 'view--file', url: `${PAGE_URL}#correct%20horse` });
 
         expect(input.value).toBe('correct horse');
-        expect(passwordStatus.style.display).toBe('flex');
+        expect(required(window.document, '#password-status', 'p').style.display).toBe('flex');
         expect(window.document.activeElement).toBe(decryptBtn);
     });
 
-    it.each(/** @type {const} */ ([['view--text'], ['view--file']]))(
-        'drops the press-Decrypt hint once %s is decrypted', async (fixture) => {
-            const { decrypt, passwordStatus } = await start({ fixture, url: `${PAGE_URL}#correct%20horse` });
+    it('a note fills the password from the fragment without a press-Decrypt hint', async () => {
+        const { window, input, decryptBtn } = await start({ url: `${PAGE_URL}#correct%20horse` });
 
-            await decrypt('correct horse');
-
-            expect(passwordStatus.style.display).toBe('none');
-        });
+        expect(input.value).toBe('correct horse');
+        expect(window.document.querySelector('#password-status')).toBeNull();
+        expect(window.document.activeElement).toBe(decryptBtn);
+    });
 
     it('scrubs the fragment from the URL without adding a history entry', async () => {
         const { window } = await start({ url: `${PAGE_URL}?x=1#correct%20horse` });
@@ -251,10 +249,10 @@ describe('view page', () => {
     });
 
     it('scrubs a malformed fragment and leaves the field empty', async () => {
-        const { window, input, passwordStatus } = await start({ url: `${PAGE_URL}#%ZZ` });
+        const { window, input } = await start({ fixture: 'view--file', url: `${PAGE_URL}#%ZZ` });
 
         expect(window.location.href).toBe(PAGE_URL);
         expect(input.value).toBe('');
-        expect(passwordStatus.style.display).toBe('none');
+        expect(required(window.document, '#password-status', 'p').style.display).toBe('none');
     });
 });

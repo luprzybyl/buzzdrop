@@ -105,8 +105,9 @@ export async function initView(root, deps) {
             null, '', window.location.pathname + window.location.search);
         if (fragmentPassword) {
             passInput.value = fragmentPassword;
-            // Show status message
-            required(root, '#password-status', 'p').style.display = 'flex';
+            // Files show a press-Decrypt hint; notes render none.
+            const passwordStatus = /** @type {HTMLElement | null} */ (root.querySelector('#password-status'));
+            if (passwordStatus) passwordStatus.style.display = 'flex';
             // Focus the decrypt button so user can easily press Enter to proceed
             decryptBtn.focus();
         }
@@ -128,8 +129,6 @@ export async function initView(root, deps) {
 
     /** @param {Bytes} fileBytes */
     function showPlaintext(fileBytes) {
-        // The one-click hint says to press Decrypt — stale once that's done.
-        required(root, '#password-status', 'p').style.display = 'none';
         // Check if this is a text note or file
         if (fileType === 'text') {
             // Display text in the page
