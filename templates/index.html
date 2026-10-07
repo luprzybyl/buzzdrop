@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 
+{# The landing page uses the full shell; the composer and drop list a narrower column. #}
+{% block content_width %}{{ 'max-w-5xl' if session.get('username') }}{% endblock %}
+
 {% block content %}
 {% if session.get('username') %}
 {# ------------------------------------------------------------- Composer #}
-<div class="mx-auto max-w-5xl space-y-8">
+<div class="mx-auto {{ self.content_width() }} space-y-8">
     <header class="animate-fade-up space-y-4">
         <span class="eyebrow">
             <span class="h-1.5 w-1.5 rounded-full bg-honey-400" aria-hidden="true"></span>
@@ -30,7 +33,9 @@
         </div>
 
         <div id="file-upload-section" class="mt-6" role="tabpanel" aria-labelledby="file-tab">
-            <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+            {# novalidate: a missing file is reported inline in #file-error, like
+               every other refusal, not in the browser's own bubble. #}
+            <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" novalidate>
                 <label id="dropzone" for="file" class="dropzone block">
                     <div class="relative flex flex-col items-center gap-4">
                         <svg viewBox="0 0 48 48" class="h-14 w-14 text-honey-300" fill="none" aria-hidden="true">
@@ -64,52 +69,71 @@
 
         <div id="text-note-section" style="display:none;" class="mt-6" role="tabpanel" aria-labelledby="text-tab">
             <label for="note-text" class="field-label">Secret text</label>
-            <textarea id="note-text" rows="9" class="field-input min-h-56 font-mono text-[0.8rem] leading-6" placeholder="Paste the note you want to protect with a one-time buzz..." required></textarea>
+            <textarea id="note-text" rows="9" class="field-input min-h-56 font-mono text-[0.8rem] leading-6" placeholder="Paste the note you want to protect with a one-time buzz..." aria-required="true" aria-describedby="note-error"></textarea>
             <p class="field-help">Encrypted in the browser before it reaches the server.</p>
+            <p id="note-error" class="file-error" role="alert"></p>
         </div>
 
         <div class="mt-8 space-y-6 border-t border-white/6 pt-8">
-            <div class="grid gap-5 md:grid-cols-2">
-                <div>
-                    <label for="shared-password" class="field-label">Password</label>
-                    <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                        <input id="shared-password" type="password" class="field-input" placeholder="Enter a strong password" aria-describedby="password-error" required autocomplete="new-password">
-                        <button id="generate-password-btn" type="button" class="btn-secondary shrink-0 whitespace-nowrap px-4 py-3 text-xs sm:w-auto" title="Generate a 6-word passphrase (about 77 bits of entropy)">
+            {# The password takes the whole row: a generated six-word passphrase
+               runs past 50 characters and must stay readable in full. #}
+            <div>
+                <label for="shared-password" class="field-label">Password</label>
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                    <input id="shared-password" type="password" class="field-input min-w-0 font-mono text-[0.8rem]" placeholder="Enter a strong password" aria-describedby="password-error" required autocomplete="new-password" spellcheck="false" autocapitalize="off">
+                    <div class="flex shrink-0 gap-2">
+                        <button id="toggle-password-btn" type="button" class="btn-secondary flex-1 whitespace-nowrap px-4 py-3 text-xs sm:flex-none" aria-label="Show password" aria-controls="shared-password">Show</button>
+                        <button id="copy-password-btn" type="button" class="btn-secondary flex-1 whitespace-nowrap px-4 py-3 text-xs sm:flex-none" aria-label="Copy password" disabled>
+                            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path d="M7 3.5A1.5 1.5 0 0 1 8.5 2h3.879a1.5 1.5 0 0 1 1.06.44l3.122 3.12A1.5 1.5 0 0 1 17 6.622V12.5a1.5 1.5 0 0 1-1.5 1.5h-1v-3.379a3 3 0 0 0-.879-2.121L10.5 5.379A3 3 0 0 0 8.379 4.5H7v-1Z"/>
+                                <path d="M4.5 6A1.5 1.5 0 0 0 3 7.5v9A1.5 1.5 0 0 0 4.5 18h7a1.5 1.5 0 0 0 1.5-1.5v-5.879a1.5 1.5 0 0 0-.44-1.06L9.44 6.439A1.5 1.5 0 0 0 8.378 6H4.5Z"/>
+                            </svg>
+                            Copy
+                        </button>
+                        <button id="generate-password-btn" type="button" class="btn-secondary flex-1 whitespace-nowrap px-4 py-3 text-xs sm:flex-none" title="Generate a 6-word passphrase (about 77 bits of entropy)">
                             <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.451a.75.75 0 0 0 0-1.5H4.5a.75.75 0 0 0-.75.75v3.75a.75.75 0 0 0 1.5 0v-2.033l.364.363a7 7 0 0 0 11.712-3.15.75.75 0 0 0-1.449-.388 5.51 5.51 0 0 1-.435 1.063ZM8.858 8.576a5.5 5.5 0 0 1 9.201-2.466l.312.311H15.92a.75.75 0 0 0 0 1.5h3.75a.75.75 0 0 0 .75-.75V3.421a.75.75 0 0 0-1.5 0v2.033l-.364-.363A7 7 0 0 0 6.894 8.24a.75.75 0 0 0 1.449.388c.14-.021.28-.042.415-.052Z" clip-rule="evenodd"/>
                             </svg>
                             Generate
                         </button>
                     </div>
-                    <div id="password-strength" class="mt-2" aria-live="polite" hidden>
-                        <div id="password-strength-meter" class="honey-track" role="meter" aria-label="Password strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="password-strength-text" style="--strength-fill: 0%">
-                            <div id="password-strength-bar" class="pw-fill" style="width: var(--strength-fill)"></div>
-                        </div>
-                        <p id="password-strength-text" class="field-help"></p>
-                    </div>
-                    <p class="field-help">Share it through a different channel than the link.</p>
-                    <p id="password-error" class="file-error" role="alert"></p>
                 </div>
+                <div id="password-strength" class="mt-2" aria-live="polite" hidden>
+                    <div id="password-strength-meter" class="honey-track" role="meter" aria-label="Password strength" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="password-strength-text" style="--strength-fill: 0%">
+                        <div id="password-strength-bar" class="pw-fill" style="width: var(--strength-fill)"></div>
+                    </div>
+                    <p id="password-strength-text" class="field-help"></p>
+                </div>
+                <p class="field-help">Share it through a different channel than the link.</p>
+                <p id="password-copy-status" class="field-help text-honey-300 empty:hidden" role="status" aria-label="Password clipboard"></p>
+                <p id="password-error" class="file-error" role="alert"></p>
+            </div>
+
+            <div class="grid gap-5 md:grid-cols-2">
                 <div>
                     <label for="shared-expiry" class="field-label">Expiry date <span class="text-slate-600">(optional)</span></label>
                     <input id="shared-expiry" name="expiry" type="datetime-local" class="field-input">
-                    <p class="field-help">For drops that should not outlive the week.</p>
+                    <p class="field-help">Leave empty to keep the drop until it&rsquo;s opened.</p>
+                </div>
+                <div>
+                    <label for="shared-private-note" class="field-label">Private note <span class="text-slate-600">(optional)</span></label>
+                    <textarea id="shared-private-note" name="private_note" rows="2" class="field-input" placeholder="Visible only to you, in your drop list"></textarea>
                 </div>
             </div>
 
-            <div>
-                <label for="shared-private-note" class="field-label">Private note <span class="text-slate-600">(optional)</span></label>
-                <textarea id="shared-private-note" name="private_note" rows="2" class="field-input" placeholder="Visible only to you, in your drop list"></textarea>
-            </div>
-
             <div class="surface-card-soft space-y-4 p-5">
-                <label class="flex cursor-pointer items-start gap-3 text-sm">
-                    <input id="notify-on-open" name="notify_on_open" type="checkbox" class="field-check">
+                {# Notifications go only to the account's own email (app.py
+                   _get_notification_preferences), so without one there is
+                   nothing to choose: the box is off and says who can fix it. #}
+                <label class="flex items-start gap-3 text-sm {{ 'cursor-pointer' if configured_notification_email else 'cursor-not-allowed' }}">
+                    <input id="notify-on-open" name="notify_on_open" type="checkbox" class="field-check disabled:cursor-not-allowed disabled:opacity-50"
+                        {%- if not configured_notification_email %} disabled aria-describedby="notify-unavailable"{% endif %}>
                     <span>
                         <span class="block font-semibold text-white">Notify me when this is opened</span>
                         <span class="mt-1 block text-slate-500">One email after the recipient attempts decryption. Delivery failures are logged only.</span>
                     </span>
                 </label>
+                {% if configured_notification_email %}
                 <div>
                     <label for="notification-email" class="field-label">Account email</label>
                     <input
@@ -117,18 +141,14 @@
                         name="notification_email"
                         type="email"
                         class="field-input"
-                        placeholder="Configure this in FLASK_USER_N"
-                        value="{{ configured_notification_email or '' }}"
+                        value="{{ configured_notification_email }}"
                         readonly
                     >
-                    <p class="field-help">
-                        {% if configured_notification_email %}
-                            Open notifications are sent only to this account email.
-                        {% else %}
-                            Configure an account email in your user record before enabling notifications.
-                        {% endif %}
-                    </p>
+                    <p class="field-help">Open notifications are sent only to this account email.</p>
                 </div>
+                {% else %}
+                <p id="notify-unavailable" class="text-sm text-slate-400">Notifications need an email on your account — ask your admin.</p>
+                {% endif %}
             </div>
 
             <div class="relative overflow-hidden rounded-2xl border border-honey-400/20 bg-linear-to-br from-honey-400/9 to-transparent p-5">
@@ -450,7 +470,7 @@
 
 {% if session.get('username') and user_files %}
 {# ------------------------------------------------------------ Drop list #}
-<div class="mx-auto mt-10 max-w-5xl">
+<div class="mx-auto mt-10 {{ self.content_width() }}">
     <section class="surface-card animate-fade-up delay-2 p-6 sm:p-8" aria-labelledby="shared-files-heading">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>

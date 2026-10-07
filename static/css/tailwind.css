@@ -169,10 +169,10 @@
     background: transparent;
   }
 
-  /* datetime-local pickers render a black-on-black icon in dark UIs. */
+  /* :root's color-scheme: dark already draws the picker icon light; don't
+     filter it, or it turns dark on the dark field again. */
   input[type='datetime-local']::-webkit-calendar-picker-indicator {
-    filter: invert(1);
-    opacity: 0.5;
+    opacity: 0.6;
     cursor: pointer;
   }
 

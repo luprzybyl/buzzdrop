@@ -11,6 +11,7 @@ const passwordField = () => screen.getByLabelText('Password');
 const fileField = () => screen.getByLabelText('Drop a file here, or browse');
 const strengthMeter = () => screen.getByRole('meter', { name: 'Password strength' });
 const clipboardStatus = () => screen.getByRole('status', { name: 'Clipboard' });
+const passwordCopyStatus = () => screen.getByRole('status', { name: 'Password clipboard' });
 /** @param {string} name */
 const shareRow = (name) => within(screen.getByRole('article', { name }));
 
@@ -100,6 +101,128 @@ describe('index page', () => {
             expect(passwordField()).toHaveAttribute('type', 'text');
             expect(passwordField()).toHaveFocus();
             expect(strengthMeter()).toHaveAttribute('aria-valuetext', 'Strong');
+        });
+    });
+
+    describe('password field controls', () => {
+        it('Copy puts the generated passphrase on the clipboard and says so', async () => {
+            const upload = openUploadPage();
+            vi.useFakeTimers({ shouldAdvanceTime: true });
+
+            await upload.generatePassword();
+            await upload.copyPassword();
+
+            await vi.waitFor(() => expect(passwordCopyStatus()).toHaveTextContent('Password copied to clipboard.'));
+            expect(await upload.clipboardText()).toBe(/** @type {HTMLInputElement} */ (passwordField()).value);
+
+            vi.advanceTimersByTime(1800);
+
+            expect(passwordCopyStatus()).toBeEmptyDOMElement();
+        });
+
+        it('says so when the browser blocks the clipboard', async () => {
+            const upload = openUploadPage({ clipboard: 'blocked' });
+
+            await upload.enterPassword(SIX_WORDS);
+            await upload.copyPassword();
+
+            await vi.waitFor(() => expect(passwordCopyStatus())
+                .toHaveTextContent('Your browser blocked clipboard access, so the password was not copied.'));
+        });
+
+        it('Copy is unavailable while the field is empty', async () => {
+            const upload = openUploadPage();
+
+            expect(screen.getByRole('button', { name: 'Copy password' })).toBeDisabled();
+
+            await upload.enterPassword('correct horse');
+            expect(screen.getByRole('button', { name: 'Copy password' })).toBeEnabled();
+
+            await upload.clearPassword();
+            expect(screen.getByRole('button', { name: 'Copy password' })).toBeDisabled();
+        });
+
+        it('Show reveals a typed password and Hide masks it again', async () => {
+            const upload = openUploadPage();
+            await upload.enterPassword('correct horse');
+            expect(passwordField()).toHaveAttribute('type', 'password');
+
+            await upload.togglePasswordVisibility();
+            expect(passwordField()).toHaveAttribute('type', 'text');
+            expect(screen.getByRole('button', { name: 'Hide password' })).toBeVisible();
+
+            await upload.togglePasswordVisibility();
+            expect(passwordField()).toHaveAttribute('type', 'password');
+            expect(screen.getByRole('button', { name: 'Show password' })).toBeVisible();
+        });
+
+        it('a generated passphrase is shown, so the toggle offers Hide', async () => {
+            const upload = openUploadPage();
+
+            await upload.generatePassword();
+
+            expect(screen.getByRole('button', { name: 'Hide password' })).toBeVisible();
+        });
+    });
+
+    describe('missing input', () => {
+        it('an empty note is refused inline, not with a dialog', async () => {
+            const upload = openUploadPage({ account: 'no-shares' });
+
+            await upload.shareMessage('');
+
+            expect(screen.getByLabelText('Secret text')).toHaveAccessibleDescription('Write the note you want to share.');
+            expect(upload.alerts()).toEqual([]);
+            expect(upload.requestsSent()).toEqual([]);
+        });
+
+        it('writing the note clears the refusal', async () => {
+            const upload = openUploadPage({ account: 'no-shares' });
+            await upload.shareMessage('');
+
+            await upload.writeMessage('the gate code');
+
+            expect(screen.getByLabelText('Secret text')).not.toHaveAccessibleDescription();
+        });
+
+        it('a missing password is refused inline', async () => {
+            const upload = openUploadPage({ account: 'no-shares' });
+
+            await upload.shareMessage('the gate code', '');
+
+            expect(passwordField()).toHaveAccessibleDescription('Enter a password, or press Generate.');
+            expect(passwordField()).toHaveFocus();
+            expect(upload.alerts()).toEqual([]);
+            expect(upload.requestsSent()).toEqual([]);
+        });
+
+        it('sharing with no file chosen is refused inline', async () => {
+            const upload = openUploadPage({ account: 'no-shares' });
+            await upload.enterPassword(SIX_WORDS);
+
+            await upload.share();
+
+            expect(fileField()).toHaveAccessibleDescription('Choose a file to share.');
+            expect(upload.requestsSent()).toEqual([]);
+        });
+    });
+
+    describe('open notifications', () => {
+        it('an account without an email cannot ask for them and is told why', () => {
+            openUploadPage({ account: 'no-shares' });
+
+            const checkbox = screen.getByRole('checkbox', { name: /^Notify me when this is opened/ });
+            expect(checkbox).toBeDisabled();
+            expect(checkbox).toHaveAccessibleDescription('Notifications need an email on your account — ask your admin.');
+            expect(screen.queryByLabelText('Account email')).toBeNull();
+            expect(screen.queryByText(/FLASK_USER/)).toBeNull();
+        });
+
+        it('an account with an email shows where they go', () => {
+            openUploadPage({ account: 'with-email' });
+
+            expect(screen.getByRole('checkbox', { name: /^Notify me when this is opened/ })).toBeEnabled();
+            expect(screen.getByLabelText('Account email')).toHaveValue('notify@example.test');
         });
     });
 

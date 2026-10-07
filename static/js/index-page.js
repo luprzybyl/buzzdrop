@@ -210,6 +210,8 @@ export function initIndex(root, deps) {
     // check is the only place a weak key can be refused — and it must refuse.
     const passwordInput = /** @type {HTMLInputElement | null} */ (root.getElementById('shared-password'));
     const generatePasswordBtn = root.getElementById('generate-password-btn');
+    const togglePasswordBtn = root.getElementById('toggle-password-btn');
+    const copyPasswordBtn = /** @type {HTMLButtonElement | null} */ (root.getElementById('copy-password-btn'));
     const strengthRegion = root.getElementById('password-strength');
     const strengthMeter = root.getElementById('password-strength-meter');
     const strengthBar = root.getElementById('password-strength-bar');
@@ -255,11 +257,35 @@ export function initIndex(root, deps) {
         strengthText.textContent = result.message;
     }
 
+    /**
+     * Mask or reveal the password, keeping the toggle's name in step: it
+     * names what pressing it will do.
+     * @param {boolean} visible
+     */
+    function setPasswordVisible(visible) {
+        if (!passwordInput || !togglePasswordBtn) return;
+        passwordInput.type = visible ? 'text' : 'password';
+        togglePasswordBtn.textContent = visible ? 'Hide' : 'Show';
+        togglePasswordBtn.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+    }
+
+    /** Copy has nothing to copy until there is a password. */
+    function syncCopyPassword() {
+        if (copyPasswordBtn && passwordInput) copyPasswordBtn.disabled = !passwordInput.value;
+    }
+
     if (passwordInput) {
         passwordInput.addEventListener('input', () => {
             updatePasswordStrength();
+            syncCopyPassword();
             // Re-typing clears a stale refusal so the user sees progress.
             setPasswordError('');
+        });
+    }
+
+    if (togglePasswordBtn && passwordInput) {
+        togglePasswordBtn.addEventListener('click', () => {
+            setPasswordVisible(passwordInput.type === 'password');
         });
     }
 
@@ -268,11 +294,50 @@ export function initIndex(root, deps) {
             passwordInput.value = generatePassphrase();
             // Show the phrase so the sender can read it back on another channel;
             // the success page reveals it again via the URL fragment.
-            passwordInput.type = 'text';
+            setPasswordVisible(true);
             setPasswordError('');
             updatePasswordStrength();
+            syncCopyPassword();
             passwordInput.focus();
         });
+    }
+
+    if (copyPasswordBtn && passwordInput) {
+        const copyStatus = root.getElementById('password-copy-status');
+        /** @type {ReturnType<typeof setTimeout> | undefined} */
+        let copyStatusTimer;
+
+        /**
+         * Same timing as the share-link pill: a failure stays up longer
+         * because it has to be read.
+         * @param {string} message
+         * @param {boolean} failed
+         */
+        const showCopyResult = (message, failed) => {
+            if (!copyStatus) return;
+            copyStatus.textContent = message;
+            clearTimeout(copyStatusTimer);
+            copyStatusTimer = setTimeout(() => { copyStatus.textContent = ''; }, failed ? 4000 : 1800);
+        };
+
+        copyPasswordBtn.addEventListener('click', () => {
+            window.navigator.clipboard.writeText(passwordInput.value).then(
+                () => showCopyResult('Password copied to clipboard.', false),
+                () => showCopyResult('Your browser blocked clipboard access, so the password was not copied.', true),
+            );
+        });
+    }
+
+    /**
+     * Refuse an empty password inline, where a weak one is refused too.
+     * @param {string} password
+     * @returns {boolean} whether there is one
+     */
+    function requirePassword(password) {
+        if (password) return true;
+        setPasswordError('Enter a password, or press Generate.');
+        if (passwordInput) passwordInput.focus();
+        return false;
     }
 
     /**
@@ -345,7 +410,9 @@ export function initIndex(root, deps) {
             expiry: required(root, '#shared-expiry', 'input').value,
             privateNote: required(root, '#shared-private-note', 'textarea').value.trim(),
             notifyOnOpen: required(root, '#notify-on-open', 'input').checked,
-            notificationEmail: required(root, '#notification-email', 'input').value.trim(),
+            // Rendered only for an account with an email to notify.
+            notificationEmail: /** @type {HTMLInputElement | null} */ (
+                root.getElementById('notification-email'))?.value.trim() ?? '',
         };
     }
 
@@ -550,8 +617,11 @@ export function initIndex(root, deps) {
             const passInput = required(root, '#shared-password', 'input');
             const file = fileInput.files?.[0];
             const password = passInput.value;
-            if (!file || !password) return;
-            if (!enforcePasswordStrength(password)) return;
+            if (!file) {
+                setFileError('Choose a file to share.');
+                return;
+            }
+            if (!requirePassword(password) || !enforcePasswordStrength(password)) return;
 
             // Read and encrypt file data via the key-release handshake
             const fileData = new Uint8Array(await file.arrayBuffer());
@@ -579,17 +649,32 @@ export function initIndex(root, deps) {
     }
 
     // --- Text Note Upload Logic ---
+    /**
+     * Same always-present-region pattern as #file-error.
+     * @param {string} message
+     */
+    function setNoteError(message) {
+        const region = root.getElementById('note-error');
+        if (region) region.textContent = message;
+    }
+
+    const noteField = root.getElementById('note-text');
+    if (noteField) {
+        noteField.addEventListener('input', () => setNoteError(''));
+    }
+
     async function uploadNote() {
         if (uploadInProgress) return;
         const noteText = required(root, '#note-text', 'textarea').value;
         const password = required(root, '#shared-password', 'input').value;
         const shareOptions = readShareOptions();
 
-        if (!noteText || !password) {
-            deps.alert('Please enter both text and password');
+        if (!noteText) {
+            setNoteError('Write the note you want to share.');
+            required(root, '#note-text', 'textarea').focus();
             return;
         }
-        if (!enforcePasswordStrength(password)) return;
+        if (!requirePassword(password) || !enforcePasswordStrength(password)) return;
 
         // Encrypt text data via the key-release handshake
         const enc = new TextEncoder();

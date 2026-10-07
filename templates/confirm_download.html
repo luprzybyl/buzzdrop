@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 
+{% block content_width %}max-w-xl{% endblock %}
+
 {% block content %}
-<div class="mx-auto max-w-xl">
+<div class="mx-auto {{ self.content_width() }}">
     <div class="surface-card animate-zoom-in p-8 text-center sm:p-10">
         <span class="relative mx-auto mb-6 block h-16 w-16">
             <span class="absolute inset-0 animate-halo-pulse rounded-full bg-honey-400/25 blur-xl" aria-hidden="true"></span>

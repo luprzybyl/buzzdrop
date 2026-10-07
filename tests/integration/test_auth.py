@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from flask import session, url_for, get_flashed_messages
 # Fixtures 'app', 'client' will be injected from conftest.py
@@ -31,6 +33,19 @@ def test_login_successful_normal_user(client, app):
         assert sess['username'] == 'testuser'
         assert sess['is_admin'] == False
     assert b'Logged in successfully' in response.data # Check flash message
+
+def test_login_flash_shares_the_composer_width(client):
+    """The banner sits in the page's own column, so their edges line up."""
+    response = client.post(url_for('login'), data={
+        'username': 'testuser',
+        'password': 'password'
+    }, follow_redirects=True)
+    html = response.get_data(as_text=True)
+    banner_column = re.search(r'<div class="([^"]*)">\s*<div class="alert-banner', html)
+    composer_column = re.search(r'<div class="([^"]*)">\s*<header', html)
+    assert banner_column and composer_column
+    assert 'max-w-5xl' in banner_column.group(1).split()
+    assert 'max-w-5xl' in composer_column.group(1).split()
 
 def test_login_successful_admin_user(client, app):
     # 'adminuser:adminpass:true'
