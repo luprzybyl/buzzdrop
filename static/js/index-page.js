@@ -306,27 +306,35 @@ export function initIndex(root, deps) {
     }
 
     if (copyPasswordBtn && passwordInput) {
-        const copyStatus = root.getElementById('password-copy-status');
+        const copyStatus = required(root, '#password-copy-status', 'p');
+        const copyLabel = required(copyPasswordBtn, '#copy-password-label', 'span');
         /** @type {ReturnType<typeof setTimeout> | undefined} */
-        let copyStatusTimer;
+        let copyResultTimer;
 
         /**
-         * Same timing as the share-link pill: a failure stays up longer
-         * because it has to be read.
+         * As on the view page's Copy: the button flashes the outcome and
+         * keeps its name, and the status region announces it. A failure
+         * stays up longer because it has to be read.
+         * @param {string} label
          * @param {string} message
          * @param {boolean} failed
          */
-        const showCopyResult = (message, failed) => {
-            if (!copyStatus) return;
+        const showCopyResult = (label, message, failed) => {
+            copyLabel.textContent = label;
             copyStatus.textContent = message;
-            clearTimeout(copyStatusTimer);
-            copyStatusTimer = setTimeout(() => { copyStatus.textContent = ''; }, failed ? 4000 : 1800);
+            clearTimeout(copyResultTimer);
+            copyResultTimer = setTimeout(() => {
+                copyLabel.textContent = 'Copy';
+                // Emptying it means the next copy writes fresh text, which is
+                // what makes assistive tech announce it again.
+                copyStatus.textContent = '';
+            }, failed ? 4000 : 2000);
         };
 
         copyPasswordBtn.addEventListener('click', () => {
             window.navigator.clipboard.writeText(passwordInput.value).then(
-                () => showCopyResult('Password copied to clipboard.', false),
-                () => showCopyResult('Your browser blocked clipboard access, so the password was not copied.', true),
+                () => showCopyResult('Copied!', 'Password copied to clipboard.', false),
+                () => showCopyResult('Failed', 'Your browser blocked clipboard access, so the password was not copied.', true),
             );
         });
     }

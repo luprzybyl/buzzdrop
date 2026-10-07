@@ -174,11 +174,10 @@
                             Generate
                         </button>
                         <button id="toggle-password-btn" type="button" class="btn-secondary flex-1 whitespace-nowrap px-4 py-3 text-xs lg:flex-none" aria-label="Show password" aria-controls="shared-password" disabled>
-                            
-                            <span class="grid *:col-start-1 *:row-start-1">
+                            <span class="btn-label">
                                 <span id="toggle-password-label">Show</span>
-                                <span class="invisible" aria-hidden="true">Show</span>
-                                <span class="invisible" aria-hidden="true">Hide</span>
+                                <span class="btn-label-sizer" data-label="Show" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Hide" aria-hidden="true"></span>
                             </span>
                         </button>
                         <button id="copy-password-btn" type="button" class="btn-secondary flex-1 whitespace-nowrap px-4 py-3 text-xs lg:flex-none" aria-label="Copy password" disabled>
@@ -186,7 +185,12 @@
                                 <path d="M7 3.5A1.5 1.5 0 0 1 8.5 2h3.879a1.5 1.5 0 0 1 1.06.44l3.122 3.12A1.5 1.5 0 0 1 17 6.622V12.5a1.5 1.5 0 0 1-1.5 1.5h-1v-3.379a3 3 0 0 0-.879-2.121L10.5 5.379A3 3 0 0 0 8.379 4.5H7v-1Z"/>
                                 <path d="M4.5 6A1.5 1.5 0 0 0 3 7.5v9A1.5 1.5 0 0 0 4.5 18h7a1.5 1.5 0 0 0 1.5-1.5v-5.879a1.5 1.5 0 0 0-.44-1.06L9.44 6.439A1.5 1.5 0 0 0 8.378 6H4.5Z"/>
                             </svg>
-                            Copy
+                            <span class="btn-label">
+                                <span id="copy-password-label">Copy</span>
+                                <span class="btn-label-sizer" data-label="Copy" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Copied!" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Failed" aria-hidden="true"></span>
+                            </span>
                         </button>
                     </div>
                 </div>
@@ -197,7 +201,8 @@
                     <p id="password-strength-text" class="field-help"></p>
                 </div>
                 <p class="field-help">Share it through a different channel than the link.</p>
-                <p id="password-copy-status" class="field-help text-honey-300 empty:hidden" role="status" aria-label="Password clipboard"></p>
+                
+                <p id="password-copy-status" class="sr-only" role="status" aria-label="Password clipboard"></p>
                 <p id="password-error" class="file-error" role="alert"></p>
             </div>
 

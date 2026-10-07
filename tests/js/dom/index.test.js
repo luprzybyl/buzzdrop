@@ -105,29 +105,41 @@ describe('index page', () => {
     });
 
     describe('password field controls', () => {
-        it('Copy puts the generated passphrase on the clipboard and says so', async () => {
+        it('Copy puts the generated passphrase on the clipboard and flashes "Copied!"', async () => {
             const upload = openUploadPage();
             vi.useFakeTimers({ shouldAdvanceTime: true });
 
             await upload.generatePassword();
             await upload.copyPassword();
 
-            await vi.waitFor(() => expect(passwordCopyStatus()).toHaveTextContent('Password copied to clipboard.'));
+            // The button keeps its name, so the flash on it is visual; the
+            // status region announces the copy.
+            const copy = screen.getByRole('button', { name: 'Copy password' });
+            await vi.waitFor(() => expect(copy).toHaveTextContent('Copied!'));
+            expect(passwordCopyStatus()).toHaveTextContent('Password copied to clipboard.');
             expect(await upload.clipboardText()).toBe(/** @type {HTMLInputElement} */ (passwordField()).value);
 
-            vi.advanceTimersByTime(1800);
+            vi.advanceTimersByTime(2000);
 
+            expect(copy).toHaveTextContent('Copy');
             expect(passwordCopyStatus()).toBeEmptyDOMElement();
         });
 
-        it('says so when the browser blocks the clipboard', async () => {
+        it('flashes "Failed" when the browser blocks the clipboard', async () => {
             const upload = openUploadPage({ clipboard: 'blocked' });
+            vi.useFakeTimers({ shouldAdvanceTime: true });
 
             await upload.enterPassword(SIX_WORDS);
             await upload.copyPassword();
 
-            await vi.waitFor(() => expect(passwordCopyStatus())
-                .toHaveTextContent('Your browser blocked clipboard access, so the password was not copied.'));
+            const copy = screen.getByRole('button', { name: 'Copy password' });
+            await vi.waitFor(() => expect(copy).toHaveTextContent('Failed'));
+            expect(passwordCopyStatus())
+                .toHaveTextContent('Your browser blocked clipboard access, so the password was not copied.');
+
+            vi.advanceTimersByTime(4000);
+
+            expect(copy).toHaveTextContent('Copy');
         });
 
         it('Copy is unavailable while the field is empty', async () => {
