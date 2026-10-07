@@ -227,9 +227,9 @@ def test_public_views_do_not_show_private_note(client, files_store, csrf_form_da
     assert b'Only uploader should see this' not in confirm_response.data
 
 def test_view_file_not_found_or_downloaded(client):
-    response = client.get(url_for('view_file', file_id='nonexistentid'), follow_redirects=True)
-    assert b'File not found' in response.data
-    assert url_for('index') in response.request.path
+    response = client.get(url_for('view_file', file_id='nonexistentid'))
+    assert response.status_code == 404
+    assert b'This drop is gone' in response.data
 
 
 def test_delete_file_requires_login(client):
@@ -295,8 +295,9 @@ def test_view_file_expired(client, app, files_store, key_release_upload):
     }
     file_id, _h, _rcpt, _resp = key_release_upload(data=file_data)
 
-    response = client.get(url_for('view_file', file_id=file_id), follow_redirects=True)
-    assert b'File has expired' in response.data
+    response = client.get(url_for('view_file', file_id=file_id))
+    assert response.status_code == 404
+    assert b'This drop is gone' in response.data
     updated = files_store.get_by_id(file_id)
     assert updated['status'] == 'expired'
     assert not os.path.exists(updated['path'])

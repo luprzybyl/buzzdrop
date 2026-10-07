@@ -161,7 +161,7 @@ Encrypts files using the same `BKV3` format as the browser client and runs the s
 
 - `/upload/begin` (POST): Mints `file_id` + server share `H` for the two-phase key-release upload. Shares the `UPLOAD_RATE_LIMIT` bucket with `/upload`
 - `/upload` (POST): Completes the key-release upload — requires `file_id` + `key_verifier` + `receipt_hash` form fields, refuses to finish another account's share (403), binds V to the pending share atomically, stores the encrypted blob, returns share link. On storage/DB failure the pending share is burned
-- `/view/<file_id>` (GET): Shows download confirmation page
+- `/view/<file_id>` (GET): Shows download confirmation page. A drop that was already opened, expired or never existed gets one uniform 404 "This drop is gone" page (`_drop_gone`, `templates/error.html`) here and on `/view/<file_id>/confirm`, so the page doesn't reveal which (`/download/<id>` still flashes the specific reason). Unknown URLs and server errors render the same template (`handle_not_found`/`handle_server_error`; JSON for API clients)
 - `/view/<file_id>/confirm` (POST): Shows decryption interface
 - `/download/<file_id>` (GET): Serves the ciphertext once, marks as downloaded, deletes file
 - `/release/<file_id>` (POST): Server-gated key release — JSON `{v}` → `{h}` on a constant-time match inside one atomic `attempt_key_release` transaction (403 on a wrong verifier, 410 after release or expiry, 429 on the attempt that locks the share, a uniform 404 when the file or share is missing, pending or burned — so with burn-on-lockout, calls after the lockout get 404). Misses increment `attempts`; lockout at `KEY_RELEASE_MAX_ATTEMPTS` (optional burn). Rate-limited per `file_id`, not per IP. `Cache-Control: no-store`
