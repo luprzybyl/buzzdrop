@@ -34,26 +34,9 @@ def _clear_csrf(client):
         session.pop('csrf_token', None)
 
 
-def _create_file_record(files_store, file_id='file-1', **overrides):
-    doc = {
-        'id': file_id,
-        'original_name': 'secret.txt',
-        'path': f'nonexistent/{file_id}',
-        'created_at': datetime.now().isoformat(),
-        'downloaded_at': None,
-        'uploaded_by': 'testuser',
-        'expiry_at': None,
-        'status': 'active',
-        'type': 'file',
-    }
-    doc.update(overrides)
-    files_store.insert(doc)
-    return file_id
-
-
-def _bound_share(files_store, file_id='file-1', h='aa' * 32, v='bb' * 32):
+def _bound_share(files_store, file_record, file_id='file-1', h='aa' * 32, v='bb' * 32):
     """Persist a complete key share + file record, return (file_id, h, v)."""
-    _create_file_record(files_store, file_id=file_id)
+    file_record(file_id)
     files_store.create_key_share(file_id, h)
     files_store.bind_key_verifier(file_id, v)
     return file_id, h, v
@@ -329,8 +312,8 @@ def test_upload_missing_receipt_hash_rejected(client, key_share):
 # /release
 # ---------------------------------------------------------------------------
 
-def test_release_returns_h_once(client, files_store):
-    file_id, h, v = _bound_share(files_store)
+def test_release_returns_h_once(client, files_store, file_record):
+    file_id, h, v = _bound_share(files_store, file_record)
 
     first = client.post(url_for('release_key', file_id=file_id), json={'v': v})
     assert first.status_code == 200
@@ -340,10 +323,10 @@ def test_release_returns_h_once(client, files_store):
     assert second.status_code == 410
 
 
-def test_release_wrong_verifier_counts_attempts(client, files_store, key_release_settings):
+def test_release_wrong_verifier_counts_attempts(client, files_store, file_record, key_release_settings):
     # Opt out of the default burn to cover the lockout-keeps-row path.
     key_release_settings['KEY_RELEASE_BURN_ON_LOCKOUT'] = False
-    file_id, _h, _v = _bound_share(files_store)
+    file_id, _h, _v = _bound_share(files_store, file_record)
 
     # With the default of 1 max attempt, the first wrong verifier is
     # already the lockout event — 429 on the same request.
@@ -357,10 +340,10 @@ def test_release_wrong_verifier_counts_attempts(client, files_store, key_release
     assert share['h'] is not None
 
 
-def test_release_lockout_after_max_attempts(client, files_store, key_release_settings):
+def test_release_lockout_after_max_attempts(client, files_store, file_record, key_release_settings):
     key_release_settings['KEY_RELEASE_MAX_ATTEMPTS'] = 2
     key_release_settings['KEY_RELEASE_BURN_ON_LOCKOUT'] = False
-    file_id, _h, _v = _bound_share(files_store)
+    file_id, _h, _v = _bound_share(files_store, file_record)
 
     for expected_status in (403, 429):
         response = client.post(
@@ -378,10 +361,10 @@ def test_release_lockout_after_max_attempts(client, files_store, key_release_set
     assert files_store.get_key_share(file_id) is not None
 
 
-def test_release_burn_on_lockout(client, files_store, key_release_settings):
+def test_release_burn_on_lockout(client, files_store, file_record, key_release_settings):
     # Burn is the default — only the attempt budget needs overriding.
     key_release_settings['KEY_RELEASE_MAX_ATTEMPTS'] = 1
-    file_id, _h, _v = _bound_share(files_store)
+    file_id, _h, _v = _bound_share(files_store, file_record)
 
     miss = client.post(
         url_for('release_key', file_id=file_id), json={'v': 'dd' * 32})
@@ -396,10 +379,10 @@ def test_release_burn_on_lockout(client, files_store, key_release_settings):
 @pytest.mark.parametrize(
     'missing', ['KEY_RELEASE_MAX_ATTEMPTS', 'KEY_RELEASE_BURN_ON_LOCKOUT'])
 def test_release_raises_without_lockout_config(
-        client, files_store, key_release_settings, missing):
+        client, files_store, file_record, key_release_settings, missing):
     """A config missing a lockout key must not fall back to a weaker policy."""
     del key_release_settings[missing]
-    file_id, _h, _v = _bound_share(files_store)
+    file_id, _h, _v = _bound_share(files_store, file_record)
 
     with pytest.raises(KeyError, match=missing):
         client.post(
@@ -408,17 +391,17 @@ def test_release_raises_without_lockout_config(
     assert files_store.get_key_share(file_id)['attempts'] == 0
 
 
-def test_release_without_key_share_is_404(client, files_store):
+def test_release_without_key_share_is_404(client, file_record):
     """A file record with no share (e.g. after burn) has nothing to release."""
-    _create_file_record(files_store, file_id='legacy-1')
+    file_record('legacy-1')
     response = client.post(
         url_for('release_key', file_id='legacy-1'), json={'v': 'bb' * 32})
     assert response.status_code == 404
 
 
-def test_release_on_pending_share_is_404(client, files_store):
+def test_release_on_pending_share_is_404(client, files_store, file_record):
     """begin without finish leaves an unbound share — nothing to release."""
-    _create_file_record(files_store, file_id='pending-1')
+    file_record('pending-1')
     files_store.create_key_share('pending-1', 'aa' * 32)
     response = client.post(
         url_for('release_key', file_id='pending-1'), json={'v': 'bb' * 32})
@@ -440,8 +423,8 @@ def test_release_missing_file_is_404(client):
     ['not', 'a', 'dict'],
     'just-a-string',
 ])
-def test_release_requires_valid_verifier(client, files_store, body):
-    _bound_share(files_store, file_id='fmt-1')
+def test_release_requires_valid_verifier(client, files_store, file_record, body):
+    _bound_share(files_store, file_record, file_id='fmt-1')
     response = client.post(
         url_for('release_key', file_id='fmt-1'), json=body)
     assert response.status_code == 400
@@ -449,9 +432,9 @@ def test_release_requires_valid_verifier(client, files_store, body):
     assert files_store.get_key_share('fmt-1')['attempts'] == 0
 
 
-def test_release_expired_file_is_410(client, files_store):
+def test_release_expired_file_is_410(client, files_store, file_record):
     past = (datetime.now() - timedelta(minutes=5)).isoformat()
-    _bound_share(files_store, file_id='exp-1', v='bb' * 32)
+    _bound_share(files_store, file_record, file_id='exp-1', v='bb' * 32)
     files_store.update_fields('exp-1', {'expiry_at': past})
 
     response = client.post(

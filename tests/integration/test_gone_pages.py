@@ -14,29 +14,12 @@ from app import handle_server_error
 GONE_HEADING = 'This drop is gone'
 
 
-def _insert(files_store, file_id, file_type='file', **fields):
-    record = {
-        'id': file_id,
-        'original_name': 'secret.txt',
-        'path': f'nonexistent/{file_id}',
-        'created_at': datetime.now().isoformat(),
-        'downloaded_at': None,
-        'uploaded_by': 'testuser',
-        'expiry_at': None,
-        'status': 'active',
-        'type': file_type,
-    }
-    record.update(fields)
-    files_store.insert(record)
-
-
-def _gone_drops(files_store):
+def _gone_drops(file_record):
     """One id per way a drop can be gone, plus one that never existed."""
-    _insert(files_store, 'opened-file', downloaded_at=datetime.now().isoformat())
-    _insert(files_store, 'opened-note', file_type='text',
-            downloaded_at=datetime.now().isoformat())
-    _insert(files_store, 'expired-file',
-            expiry_at=(datetime.now() - timedelta(minutes=1)).isoformat())
+    file_record('opened-file', downloaded_at=datetime.now().isoformat())
+    file_record('opened-note', type='text', downloaded_at=datetime.now().isoformat())
+    file_record('expired-file',
+                expiry_at=(datetime.now() - timedelta(minutes=1)).isoformat())
     return ['opened-file', 'opened-note', 'expired-file', 'never-existed']
 
 
@@ -47,8 +30,8 @@ def _open_link(client, csrf_form_data, file_id, step):
 
 
 @pytest.mark.parametrize('step', ['view', 'confirm'])
-def test_gone_drop_renders_its_own_page(client, files_store, csrf_form_data, step):
-    for file_id in _gone_drops(files_store):
+def test_gone_drop_renders_its_own_page(client, file_record, csrf_form_data, step):
+    for file_id in _gone_drops(file_record):
         response = _open_link(client, csrf_form_data, file_id, step)
 
         assert response.status_code == 404, file_id
@@ -59,17 +42,17 @@ def test_gone_drop_renders_its_own_page(client, files_store, csrf_form_data, ste
 
 
 @pytest.mark.parametrize('step', ['view', 'confirm'])
-def test_gone_page_does_not_reveal_why(client, files_store, csrf_form_data, step):
+def test_gone_page_does_not_reveal_why(client, file_record, csrf_form_data, step):
     bodies = {file_id: _open_link(client, csrf_form_data, file_id, step).get_data()
-              for file_id in _gone_drops(files_store)}
+              for file_id in _gone_drops(file_record)}
 
     assert len(set(bodies.values())) == 1, sorted(bodies)
 
 
-def test_gone_page_is_the_same_logged_in(client, files_store):
+def test_gone_page_is_the_same_logged_in(client, file_record):
     with client.session_transaction() as session:
         session['username'] = 'testuser'
-    _gone_drops(files_store)
+    _gone_drops(file_record)
 
     response = client.get(url_for('view_file', file_id='opened-note'))
 
