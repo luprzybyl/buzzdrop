@@ -49,7 +49,7 @@ const pathOf = (request) => new URL(request.url).pathname;
  * @param {UploadPage} upload
  * @param {string} path
  */
-const requestsTo = (upload, path) => upload.backend.log.filter((request) => pathOf(request) === path);
+const requestsTo = (upload, path) => upload.requestsSent().filter((request) => pathOf(request) === path);
 
 /**
  * A field of a logged /upload request's multipart body.
@@ -104,7 +104,7 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
             await shareIn(upload, mode);
 
             expect(upload.alerts()).toEqual([]);
-            expect(upload.backend.log.map(pathOf)).toEqual(['/upload/begin', '/upload']);
+            expect(upload.requestsSent().map(pathOf)).toEqual(['/upload/begin', '/upload']);
             expect(upload.sharesIssued()).toHaveLength(1);
             const [{ file_id: fileId, h }] = upload.sharesIssued();
             const [request] = requestsTo(upload, '/upload');
@@ -160,18 +160,18 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
      * @typedef {object} ErrorCase
      * @property {string} name
      * @property {UploadServer} server
-     * @property {string} [message] - what the page alerts, pinned only for 413
+     * @property {string} [message] - what the page alerts, pinned only for a file too large
      * @property {boolean} reachesUpload - whether the failed attempt sends /upload
      */
     // File and note share the upload code, so the error paths run once, in
-    // file mode: one failure per phase, plus the 413 message
+    // file mode: one failure per phase, plus the too-large message
     // (docs/frontend-test-strategy.md §7, Granularity). Which message each
     // other status shows is not an integration concern.
     /** @type {ErrorCase[]} */
     const ERROR_CASES = [
-        { name: 'begin is rate-limited (429)', server: 'busy', reachesUpload: false },
-        { name: 'the upload errors (500, HTML body)', server: 'failing', reachesUpload: true },
-        { name: 'the upload is too large (413)', server: 'too-large', message: 'File too large', reachesUpload: true },
+        { name: 'the server is too busy to begin', server: 'busy', reachesUpload: false },
+        { name: 'the server fails the upload', server: 'failing', reachesUpload: true },
+        { name: 'the file is too large', server: 'too-large', message: 'File too large', reachesUpload: true },
     ];
 
     describe('upload errors', () => {
@@ -219,8 +219,8 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
             await upload.share();
 
             expect(upload.alerts()).toHaveLength(1);
-            expect(upload.backend.log).toHaveLength(4);
-            for (const request of upload.backend.log) {
+            expect(upload.requestsSent()).toHaveLength(4);
+            for (const request of upload.requestsSent()) {
                 const text = await requestText(request);
                 expect(text).not.toContain(PASSWORD);
                 expect(text).not.toContain(encodeURIComponent(PASSWORD));
@@ -233,7 +233,7 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
             await shareIn(upload, mode, { password: PASSWORDS.weak });
 
             expect(screen.getByLabelText('Password')).toHaveAccessibleDescription(/^Password rejected: /);
-            expect(upload.backend.log).toEqual([]);
+            expect(upload.requestsSent()).toEqual([]);
             expect(upload.navigatedTo()).toEqual([]);
             expect(upload.alerts()).toEqual([]);
         });
@@ -244,10 +244,10 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
             await shareIn(upload, 'file', { server: 'rate-limited' });
             await shareIn(upload, 'text');
 
-            expect(upload.backend.log.map((request) => `${request.method} ${pathOf(request)}`)).toEqual([
+            expect(upload.requestsSent().map((request) => `${request.method} ${pathOf(request)}`)).toEqual([
                 'POST /upload/begin', 'POST /upload', 'POST /upload/begin', 'POST /upload',
             ]);
-            for (const request of upload.backend.log) {
+            for (const request of upload.requestsSent()) {
                 const headers = Object.fromEntries(
                     Object.entries(request.headers).map(([name, value]) => [name.toLowerCase(), value]));
                 expect(headers['x-csrf-token']).toBe(CSRF_TOKEN);

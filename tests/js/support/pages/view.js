@@ -8,7 +8,7 @@ import { CryptoService, bytesToHex } from '../../../../static/js/crypto.js';
 import { initView } from '../../../../static/js/view-page.js';
 import { makeProtocolFake } from '../protocol-fake.js';
 import { makeStubCrypto } from '../stub-crypto.js';
-import { openPage, typeable, waitUntil } from './page.js';
+import { openPage, replaceInFixture, typeable, waitUntil } from './page.js';
 
 export { screen } from './page.js';
 
@@ -63,7 +63,6 @@ const WRONG_VERIFIER = 'f'.repeat(64);
 
 /**
  * @typedef {object} ShareView
- * @property {Page['screen']} screen
  * @property {Page['url']} url
  * @property {Page['historyLength']} historyLength
  * @property {Page['clipboardText']} clipboardText
@@ -115,7 +114,7 @@ export async function openShare({
     const page = openPage(fixture, {
         path: `/view/${fileId}/confirm${query ? `?${query}` : ''}${fragment}`,
         // As the server renders it for this share.
-        edit: (html) => html.replaceAll(fixtureId, fileId).replace(
+        edit: (html) => replaceInFixture(replaceInFixture(html, fixtureId, fileId),
             'You have one attempt', maxAttempts === 1 ? 'You have one attempt' : `You have ${maxAttempts} attempts`),
     });
     const { window, screen, user } = page;
@@ -166,7 +165,6 @@ export async function openShare({
     };
 
     return {
-        screen,
         url: page.url,
         historyLength: page.historyLength,
         clipboardText: page.clipboardText,
@@ -179,7 +177,7 @@ export async function openShare({
         decryptWithEnter: (password) => attempt(async (field) => {
             await user.type(field, `${typeable(password)}{Enter}`);
         }),
-        copyMessage: () => user.click(screen.getByRole('button', { name: 'Copy' })),
+        copyMessage: () => user.click(screen.getByRole('button', { name: 'Copy text' })),
         async finishDownload() {
             finishDownload();
             await ready;

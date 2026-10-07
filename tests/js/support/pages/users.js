@@ -60,6 +60,16 @@ export function openUsersPage({ server = 'ok' } = {}) {
     /** @param {string} username */
     const generateButton = (username) => card(username).getByRole('button', { name: 'Generate token' });
 
+    /**
+     * Let the held token request through and wait for the page to settle.
+     * @param {string} username
+     */
+    async function finishTokenRequest(username) {
+        await waitUntil(() => expect(held).not.toHaveLength(0));
+        held.splice(0).forEach((release) => release());
+        await waitUntil(() => expect(generateButton(username)).toBeEnabled());
+    }
+
     return {
         clipboardText: page.clipboardText,
         requestsSent: () => [...sent],
@@ -69,19 +79,14 @@ export function openUsersPage({ server = 'ok' } = {}) {
          * @param {string} username
          */
         startGeneratingToken: (username) => user.click(generateButton(username)),
-        /** @param {string} username */
-        async finishTokenRequest(username) {
-            await waitUntil(() => expect(held).not.toHaveLength(0));
-            held.splice(0).forEach((release) => release());
-            await waitUntil(() => expect(generateButton(username)).toBeEnabled());
-        },
+        finishTokenRequest,
         /**
          * Press Generate token on a user's card and wait for the answer.
          * @param {string} username
          */
         async generateToken(username) {
             await user.click(generateButton(username));
-            await this.finishTokenRequest(username);
+            await finishTokenRequest(username);
         },
         /** @param {string} username */
         copyToken: (username) => user.click(card(username).getByRole('button', { name: 'Copy token' })),

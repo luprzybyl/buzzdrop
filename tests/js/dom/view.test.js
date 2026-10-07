@@ -53,12 +53,13 @@ describe('view page', () => {
 
         await share.copyMessage();
 
-        await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Copied!' })).toBeVisible());
+        const copy = screen.getByRole('button', { name: 'Copy text' });
+        await vi.waitFor(() => expect(copy).toHaveTextContent('Copied!'));
         expect(await share.clipboardText()).toBe(DEFAULT_MESSAGE);
 
         vi.advanceTimersByTime(2000);
 
-        expect(screen.getByRole('button', { name: 'Copy' })).toBeVisible();
+        expect(copy).toHaveTextContent('Copy');
     });
 
     it.each([

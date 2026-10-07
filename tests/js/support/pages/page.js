@@ -165,3 +165,15 @@ export function waitUntil(check, timeout = 1000) {
 export function typeable(text) {
     return text.replace(/[{[]/g, (bracket) => bracket + bracket);
 }
+
+/**
+ * Replace the one occurrence of `search` in a fixture's HTML. Throws when it
+ * isn't there, so a template change can't turn a fixture edit into a no-op.
+ * @param {string} html
+ * @param {string} search
+ * @param {string} replacement
+ */
+export function replaceInFixture(html, search, replacement) {
+    if (!html.includes(search)) throw new Error(`fixture edit: "${search}" is not in the fixture`);
+    return html.replaceAll(search, replacement);
+}

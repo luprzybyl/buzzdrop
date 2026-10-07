@@ -12,7 +12,7 @@ import { initHeroFlow } from '../../../../static/js/hero-flow-page.js';
 import { initIndex } from '../../../../static/js/index-page.js';
 import { makeProtocolFake } from '../protocol-fake.js';
 import { makeStubCrypto } from '../stub-crypto.js';
-import { openPage, typeable, waitUntil } from './page.js';
+import { openPage, replaceInFixture, typeable, waitUntil } from './page.js';
 
 export { screen } from './page.js';
 
@@ -76,12 +76,11 @@ export const PASSWORDS = {
 
 /**
  * The page's dependencies, recording what it navigates to and alerts.
- * @param {Page} page
  * @param {typeof globalThis.fetch} fetch
  * @param {import('../../../../static/js/index-page.js').IndexDeps['crypto']} crypto
  * @param {typeof XMLHttpRequest} xhr
  */
-function indexDeps(page, fetch, crypto, xhr) {
+function indexDeps(fetch, crypto, xhr) {
     /** @type {string[]} */
     const navigations = [];
     /** @type {string[]} */
@@ -105,7 +104,7 @@ function indexDeps(page, fetch, crypto, xhr) {
  */
 export function openLandingPage({ path = '/', reducedMotion = false } = {}) {
     const page = openPage('index--anonymous', { path, reducedMotion });
-    const { deps } = indexDeps(page, async (input) => {
+    const { deps } = indexDeps(async (input) => {
         throw new Error(`the landing page sent ${input}`);
     }, makeStubCrypto(), page.window.XMLHttpRequest);
     initIndex(page.window.document, deps);
@@ -139,7 +138,8 @@ export function openUploadPage({
     const server = backend ?? makeProtocolFake({ owner });
     const page = openPage(fixture, {
         path,
-        edit: (html) => (sharesPerPage ? html.replace('data-page-size="5"', `data-page-size="${sharesPerPage}"`) : html),
+        edit: (html) => (sharesPerPage
+            ? replaceInFixture(html, 'data-page-size="5"', `data-page-size="${sharesPerPage}"`) : html),
     });
     const { window, screen, user } = page;
     const timeout = crypto === 'real' ? 10_000 : 1000;
@@ -168,7 +168,7 @@ export function openUploadPage({
         return response;
     };
     const { deps, navigations, alerts } = indexDeps(
-        page, fetch, crypto === 'real' ? new CryptoService() : makeStubCrypto(), server.XMLHttpRequest);
+        fetch, crypto === 'real' ? new CryptoService() : makeStubCrypto(), server.XMLHttpRequest);
     if (clipboard === 'blocked') {
         vi.spyOn(window.navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
     }
@@ -212,6 +212,8 @@ export function openUploadPage({
         historyLength: page.historyLength,
         clipboardText: page.clipboardText,
         backend: server,
+        /** What the page sent to the server, in order. */
+        requestsSent: () => [...server.log],
 
         switchToNote: () => user.click(screen.getByRole('tab', { name: 'Text note' })),
         switchToFile: () => user.click(screen.getByRole('tab', { name: 'File' })),

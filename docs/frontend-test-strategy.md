@@ -9,7 +9,7 @@ Each behaviour is tested **once**, at the **lowest layer that can show it**.
 | Layer | What it tests | Runner | Environment |
 |---|---|---|---|
 | **Unit** | Pure modules on their own | `node --test` | Node |
-| **DOM** | One page module against its real markup, network stubbed | Vitest | happy-dom |
+| **DOM** | One page module against its real markup, crypto stubbed, network on the protocol fake | Vitest | happy-dom |
 | **JS integration** | Page modules + real `crypto.js` against the protocol fake | Vitest | happy-dom |
 | **E2E** | What needs a real browser *and* the real server | Playwright | Chromium, Firefox, WebKit against the Buzzdrop Docker image |
 
@@ -92,7 +92,7 @@ From [What does the JS-integration layer's protocol fake look like?](https://git
   - **`fetch` and the XHR class** are thin adapters that add browser behaviour: following a 302 (`redirected: true`, final URL) and firing `upload.onprogress`.
 - **State** is what the server would hold: the pending share (H, owner, bound V), the stored blob, `downloaded`, `released_at`, `attempts`, `receipt_hash`, `decryption_success`.
 - **One instance spans upload → view**, which gives a browser-only round trip. `seedShare({ password, plaintext })` builds a valid share directly for view-only tests.
-- **Routes:** exactly five: `/upload/begin`, `/upload`, `/download/<id>`, `/release/<id>`, `/report_decryption/<id>`. **Any other request throws.** The shared-files status poll and `/delete` are stubbed per test in the DOM layer.
+- **Routes:** exactly five: `/upload/begin`, `/upload`, `/download/<id>`, `/release/<id>`, `/report_decryption/<id>`. **Any other request throws.** The shared-files status poll and `/api/token` are answered by their page drivers (§7a); `/delete` is a native form POST, which the page harness records and stops.
 - **Enforces:**
   - the CSRF header on `/upload/begin` and `/upload`
   - owner and `file_id` binding
@@ -159,7 +159,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
   - Dropzone: a disallowed extension shows the error and no chip; the selected-file chip; the error regions.
   - Copy-to-clipboard status.
   - Delete confirmation via `data-confirm-message`.
-  - Shared files: search, sort, pagination and their URL sync. Status refresh updates the row and re-renders (one row, stubbed `fetch`).
+  - Shared files: search, sort, pagination and their URL sync. Status refresh updates the row and re-renders (one row, answered by the driver).
 - **View page (`view.js`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment, Enter in the field decrypting without navigating, Decrypt disabled until the share has downloaded, the attempts warning (and the field's description of it) going after the first try, the status line as a live region.
 - **Success page (`success.js`):** copy link and one-click link, password visibility toggle, the field filled from a well-formed fragment.
 - **Confirm page (`confirm-download.js`):** the fragment password carried across the confirm POST (one well-formed case).
