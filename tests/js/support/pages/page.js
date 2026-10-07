@@ -7,7 +7,11 @@
 import { within } from '@testing-library/dom';
 import { userEvent } from '@testing-library/user-event';
 import { vi } from 'vitest';
+import { CryptoService } from '../../../../static/js/crypto.js';
 import { browserView, loadFixture } from '../dom-fixture.js';
+import { makeStubCrypto } from '../stub-crypto.js';
+
+/** @typedef {import('../stub-crypto.js').StubCrypto} StubCrypto */
 
 /** The origin every fixture is served from. */
 export const ORIGIN = 'http://localhost';
@@ -20,6 +24,25 @@ export const DEFAULT_PASSWORD = 'correct horse';
  * 600k-iteration PBKDF2 runs on every encryption, verifier and decryption.
  */
 export const REAL_CRYPTO_TIMEOUT = 15_000;
+
+/**
+ * Which crypto a page runs: the stub in the DOM layer, the real crypto.js in
+ * the JS-integration layer.
+ * @typedef {'stub' | 'real'} CryptoKind
+ */
+
+/**
+ * The crypto service for `kind`, and how long a driver waits for a step that
+ * runs it.
+ * @param {CryptoKind} kind
+ * @param {import('../stub-crypto.js').StubCryptoOptions} [stubOptions]
+ * @returns {{ service: CryptoService | StubCrypto, timeout: number }}
+ */
+export function cryptoFor(kind, stubOptions) {
+    return kind === 'real'
+        ? { service: new CryptoService(), timeout: REAL_CRYPTO_TIMEOUT }
+        : { service: makeStubCrypto(stubOptions), timeout: 1000 };
+}
 
 /**
  * What an address carries after its path: a one-click link has the password
@@ -200,8 +223,8 @@ export function typeable(text) {
 }
 
 /**
- * Replace the one occurrence of `search` in a fixture's HTML. Throws when it
- * isn't there, so a template change can't turn a fixture edit into a no-op.
+ * Replace every occurrence of `search` in a fixture's HTML. Throws when there
+ * is none, so a template change can't turn a fixture edit into a no-op.
  * @param {string} html
  * @param {string} search
  * @param {string} replacement

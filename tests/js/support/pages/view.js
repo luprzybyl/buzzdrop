@@ -4,16 +4,16 @@
 // produced by the fake's own state. The DOM layer runs it with the stub
 // crypto, the JS-integration layer with the real crypto.js.
 import { expect, vi } from 'vitest';
-import { CryptoService, bytesToHex } from '../../../../static/js/crypto.js';
+import { bytesToHex } from '../../../../static/js/crypto.js';
 import { initView } from '../../../../static/js/view-page.js';
 import { makeProtocolFake } from '../protocol-fake.js';
-import { makeStubCrypto } from '../stub-crypto.js';
-import { DEFAULT_PASSWORD, REAL_CRYPTO_TIMEOUT, addressOf, openPage, replaceInFixture, typeable, waitUntil } from './page.js';
+import { DEFAULT_PASSWORD, addressOf, cryptoFor, openPage, replaceInFixture, typeable, waitUntil } from './page.js';
 
 export { DEFAULT_PASSWORD, screen } from './page.js';
 
 /**
  * @typedef {import('../../../../static/js/crypto.js').Bytes} Bytes
+ * @typedef {import('../../../../static/js/crypto.js').CryptoService} CryptoService
  * @typedef {ReturnType<typeof makeProtocolFake>} Fake
  * @typedef {Fake['log'][number]} LoggedRequest
  * @typedef {import('./page.js').Page} Page
@@ -47,7 +47,7 @@ const WRONG_VERIFIER = 'f'.repeat(64);
  *   fails the release; unreachable: the release never arrives
  * @property {number} [maxAttempts] - wrong passwords allowed before the share
  *   locks (KEY_RELEASE_MAX_ATTEMPTS, 1 like the server's default)
- * @property {'stub' | 'real'} [crypto] - real in the JS-integration layer
+ * @property {import('./page.js').CryptoKind} [crypto] - real in the JS-integration layer
  * @property {{ backend: Fake, fileId: string }} [uploaded] - open a share
  *   already uploaded to this server, instead of a new one
  */
@@ -97,9 +97,8 @@ export async function openShare({
     crypto = 'stub',
     uploaded,
 } = {}) {
-    const cryptoService = crypto === 'real'
-        ? new CryptoService()
-        : makeStubCrypto({ unsupportedFormat: share === 'unsupported-format', corrupted: share === 'corrupted' });
+    const { service: cryptoService, timeout } = cryptoFor(crypto,
+        { unsupportedFormat: share === 'unsupported-format', corrupted: share === 'corrupted' });
     const backend = uploaded?.backend ?? makeProtocolFake({ maxAttempts });
     const fileId = uploaded?.fileId ?? await backend.seedShare({ password, plaintext: content }, cryptoService);
     await arrange(backend, fileId, server, cryptoService, password, maxAttempts);
@@ -114,7 +113,6 @@ export async function openShare({
             'You have one attempt', maxAttempts === 1 ? 'You have one attempt' : `You have ${maxAttempts} attempts`),
     });
     const { window, screen, user } = page;
-    const timeout = crypto === 'real' ? REAL_CRYPTO_TIMEOUT : 1000;
 
     /** @type {() => void} */
     let finishDownload = () => {};

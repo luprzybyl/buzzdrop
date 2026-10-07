@@ -7,12 +7,10 @@
 import { isInaccessible, within } from '@testing-library/dom';
 import { computeAccessibleDescription, computeAccessibleName } from 'dom-accessibility-api';
 import { expect, vi } from 'vitest';
-import { CryptoService } from '../../../../static/js/crypto.js';
 import { initHeroFlow } from '../../../../static/js/hero-flow-page.js';
 import { initIndex } from '../../../../static/js/index-page.js';
 import { makeProtocolFake } from '../protocol-fake.js';
-import { makeStubCrypto } from '../stub-crypto.js';
-import { DEFAULT_PASSWORD, REAL_CRYPTO_TIMEOUT, openPage, replaceInFixture, typeable, waitUntil } from './page.js';
+import { DEFAULT_PASSWORD, cryptoFor, openPage, replaceInFixture, typeable, waitUntil } from './page.js';
 
 export { screen } from './page.js';
 
@@ -64,7 +62,7 @@ export const PASSWORDS = {
  * @property {Array<{ name: ShareName, openedAt: string, openedFrom: string }>} [openedMeanwhile] -
  *   shares opened since the page was rendered: the status refresh reports them
  * @property {'ok' | 'blocked'} [clipboard] - blocked: the browser refuses clipboard access
- * @property {'stub' | 'real'} [crypto] - real in the JS-integration layer
+ * @property {import('./page.js').CryptoKind} [crypto] - real in the JS-integration layer
  * @property {Fake} [backend] - the server uploads go to, when a test needs one it made
  */
 
@@ -106,7 +104,7 @@ export function openLandingPage({ path = '/', reducedMotion = false } = {}) {
     const page = openPage('index--anonymous', { path, reducedMotion });
     const { deps } = indexDeps(async (input) => {
         throw new Error(`the landing page sent ${input}`);
-    }, makeStubCrypto(), page.window.XMLHttpRequest);
+    }, cryptoFor('stub').service, page.window.XMLHttpRequest);
     initIndex(page.window.document, deps);
     initHeroFlow(page.window.document, {});
     const { screen, user } = page;
@@ -142,7 +140,7 @@ export function openUploadPage({
             ? replaceInFixture(html, 'data-page-size="5"', `data-page-size="${sharesPerPage}"`) : html),
     });
     const { window, screen, user } = page;
-    const timeout = crypto === 'real' ? REAL_CRYPTO_TIMEOUT : 1000;
+    const { service: cryptoService, timeout } = cryptoFor(crypto);
 
     /** @type {Array<{ file_id: string, h: string }>} */
     const issued = [];
@@ -168,7 +166,7 @@ export function openUploadPage({
         return response;
     };
     const { deps, navigations, alerts } = indexDeps(
-        fetch, crypto === 'real' ? new CryptoService() : makeStubCrypto(), server.XMLHttpRequest);
+        fetch, cryptoService, server.XMLHttpRequest);
     if (clipboard === 'blocked') {
         vi.spyOn(window.navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
     }
