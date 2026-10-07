@@ -32,11 +32,16 @@
             </button>
         </div>
 
-        <div id="file-upload-section" class="mt-6" role="tabpanel" aria-labelledby="file-tab">
+        {# Both panels share one grid cell, so the cell is as tall as the taller
+           one and switching tabs doesn't move anything below. The inactive
+           panel keeps its space with visibility: hidden (index-page.js), which
+           also takes it out of the tab order and the accessibility tree. #}
+        <div class="mt-6 grid *:col-start-1 *:row-start-1">
+        <div id="file-upload-section" class="flex flex-col" role="tabpanel" aria-labelledby="file-tab">
             {# novalidate: a missing file is reported inline in #file-error, like
                every other refusal, not in the browser's own bubble. #}
-            <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" novalidate>
-                <label id="dropzone" for="file" class="dropzone block">
+            <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" novalidate class="flex flex-1 flex-col">
+                <label id="dropzone" for="file" class="dropzone flex flex-1 flex-col justify-center">
                     <div class="relative flex flex-col items-center gap-4">
                         <svg viewBox="0 0 48 48" class="h-14 w-14 text-honey-300" fill="none" aria-hidden="true">
                             <path d="M24 3 42 13.5v21L24 45 6 34.5v-21z" stroke="currentColor" stroke-width="1.4" opacity=".45"/>
@@ -67,11 +72,12 @@
             </form>
         </div>
 
-        <div id="text-note-section" style="display:none;" class="mt-6" role="tabpanel" aria-labelledby="text-tab">
+        <div id="text-note-section" style="visibility:hidden;" class="flex flex-col" role="tabpanel" aria-labelledby="text-tab">
             <label for="note-text" class="field-label">Secret text</label>
-            <textarea id="note-text" rows="9" class="field-input min-h-56 font-mono text-[0.8rem] leading-6" placeholder="Paste the note you want to protect with a one-time buzz..." aria-required="true" aria-describedby="note-error"></textarea>
+            <textarea id="note-text" rows="9" class="field-input min-h-56 flex-1 font-mono text-[0.8rem] leading-6" placeholder="Paste the note you want to protect with a one-time buzz..." aria-required="true" aria-describedby="note-error"></textarea>
             <p class="field-help">Encrypted in the browser before it reaches the server.</p>
             <p id="note-error" class="file-error" role="alert"></p>
+        </div>
         </div>
 
         <div class="mt-8 space-y-6 border-t border-white/6 pt-8">

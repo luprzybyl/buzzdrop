@@ -154,7 +154,9 @@ export function initIndex(root, deps) {
             const tabNode = root.getElementById(tab);
             const panelNode = root.getElementById(panel);
 
-            if (panelNode) panelNode.style.display = isActive ? 'block' : 'none';
+            // visibility, not display: the panels share a grid cell sized to
+            // the taller one (index.html), so the inactive one keeps its space.
+            if (panelNode) panelNode.style.visibility = isActive ? '' : 'hidden';
             if (!tabNode) return;
 
             tabNode.classList.toggle('share-tab-active', isActive);
