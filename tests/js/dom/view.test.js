@@ -234,6 +234,15 @@ describe('view page', () => {
         expect(window.document.activeElement).toBe(decryptBtn);
     });
 
+    it.each(/** @type {const} */ ([['view--text'], ['view--file']]))(
+        'drops the press-Decrypt hint once %s is decrypted', async (fixture) => {
+            const { decrypt, passwordStatus } = await start({ fixture, url: `${PAGE_URL}#correct%20horse` });
+
+            await decrypt('correct horse');
+
+            expect(passwordStatus.style.display).toBe('none');
+        });
+
     it('scrubs the fragment from the URL without adding a history entry', async () => {
         const { window } = await start({ url: `${PAGE_URL}?x=1#correct%20horse` });
 

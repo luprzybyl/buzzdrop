@@ -128,6 +128,8 @@ export async function initView(root, deps) {
 
     /** @param {Bytes} fileBytes */
     function showPlaintext(fileBytes) {
+        // The one-click hint says to press Decrypt — stale once that's done.
+        required(root, '#password-status', 'p').style.display = 'none';
         // Check if this is a text note or file
         if (fileType === 'text') {
             // Display text in the page
