@@ -210,7 +210,7 @@ export function initIndex(root, deps) {
     // check is the only place a weak key can be refused — and it must refuse.
     const passwordInput = /** @type {HTMLInputElement | null} */ (root.getElementById('shared-password'));
     const generatePasswordBtn = root.getElementById('generate-password-btn');
-    const togglePasswordBtn = root.getElementById('toggle-password-btn');
+    const togglePasswordBtn = /** @type {HTMLButtonElement | null} */ (root.getElementById('toggle-password-btn'));
     const copyPasswordBtn = /** @type {HTMLButtonElement | null} */ (root.getElementById('copy-password-btn'));
     const strengthRegion = root.getElementById('password-strength');
     const strengthMeter = root.getElementById('password-strength-meter');
@@ -269,15 +269,18 @@ export function initIndex(root, deps) {
         togglePasswordBtn.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
     }
 
-    /** Copy has nothing to copy until there is a password. */
-    function syncCopyPassword() {
-        if (copyPasswordBtn && passwordInput) copyPasswordBtn.disabled = !passwordInput.value;
+    /** Show/Hide and Copy have nothing to act on until there is a password. */
+    function syncPasswordButtons() {
+        if (!passwordInput) return;
+        for (const button of [togglePasswordBtn, copyPasswordBtn]) {
+            if (button) button.disabled = !passwordInput.value;
+        }
     }
 
     if (passwordInput) {
         passwordInput.addEventListener('input', () => {
             updatePasswordStrength();
-            syncCopyPassword();
+            syncPasswordButtons();
             // Re-typing clears a stale refusal so the user sees progress.
             setPasswordError('');
         });
@@ -297,7 +300,7 @@ export function initIndex(root, deps) {
             setPasswordVisible(true);
             setPasswordError('');
             updatePasswordStrength();
-            syncCopyPassword();
+            syncPasswordButtons();
             passwordInput.focus();
         });
     }

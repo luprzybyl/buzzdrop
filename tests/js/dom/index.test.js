@@ -142,6 +142,18 @@ describe('index page', () => {
             expect(screen.getByRole('button', { name: 'Copy password' })).toBeDisabled();
         });
 
+        it('Show is unavailable while the field is empty', async () => {
+            const upload = openUploadPage();
+
+            expect(screen.getByRole('button', { name: 'Show password' })).toBeDisabled();
+
+            await upload.enterPassword('correct horse');
+            expect(screen.getByRole('button', { name: 'Show password' })).toBeEnabled();
+
+            await upload.clearPassword();
+            expect(screen.getByRole('button', { name: 'Show password' })).toBeDisabled();
+        });
+
         it('Show reveals a typed password and Hide masks it again', async () => {
             const upload = openUploadPage();
             await upload.enterPassword('correct horse');
