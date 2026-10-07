@@ -312,7 +312,7 @@
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:border-honey-400/40 hover:bg-white/[0.07] hover:text-white;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-slate-200 transition duration-200 not-disabled:hover:border-honey-400/40 not-disabled:hover:bg-white/[0.07] not-disabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .btn-ghost {
