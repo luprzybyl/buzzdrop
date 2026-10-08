@@ -30,9 +30,17 @@ const NOW = Date.parse('2026-10-06T21:37:00+02:00');
 /** @param {string} iso */
 const ago = (iso) => relativeTime(Date.parse(iso), NOW);
 
-test('calls the last minute "just now"', () => {
+test('calls the last minute "just now", and the next "in under a minute"', () => {
     assert.equal(ago('2026-10-06T21:36:30+02:00'), 'just now');
-    assert.equal(ago('2026-10-06T21:37:20+02:00'), 'just now');
+    assert.equal(ago('2026-10-06T21:37:20+02:00'), 'in under a minute');
+});
+
+test('rounds to the nearest unit, so a time just short of one reads as it', () => {
+    // An expiry set three days out, looked at a few minutes later.
+    assert.equal(ago('2026-10-09T21:30:00+02:00'), 'in 3 days');
+    assert.equal(ago('2026-10-06T19:40:00+02:00'), '2 h ago');
+    assert.equal(ago('2026-10-05T21:57:00+02:00'), 'yesterday');
+    assert.equal(ago('2026-08-08T21:37:00+02:00'), '2 months ago');
 });
 
 test('counts minutes and hours, in the past and the future', () => {
@@ -50,7 +58,7 @@ test('says "yesterday" and "tomorrow" a day away', () => {
 test('counts days, months and years further out', () => {
     assert.equal(ago('2026-10-01T21:37:00+02:00'), '5 days ago');
     assert.equal(ago('2026-12-06T21:37:00+01:00'), 'in 2 months');
-    assert.equal(ago('2025-01-01T12:00:00+01:00'), '1 year ago');
+    assert.equal(ago('2025-10-01T12:00:00+02:00'), '1 year ago');
     assert.equal(ago('2099-01-01T00:00:00+01:00'), 'in 72 years');
 });
 

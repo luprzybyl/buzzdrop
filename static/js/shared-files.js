@@ -71,9 +71,10 @@ const DAY = 24 * HOUR;
 
 /**
  * A timestamp as a short, scannable distance from now: "just now",
- * "2 min ago", "yesterday", "in 3 days". Every unit is rounded down, and a
- * month is 30 days, a year 365: this is for scanning, the full timestamp
- * stays in the element's title.
+ * "2 min ago", "yesterday", "in 3 days". Each unit is rounded to the nearest
+ * whole one (an expiry set three days out still reads "in 3 days" a few
+ * minutes later), a month is 30 days and a year 365: this is for scanning,
+ * the full timestamp stays in the element's title.
  * @param {number} then - epoch milliseconds
  * @param {number} now - epoch milliseconds
  * @returns {string | null} null when `then` is not a valid time
@@ -90,14 +91,17 @@ export function relativeTime(then, now) {
     /** @param {number} count @param {string} unit */
     const plural = (count, unit) => phrase(count, count === 1 ? unit : `${unit}s`);
 
-    if (elapsed < MINUTE) return 'just now';
-    if (elapsed < HOUR) return phrase(Math.floor(elapsed / MINUTE), 'min');
-    if (elapsed < DAY) return phrase(Math.floor(elapsed / HOUR), 'h');
-    const days = Math.floor(elapsed / DAY);
+    if (elapsed < MINUTE) return future ? 'in under a minute' : 'just now';
+    const minutes = Math.round(elapsed / MINUTE);
+    if (minutes < 60) return phrase(minutes, 'min');
+    const hours = Math.round(elapsed / HOUR);
+    if (hours < 24) return phrase(hours, 'h');
+    const days = Math.round(elapsed / DAY);
     if (days === 1) return future ? 'tomorrow' : 'yesterday';
     if (days < 30) return plural(days, 'day');
-    if (days < 365) return plural(Math.floor(days / 30), 'month');
-    return plural(Math.floor(days / 365), 'year');
+    const months = Math.round(days / 30);
+    if (months < 12) return plural(months, 'month');
+    return plural(Math.max(Math.round(days / 365), 1), 'year');
 }
 
 /**
