@@ -104,7 +104,7 @@ describe('success page', () => {
     });
 
     it('Show reveals the password, then hides it again', async () => {
-        const success = openSuccessPage();
+        const success = openSuccessPage({ link: 'one-click' });
 
         await success.revealPassword();
 
@@ -117,7 +117,7 @@ describe('success page', () => {
     });
 
     it('a revealed password hides itself after five seconds', async () => {
-        const success = openSuccessPage();
+        const success = openSuccessPage({ link: 'one-click' });
 
         await success.revealPassword();
         vi.advanceTimersByTime(5000);
@@ -127,7 +127,7 @@ describe('success page', () => {
     });
 
     it('showing the password again restarts the five seconds', async () => {
-        const success = openSuccessPage();
+        const success = openSuccessPage({ link: 'one-click' });
 
         await success.revealPassword();
         vi.advanceTimersByTime(3000);
@@ -144,6 +144,7 @@ describe('success page', () => {
         openSuccessPage({ link: 'one-click', password: 'correct horse' });
 
         expect(passwordField()).toHaveValue('correct horse');
+        expect(screen.getByRole('button', { name: 'Show' })).toBeEnabled();
         expect(copyPasswordButton()).toBeEnabled();
         expect(copyOneClickButton()).toBeEnabled();
     });
@@ -165,12 +166,13 @@ describe('success page', () => {
         expect(success.historyLength()).toBe(1);
     });
 
-    it('scrubs a mangled fragment and has no password or one-click link to copy', () => {
+    it('scrubs a mangled fragment and has no password to show or copy', () => {
         const success = openSuccessPage({ link: 'mangled' });
 
         expect(success.url()).toBe(PAGE_URL);
         expect(passwordField()).toHaveValue('');
         expect(oneClickSection().getByText(SHARE_LINK)).not.toBeVisible();
+        expect(screen.getByRole('button', { name: 'Show' })).toBeDisabled();
         expect(copyPasswordButton()).toBeDisabled();
         expect(copyOneClickButton()).toBeDisabled();
     });

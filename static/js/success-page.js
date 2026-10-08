@@ -146,6 +146,7 @@ export function initSuccess(root, deps) {
         null, '', window.location.pathname + window.location.search);
     if (pwd) {
         pwdInput.value = pwd;
+        toggleBtn.disabled = false;
         copyPasswordBtn.disabled = false;
 
         // The convenience link: password in the fragment, ready to paste
