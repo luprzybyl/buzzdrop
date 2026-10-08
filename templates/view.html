@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 
+{% block content_width %}max-w-xl{% endblock %}
+
 {% block content %}
-<div class="mx-auto max-w-xl">
+<div class="mx-auto {{ self.content_width() }}">
     <div class="surface-card animate-zoom-in p-8 sm:p-10">
         <div class="text-center">
             <span class="relative mx-auto mb-6 block h-16 w-16">

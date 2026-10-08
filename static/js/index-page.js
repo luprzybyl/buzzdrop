@@ -154,7 +154,9 @@ export function initIndex(root, deps) {
             const tabNode = root.getElementById(tab);
             const panelNode = root.getElementById(panel);
 
-            if (panelNode) panelNode.style.display = isActive ? 'block' : 'none';
+            // visibility, not display: the panels share a grid cell sized to
+            // the taller one (index.html), so the inactive one keeps its space.
+            if (panelNode) panelNode.style.visibility = isActive ? '' : 'hidden';
             if (!tabNode) return;
 
             tabNode.classList.toggle('share-tab-active', isActive);
@@ -205,16 +207,30 @@ export function initIndex(root, deps) {
         });
     }
 
+    /**
+     * Show (or with '', clear) a refusal in one of the always-present error
+     * regions (#file-error, #note-error, #password-error). The region stays
+     * and only its text changes, so assistive tech announces every refusal
+     * rather than a one-time reveal.
+     * @param {'file-error' | 'note-error' | 'password-error'} regionId
+     * @param {string} message
+     */
+    function showRefusal(regionId, message) {
+        const region = root.getElementById(regionId);
+        if (region) region.textContent = message;
+    }
+
     // --- Password Generation & Strength Gate ---
     // The server never sees the password (encryption is client-side), so this
     // check is the only place a weak key can be refused — and it must refuse.
     const passwordInput = /** @type {HTMLInputElement | null} */ (root.getElementById('shared-password'));
     const generatePasswordBtn = root.getElementById('generate-password-btn');
+    const togglePasswordBtn = /** @type {HTMLButtonElement | null} */ (root.getElementById('toggle-password-btn'));
+    const copyPasswordBtn = /** @type {HTMLButtonElement | null} */ (root.getElementById('copy-password-btn'));
     const strengthRegion = root.getElementById('password-strength');
     const strengthMeter = root.getElementById('password-strength-meter');
     const strengthBar = root.getElementById('password-strength-bar');
     const strengthText = root.getElementById('password-strength-text');
-    const passwordError = root.getElementById('password-error');
 
     // Per level: the bar's and the message's colour, and the word the meter
     // reports to assistive tech (the colour carries it on screen).
@@ -223,14 +239,6 @@ export function initIndex(root, deps) {
         fair: { fill: 'pw-fill-fair', text: 'pw-text-fair', label: 'Fair' },
         strong: { fill: 'pw-fill-strong', text: 'pw-text-strong', label: 'Strong' },
     };
-
-    /**
-     * Same always-present-region pattern as #file-error: only the text swaps.
-     * @param {string} message
-     */
-    function setPasswordError(message) {
-        if (passwordError) passwordError.textContent = message;
-    }
 
     function updatePasswordStrength() {
         if (!passwordInput || !strengthRegion || !strengthMeter || !strengthBar || !strengthText) {
@@ -255,11 +263,38 @@ export function initIndex(root, deps) {
         strengthText.textContent = result.message;
     }
 
+    /**
+     * Mask or reveal the password, keeping the toggle's name in step: it
+     * names what pressing it will do.
+     * @param {boolean} visible
+     */
+    function setPasswordVisible(visible) {
+        if (!passwordInput || !togglePasswordBtn) return;
+        passwordInput.type = visible ? 'text' : 'password';
+        required(togglePasswordBtn, '#toggle-password-label', 'span').textContent = visible ? 'Hide' : 'Show';
+        togglePasswordBtn.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+    }
+
+    /** Show/Hide and Copy have nothing to act on until there is a password. */
+    function syncPasswordButtons() {
+        if (!passwordInput) return;
+        for (const button of [togglePasswordBtn, copyPasswordBtn]) {
+            if (button) button.disabled = !passwordInput.value;
+        }
+    }
+
     if (passwordInput) {
         passwordInput.addEventListener('input', () => {
             updatePasswordStrength();
+            syncPasswordButtons();
             // Re-typing clears a stale refusal so the user sees progress.
-            setPasswordError('');
+            showRefusal('password-error', '');
+        });
+    }
+
+    if (togglePasswordBtn && passwordInput) {
+        togglePasswordBtn.addEventListener('click', () => {
+            setPasswordVisible(passwordInput.type === 'password');
         });
     }
 
@@ -268,29 +303,87 @@ export function initIndex(root, deps) {
             passwordInput.value = generatePassphrase();
             // Show the phrase so the sender can read it back on another channel;
             // the success page reveals it again via the URL fragment.
-            passwordInput.type = 'text';
-            setPasswordError('');
+            setPasswordVisible(true);
+            showRefusal('password-error', '');
             updatePasswordStrength();
+            syncPasswordButtons();
             passwordInput.focus();
         });
     }
 
+    if (copyPasswordBtn && passwordInput) {
+        const copyStatus = required(root, '#password-copy-status', 'p');
+        const copyLabel = required(copyPasswordBtn, '#copy-password-label', 'span');
+        // The label the template renders, which each flash returns to.
+        const restingLabel = copyLabel.textContent;
+        // How long a flash stays up; a failure has to be read, so it stays longer.
+        const COPIED_FLASH_MS = 2000;
+        const FAILED_FLASH_MS = 4000;
+        /** @type {ReturnType<typeof setTimeout> | undefined} */
+        let copyResultTimer;
+
+        /**
+         * As on the view page's Copy: the button flashes the outcome and
+         * keeps its name, and the status region announces it.
+         * @param {string} label
+         * @param {string} message
+         * @param {boolean} failed
+         */
+        const showCopyResult = (label, message, failed) => {
+            copyLabel.textContent = label;
+            copyStatus.textContent = message;
+            clearTimeout(copyResultTimer);
+            copyResultTimer = setTimeout(() => {
+                copyLabel.textContent = restingLabel;
+                // Emptying it means the next copy writes fresh text, which is
+                // what makes assistive tech announce it again.
+                copyStatus.textContent = '';
+            }, failed ? FAILED_FLASH_MS : COPIED_FLASH_MS);
+        };
+
+        copyPasswordBtn.addEventListener('click', () => {
+            // Started inside a promise so a missing Clipboard API (a
+            // non-secure context has no navigator.clipboard) lands in the
+            // failure branch instead of throwing with no feedback at all.
+            Promise.resolve().then(() => window.navigator.clipboard.writeText(passwordInput.value)).then(
+                () => showCopyResult('Copied!', 'Password copied to clipboard.', false),
+                () => showCopyResult('Failed', 'Your browser blocked clipboard access, so the password was not copied.', true),
+            );
+        });
+    }
+
     /**
-     * The actual gate: refuse to encrypt/upload a weak password. Called from
-     * both upload paths (file form submit and text note) so every drop shares
-     * the same floor.
+     * The actual gate: refuse to encrypt/upload a missing or weak password,
+     * inline in #password-error. Called from both upload paths (file form
+     * submit and text note) so every drop shares the same floor.
      * @param {string} password
-     * @returns {boolean}
+     * @returns {boolean} whether the password may be used
      */
-    function enforcePasswordStrength(password) {
+    function acceptPassword(password) {
+        if (!password) {
+            showRefusal('password-error', 'Enter a password, or press Generate.');
+            if (passwordInput) passwordInput.focus();
+            return false;
+        }
         const result = assessPassword(password);
         if (result.blocked) {
             updatePasswordStrength();
-            setPasswordError(`Password rejected: ${result.message}`);
+            showRefusal('password-error', `Password rejected: ${result.message}`);
             if (passwordInput) passwordInput.focus();
             return false;
         }
         return true;
+    }
+
+    // --- Open notifications ---
+    // The account email (rendered only when there is one) shows while the
+    // box is ticked.
+    const notifyCheckbox = /** @type {HTMLInputElement | null} */ (root.getElementById('notify-on-open'));
+    const notificationEmailField = root.getElementById('notification-email-field');
+    if (notifyCheckbox && notificationEmailField) {
+        notifyCheckbox.addEventListener('change', () => {
+            notificationEmailField.hidden = !notifyCheckbox.checked;
+        });
     }
 
     // --- Shared Upload Logic ---
@@ -345,7 +438,9 @@ export function initIndex(root, deps) {
             expiry: required(root, '#shared-expiry', 'input').value,
             privateNote: required(root, '#shared-private-note', 'textarea').value.trim(),
             notifyOnOpen: required(root, '#notify-on-open', 'input').checked,
-            notificationEmail: required(root, '#notification-email', 'input').value.trim(),
+            // Rendered only for an account with an email to notify.
+            notificationEmail: /** @type {HTMLInputElement | null} */ (
+                root.getElementById('notification-email'))?.value.trim() ?? '',
         };
     }
 
@@ -465,23 +560,13 @@ export function initIndex(root, deps) {
     }
 
     /**
-     * The region is always present and only its text changes, so assistive tech
-     * announces every rejection rather than a one-time reveal.
-     * @param {string} message
-     */
-    function setFileError(message) {
-        const region = root.getElementById('file-error');
-        if (region) region.textContent = message;
-    }
-
-    /**
      * Reject a disallowed file, discarding any earlier selection along with it.
      * @param {HTMLInputElement} input
      */
     function rejectFile(input) {
         input.value = '';
         showSelectedFile(null);
-        setFileError('That file type is not allowed.');
+        showRefusal('file-error', 'That file type is not allowed.');
     }
 
     const dropzone = root.getElementById('dropzone');
@@ -519,7 +604,7 @@ export function initIndex(root, deps) {
             transfer.items.add(file);
             fileField.files = transfer.files;
             showSelectedFile(file);
-            setFileError('');
+            showRefusal('file-error', '');
         });
     }
 
@@ -539,7 +624,7 @@ export function initIndex(root, deps) {
                 return;
             }
             showSelectedFile(file);
-            setFileError('');
+            showRefusal('file-error', '');
         });
 
         // Handle form submission: encrypt file client-side, then upload
@@ -550,8 +635,11 @@ export function initIndex(root, deps) {
             const passInput = required(root, '#shared-password', 'input');
             const file = fileInput.files?.[0];
             const password = passInput.value;
-            if (!file || !password) return;
-            if (!enforcePasswordStrength(password)) return;
+            if (!file) {
+                showRefusal('file-error', 'Choose a file to share.');
+                return;
+            }
+            if (!acceptPassword(password)) return;
 
             // Read and encrypt file data via the key-release handshake
             const fileData = new Uint8Array(await file.arrayBuffer());
@@ -579,17 +667,24 @@ export function initIndex(root, deps) {
     }
 
     // --- Text Note Upload Logic ---
+    const noteInput = root.getElementById('note-text');
+    if (noteInput) {
+        noteInput.addEventListener('input', () => showRefusal('note-error', ''));
+    }
+
     async function uploadNote() {
         if (uploadInProgress) return;
-        const noteText = required(root, '#note-text', 'textarea').value;
+        const noteField = required(root, '#note-text', 'textarea');
+        const noteText = noteField.value;
         const password = required(root, '#shared-password', 'input').value;
         const shareOptions = readShareOptions();
 
-        if (!noteText || !password) {
-            deps.alert('Please enter both text and password');
+        if (!noteText) {
+            showRefusal('note-error', 'Write the note you want to share.');
+            noteField.focus();
             return;
         }
-        if (!enforcePasswordStrength(password)) return;
+        if (!acceptPassword(password)) return;
 
         // Encrypt text data via the key-release handshake
         const enc = new TextEncoder();

@@ -5,7 +5,7 @@
 // the real crypto.js. The shared-files status refresh is not one of the
 // fake's routes, so the driver answers it itself.
 import { isInaccessible, within } from '@testing-library/dom';
-import { computeAccessibleDescription, computeAccessibleName } from 'dom-accessibility-api';
+import { computeAccessibleName } from 'dom-accessibility-api';
 import { expect, vi } from 'vitest';
 import { initHeroFlow } from '../../../../static/js/hero-flow-page.js';
 import { initIndex } from '../../../../static/js/index-page.js';
@@ -61,7 +61,8 @@ export const PASSWORDS = {
  * @property {number} [sharesPerPage] - the list's page size (5 as rendered)
  * @property {Array<{ name: ShareName, openedAt: string, openedFrom: string }>} [openedMeanwhile] -
  *   shares opened since the page was rendered: the status refresh reports them
- * @property {'ok' | 'blocked'} [clipboard] - blocked: the browser refuses clipboard access
+ * @property {'ok' | 'blocked' | 'unavailable'} [clipboard] - blocked: the browser refuses
+ *   clipboard access; unavailable: no Clipboard API at all (a non-secure context)
  * @property {import('./page.js').CryptoKind} [crypto] - real in the JS-integration layer
  * @property {Fake} [backend] - the server uploads go to, when a test needs one it made
  */
@@ -169,6 +170,9 @@ export function openUploadPage({
         fetch, cryptoService, server.XMLHttpRequest);
     if (clipboard === 'blocked') {
         vi.spyOn(window.navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
+    } else if (clipboard === 'unavailable') {
+        // lib.dom types navigator.clipboard as always present; a non-secure context lacks it.
+        vi.spyOn(window.navigator, 'clipboard', 'get').mockReturnValue(/** @type {any} */ (undefined));
     }
     initIndex(window.document, deps);
     initHeroFlow(window.document, {});
@@ -219,7 +223,7 @@ export function openUploadPage({
         async writeMessage(text) {
             const field = screen.getByLabelText('Secret text');
             await user.clear(field);
-            await user.type(field, typeable(text));
+            if (text) await user.type(field, typeable(text));
         },
         /** @param {string | UploadFile} file */
         selectFile: (file) => user.upload(fileField(),
@@ -241,11 +245,15 @@ export function openUploadPage({
         },
         /** @param {string | { strength: keyof typeof PASSWORDS }} password */
         async enterPassword(password) {
+            const text = typeof password === 'string' ? password : PASSWORDS[password.strength];
             await user.clear(passwordField());
-            await user.type(passwordField(), typeable(typeof password === 'string' ? password : PASSWORDS[password.strength]));
+            if (text) await user.type(passwordField(), typeable(text));
         },
         clearPassword: () => user.clear(passwordField()),
         generatePassword: () => user.click(screen.getByRole('button', { name: 'Generate' })),
+        copyPassword: () => user.click(screen.getByRole('button', { name: 'Copy password' })),
+        showPassword: () => user.click(screen.getByRole('button', { name: 'Show password' })),
+        hidePassword: () => user.click(screen.getByRole('button', { name: 'Hide password' })),
         /**
          * How full the strength meter's bar is drawn, e.g. '68%'. The width is
          * visual, so it is read from the meter that carries it for the bar
@@ -264,7 +272,8 @@ export function openUploadPage({
         },
         /**
          * Press the share button and wait for the outcome: the page leaves for
-         * the success page, alerts, or refuses the password.
+         * the success page, alerts, or refuses the input inline (a missing
+         * file, note or password, or a weak password).
          * @param {{ server?: UploadServer }} [options]
          */
         async share({ server: situation = 'ok' } = {}) {
@@ -272,7 +281,7 @@ export function openUploadPage({
             const outcomes = navigations.length + alerts.length;
             await user.click(screen.getByRole('button', { name: /^Share (file|note)$/ }));
             await waitUntil(() => expect(navigations.length + alerts.length > outcomes
-                || computeAccessibleDescription(passwordField()).startsWith('Password rejected')).toBe(true), timeout);
+                || screen.queryAllByRole('alert').some((region) => region.textContent?.trim())).toBe(true), timeout);
         },
         /**
          * Choose a file, enter the password and share it.

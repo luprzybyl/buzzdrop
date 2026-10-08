@@ -169,10 +169,10 @@
     background: transparent;
   }
 
-  /* datetime-local pickers render a black-on-black icon in dark UIs. */
+  /* :root's color-scheme: dark already draws the picker icon light; don't
+     filter it, or it turns dark on the dark field again. */
   input[type='datetime-local']::-webkit-calendar-picker-indicator {
-    filter: invert(1);
-    opacity: 0.5;
+    opacity: 0.6;
     cursor: pointer;
   }
 
@@ -312,7 +312,21 @@
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:border-honey-400/40 hover:bg-white/[0.07] hover:text-white;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-slate-200 transition duration-200 not-disabled:hover:border-honey-400/40 not-disabled:hover:bg-white/[0.07] not-disabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  /* A button label that flips between words (Show/Hide, Copy/Copied!)
+     without resizing the button: each .btn-label-sizer draws its
+     data-label invisibly in the same cell, so the cell is as wide as the
+     widest word. The words live in CSS, so the button's text is only the
+     word on screen. */
+  .btn-label {
+    @apply inline-grid *:col-start-1 *:row-start-1;
+  }
+
+  .btn-label-sizer::before {
+    content: attr(data-label);
+    @apply invisible;
   }
 
   .btn-ghost {

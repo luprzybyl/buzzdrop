@@ -1,3 +1,5 @@
+from html.parser import HTMLParser
+
 import pytest
 from flask import session, url_for, get_flashed_messages
 # Fixtures 'app', 'client' will be injected from conftest.py
@@ -31,6 +33,45 @@ def test_login_successful_normal_user(client, app):
         assert sess['username'] == 'testuser'
         assert sess['is_admin'] == False
     assert b'Logged in successfully' in response.data # Check flash message
+
+class _ParentClasses(HTMLParser):
+    """Records the classes on the parent of the first element matching each probe."""
+
+    VOID = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+            'link', 'meta', 'source', 'track', 'wbr'}
+
+    def __init__(self, probes):
+        super().__init__()
+        self.probes = probes  # name -> predicate(tag, classes)
+        self.found = {}
+        self._stack = []
+
+    def handle_starttag(self, tag, attrs):
+        classes = (dict(attrs).get('class') or '').split()
+        for name, matches in self.probes.items():
+            if name not in self.found and self._stack and matches(tag, classes):
+                self.found[name] = self._stack[-1]
+        if tag not in self.VOID:
+            self._stack.append(classes)
+
+    def handle_endtag(self, tag):
+        if tag not in self.VOID and self._stack:
+            self._stack.pop()
+
+
+def test_login_flash_shares_the_composer_width(client):
+    """The banner sits in the page's own column, so their edges line up."""
+    response = client.post(url_for('login'), data={
+        'username': 'testuser',
+        'password': 'password'
+    }, follow_redirects=True)
+    parser = _ParentClasses({
+        'banner': lambda tag, classes: 'alert-banner' in classes,
+        'composer': lambda tag, classes: tag == 'header',
+    })
+    parser.feed(response.get_data(as_text=True))
+    assert 'max-w-5xl' in parser.found['banner']
+    assert 'max-w-5xl' in parser.found['composer']
 
 def test_login_successful_admin_user(client, app):
     # 'adminuser:adminpass:true'

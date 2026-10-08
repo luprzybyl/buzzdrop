@@ -85,7 +85,9 @@
             {# Anything not explicitly flashed as a success is treated as a problem. #}
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
-                    <div class="mb-8 space-y-3">
+                    {# Same width as the page's own content (its content_width
+                       block), so the banner's edges line up with it. #}
+                    <div class="mx-auto mb-8 {% block content_width %}{% endblock %} space-y-3">
                     {% for category, message in messages %}
                         {% set is_success = category == 'success' %}
                         <div class="alert-banner animate-fade-up {{ 'alert-banner-success' if is_success else 'alert-banner-error' }}" role="{{ 'status' if is_success else 'alert' }}">
