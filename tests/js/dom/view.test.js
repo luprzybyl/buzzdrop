@@ -134,6 +134,39 @@ describe('view page', () => {
         expect(share.reportsSent()).toEqual([{ success: false, receipt: null }]);
     });
 
+    // A download that never reached the server consumed nothing: the ticket
+    // from the release still opens it, so Decrypt fetches again without
+    // asking for the password.
+    it('a download that never connects can be retried with Decrypt', async () => {
+        const share = await openShare({ download: 'unreachable' });
+
+        await share.decryptWithPassword(DEFAULT_PASSWORD);
+
+        expect(screen.getByRole('status')).toHaveTextContent('The download failed — press Decrypt to retry.');
+        expect(decryptButton()).toBeEnabled();
+
+        await share.pressDecryptAgain();
+
+        expect(decryptedText()).toHaveTextContent(DEFAULT_MESSAGE);
+    });
+
+    // Only the server knows whether a cut-off download used the share up, so
+    // the page offers the retry and lets the server's answer decide.
+    it('a download cut off partway can be retried, and the server says the share is gone', async () => {
+        const share = await openShare({ download: 'interrupted' });
+
+        await share.decryptWithPassword(DEFAULT_PASSWORD);
+
+        expect(screen.getByRole('status')).toHaveTextContent('The download failed — press Decrypt to retry.');
+        expect(decryptButton()).toBeEnabled();
+
+        await share.pressDecryptAgain();
+
+        expect(screen.getByRole('status')).toHaveTextContent(
+            'This share no longer exists — it was deleted, has expired, or was already claimed.');
+        expect(decryptButton()).toBeDisabled();
+    });
+
     it('an unsupported share format fails the decrypt and disables the form', async () => {
         const share = await openShare({ share: 'unsupported-format' });
 

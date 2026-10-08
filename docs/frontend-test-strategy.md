@@ -90,7 +90,7 @@ From [What does the JS-integration layer's protocol fake look like?](https://git
 - **Shape:** `makeProtocolFake(opts)` → `{ handle, fetch, XMLHttpRequest, state, log, failNext, seedShare }`.
   - **`handle(request) → { status, headers, body }`** is the raw core that holds all protocol logic.
   - **`fetch` and the XHR class** are thin adapters that add browser behaviour: following a 302 (`redirected: true`, final URL) and firing `upload.onprogress`.
-- **State** is what the server would hold: the pending share (H, owner, bound V), the stored blob, `downloaded`, `released_at`, `attempts`, `receipt_hash`, `decryption_success`.
+- **State** is what the server would hold: the pending share (H, owner, bound V), the stored blob, `downloaded`, `released_at`, the `download_ticket` a release mints, `attempts`, `receipt_hash`, `decryption_success`.
 - **One instance spans upload → view**, which gives a browser-only round trip. `seedShare({ password, plaintext })` builds a valid share directly for view-only tests.
 - **Routes:** exactly five: `/upload/begin`, `/upload`, `/download/<id>`, `/release/<id>`, `/report_decryption/<id>`. **Any other request throws.** The shared-files status poll and `/api/token` are answered by their page drivers (§7a); `/delete` is a native form POST, which the page harness records and stops.
 - **Enforces:**
@@ -98,7 +98,9 @@ From [What does the JS-integration layer's protocol fake look like?](https://git
   - owner and `file_id` binding
   - the format of `file_id`, `key_verifier` and `receipt_hash`
   - the V match on release
-  - one-time download and one-time release
+  - one-time release, which mints the download ticket ([#238](https://github.com/luprzybyl/buzzdrop/issues/238))
+  - the blob served only after the release, to a request carrying that ticket in `X-Download-Ticket`
+  - one-time download
   - the receipt on `/report_decryption`
 
   A failed check returns **the server's own status and body**. It never throws.
@@ -111,8 +113,9 @@ From [What does the JS-integration layer's protocol fake look like?](https://git
   - exhausted attempts → 429 (burn off) or 404 (burn on)
   - other owner → 403 on `/upload`
   - re-finish → 409
+  - download before the release, or without the release's ticket → 403, and the share is not consumed
   - download twice → 302 to `/`
-- **Injected failures:** `failNext(route, { status, body } | 'network')` is one-shot. For 413 and rate-limit 429 the body defaults to the **recorded** one (see §6). 500, malformed JSON and network errors are hand-specified.
+- **Injected failures:** `failNext(route, { status, body } | 'network' | 'cut-off')` is one-shot. `'cut-off'` lets the route answer for real (a download is claimed) and drops the connection halfway through the body; only `fetch` delivers it. For 413 and rate-limit 429 the body defaults to the **recorded** one (see §6). 500, malformed JSON and network errors are hand-specified.
 - **Request log:** every request is recorded (method, URL, headers, body). The security invariants assert on it.
 - **Source of truth:** `app.py`, not `CLAUDE.md`.
 - **Module:** shared test support, e.g. `tests/js/support/protocol-fake.js`.
@@ -160,7 +163,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
   - Copy-to-clipboard status.
   - Delete confirmation via `data-confirm-message`.
   - Shared files: search, sort, pagination and their URL sync. Status refresh updates the row and re-renders (one row, answered by the driver).
-- **View page (`view.js`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment, Enter in the field decrypting without navigating, Decrypt disabled until the share has downloaded, the attempts warning (and the field's description of it) going after the first try, the status line as a live region.
+- **View page (`view.js`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment, Enter in the field decrypting without navigating, Decrypt ready as soon as the page opens with nothing fetched until a password is tried, the progress lines while an attempt runs (`Checking password…`, `Downloading encrypted file…`, `Decrypting…`) with the form shut until it ends, a download that fails before or during the body retried with Decrypt, the server's answer saying whether the share is still there ([#238](https://github.com/luprzybyl/buzzdrop/issues/238)), the attempts warning (and the field's description of it) going after the first try, the status line as a live region.
 - **Success page (`success.js`):** copy link and one-click link, password visibility toggle, the field filled from a well-formed fragment.
 - **Confirm page (`confirm-download.js`):** the fragment password carried across the confirm POST (one well-formed case).
 - **Hero flow (`hero-flow.js`):** reduced motion means no autoplay; the toggle pauses it. The stage on screen is the list item with `aria-current="step"`.
@@ -170,7 +173,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 - **Two-phase upload, for file and for note:** begin → encrypt under H → upload with `file_id`, verifier and `receipt_hash` → progress updates → redirect to success.
 - **Share options sent on upload, for file and for note:** expiry, private note, notify-on-open, notification email. Asserted on the request bodies.
 - **Upload error paths, file mode only:** begin fails → the retry runs a fresh begin; upload fails → the retry finishes the newly issued share, not the stale one; 413 shows its message and the UI unlocks.
-- **View:** fetch the blob → release → decrypt → report the receipt, plus one upload → view round trip on one fake instance. 403 with `attempts_remaining`. The other `/release` statuses only pick a message and are DOM-tested.
+- **View:** release (V proven) → fetch the blob with the ticket the release minted → decrypt → report the receipt, plus one upload → view round trip on one fake instance. The password is proven before any ciphertext moves ([#238](https://github.com/luprzybyl/buzzdrop/issues/238)). 403 with `attempts_remaining`. The other `/release` statuses only pick a message and are DOM-tested.
 
 ### E2E journeys (Playwright, against the app container)
 1. File: upload → success → share link → confirm → decrypt → downloaded bytes equal the original.
@@ -212,6 +215,7 @@ Each row is a small mistake and the layer that must catch it. A test that owns a
 | 10 | Progress display removed | Integration |
 | 11 | Key derivation or envelope diverges between browser and CLI | Unit (byte-identical BKV3 fixtures) |
 | 12 | Server releases H twice, or skips the lockout | Python (`tests/integration/test_key_release.py`) |
+| 13 | Blob fetched before the release, or without the release's ticket | Integration (view) + DOM (nothing fetched on open) |
 
 ## 7a. Page drivers
 

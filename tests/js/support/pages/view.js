@@ -42,9 +42,10 @@ const PROGRESS_STATUS = /^(Checking password|Downloading encrypted file|Decrypti
  * @property {string} [query] - a query string the link carries, e.g. 'x=1'
  * @property {string} [password] - the share's password
  * @property {string | Bytes} [content] - what was shared
- * @property {'done' | 'in-progress'} [download] - in-progress holds the
- *   /download fetch (which now runs inside the decrypt attempt) until
- *   finishDownload()
+ * @property {'done' | 'in-progress' | 'unreachable' | 'interrupted'} [download] -
+ *   in-progress holds the /download fetch (which runs inside the decrypt
+ *   attempt) until finishDownload(); unreachable: the first download never
+ *   reaches the server; interrupted: the connection drops partway through it
  * @property {'ok' | 'unsupported-format' | 'corrupted'} [share] - DOM layer only
  * @property {'ok' | 'claimed' | 'burned' | 'error' | 'unreachable'} [server] -
  *   claimed: someone already decrypted it; burned: someone's wrong guesses
@@ -72,6 +73,7 @@ const PROGRESS_STATUS = /^(Checking password|Downloading encrypted file|Decrypti
  * @property {Page['storage']} storage
  * @property {(password: string) => Promise<void>} decryptWithPassword - type it, press Decrypt, wait for the outcome
  * @property {(password: string) => Promise<void>} decryptWithEnter - type it, press Enter, wait for the outcome
+ * @property {() => Promise<void>} pressDecryptAgain - press Decrypt without typing, wait for the outcome
  * @property {() => Promise<void>} copyMessage
  * @property {() => Promise<void>} finishDownload - let a held download arrive
  * @property {() => Promise<SavedFile>} savedFile - the one file the page saved
@@ -119,6 +121,8 @@ export async function openShare({
     const backend = uploaded?.backend ?? makeProtocolFake({ maxAttempts });
     const fileId = uploaded?.fileId ?? await backend.seedShare({ password, plaintext: content }, cryptoService);
     await arrange(backend, fileId, server, cryptoService, password, maxAttempts);
+    if (download === 'unreachable') backend.failNext('/download', 'network');
+    if (download === 'interrupted') backend.failNext('/download', 'cut-off');
     // Only what the page sends from here on is its own.
     const logStart = backend.log.length;
 
@@ -147,7 +151,7 @@ export async function openShare({
     /** @type {() => void} */
     let finishDownload = () => {};
     const downloaded = new Promise((resolve) => { finishDownload = () => resolve(undefined); });
-    if (download === 'done') finishDownload();
+    if (download !== 'in-progress') finishDownload();
     /** @type {typeof globalThis.fetch} */
     const fetch = async (input, init) => {
         if (String(input).startsWith('/download/')) await downloaded;
@@ -180,16 +184,14 @@ export async function openShare({
      * attempt writes progress lines first (checking, downloading, decrypting),
      * so the wait ends on the first status that is none of those — and only
      * after the status has moved at all, or the prompt itself would count.
-     * @param {(field: HTMLElement) => Promise<void>} submit
+     * @param {() => Promise<void>} submit
      */
     const attempt = async (submit) => {
         let reported = false;
         const observer = new window.MutationObserver(() => { reported = true; });
         observer.observe(status(), { childList: true, characterData: true, subtree: true });
         try {
-            const field = passwordField();
-            await user.clear(field);
-            await submit(field);
+            await submit();
             await waitUntil(() => {
                 expect(reported).toBe(true);
                 expect(PROGRESS_STATUS.test(status().textContent)).toBe(false);
@@ -205,13 +207,16 @@ export async function openShare({
         clipboardText: page.clipboardText,
         formsSubmitted: page.formsSubmitted,
         storage: page.storage,
-        decryptWithPassword: (password) => attempt(async (field) => {
-            await user.type(field, typeable(password));
+        decryptWithPassword: (password) => attempt(async () => {
+            await user.clear(passwordField());
+            await user.type(passwordField(), typeable(password));
             await user.click(decryptButton());
         }),
-        decryptWithEnter: (password) => attempt(async (field) => {
-            await user.type(field, `${typeable(password)}{Enter}`);
+        decryptWithEnter: (password) => attempt(async () => {
+            await user.clear(passwordField());
+            await user.type(passwordField(), `${typeable(password)}{Enter}`);
         }),
+        pressDecryptAgain: () => attempt(() => user.click(decryptButton())),
         copyMessage: () => user.click(screen.getByRole('button', { name: 'Copy text' })),
         async finishDownload() {
             finishDownload();

@@ -34,7 +34,7 @@ import { CryptoService, bytesToHex } from '../../../static/js/crypto.js';
  * }} FakeRequest
  * @typedef {{ status: number, headers: Record<string, string>, body: string | Bytes }} FakeResponse
  * @typedef {{ status: number, body?: unknown, headers?: Record<string, string> }} InjectedResponse
- * @typedef {InjectedResponse | number | 'network'} Failure
+ * @typedef {InjectedResponse | number | 'network' | 'cut-off'} Failure
  * @typedef {{
  *   h: string | null,
  *   v: string | null,
@@ -291,6 +291,9 @@ export function makeProtocolFake(opts = {}) {
      * Queue a one-shot failure for the next request to `route`. A bare 413 or
      * 429 (or `{ status }` without a body) answers with the body recorded from
      * app.py; 'network' makes the request fail as a dropped connection.
+     * 'cut-off' lets the route answer for real (so its state changes, as a
+     * claimed download does) and drops the connection halfway through the
+     * body; only fetch can deliver it.
      * @param {Route} route
      * @param {Failure} failure
      */
@@ -308,6 +311,9 @@ export function makeProtocolFake(opts = {}) {
     function injected(route, failure) {
         if (failure === 'network') {
             throw new TypeError('Failed to fetch');
+        }
+        if (failure === 'cut-off') {
+            throw new Error(`protocol fake: a cut-off body needs fetch, not handle() (${route})`);
         }
         const { status, body, headers } = typeof failure === 'number' ? { status: failure } : failure;
         if (body === undefined) {
@@ -685,6 +691,9 @@ export function makeProtocolFake(opts = {}) {
         if (body !== null && typeof body !== 'string' && !(body instanceof FormData)) {
             throw new Error('protocol fake: only string and FormData bodies are supported');
         }
+        const queue = failures.get(routeOf(new URL(url, ORIGIN).pathname));
+        const cutOff = queue?.[0] === 'cut-off';
+        if (cutOff) queue?.shift();
         const response = await handle({ method: init.method ?? 'GET', url, headers, body });
         if (response.status >= 300 && response.status < 400 && response.headers.Location) {
             return browserResponse(new Response('', {
@@ -692,7 +701,7 @@ export function makeProtocolFake(opts = {}) {
             }), new URL(response.headers.Location, ORIGIN).href, true);
         }
         return browserResponse(
-            new Response(response.body.length === 0 ? null : response.body,
+            new Response(cutOff ? cutOffBody(response.body) : response.body.length === 0 ? null : response.body,
                 { status: response.status, headers: response.headers }),
             new URL(url, ORIGIN).href, false);
     }
@@ -794,6 +803,22 @@ export function makeProtocolFake(opts = {}) {
         failNext,
         seedShare,
     };
+}
+
+/**
+ * A body that delivers its first half and then fails the read, as a
+ * connection dropped mid-transfer does.
+ * @param {string | Bytes} body
+ * @returns {ReadableStream<Uint8Array>}
+ */
+function cutOffBody(body) {
+    const bytes = typeof body === 'string' ? new TextEncoder().encode(body) : body;
+    return new ReadableStream({
+        start(controller) {
+            controller.enqueue(bytes.slice(0, Math.floor(bytes.length / 2)));
+            controller.error(new TypeError('network error'));
+        },
+    });
 }
 
 /**

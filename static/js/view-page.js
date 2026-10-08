@@ -251,20 +251,21 @@ export async function initView(root, deps) {
 
     /**
      * Streams the ciphertext behind the release ticket, reporting progress
-     * in the status line. A failed read leaves the ticket usable, so the
-     * same Decrypt press can retry — the server claims the share only when
-     * the fetch reaches it.
+     * in the status line. A dropped connection, before or during the body,
+     * leaves Decrypt to retry with the same ticket: only the server knows
+     * whether the share survived, and its answer to the retry says so.
      * @param {string} ticket
      * @returns {Promise<Bytes>}
      */
     async function downloadCiphertext(ticket) {
+        const failed = 'The download failed — press Decrypt to retry.';
         let res;
         try {
             res = await deps.fetch(downloadUrl, {
                 headers: { 'X-Download-Ticket': ticket },
             });
         } catch (err) {
-            throw new Error('The download failed — press Decrypt to retry.');
+            throw new Error(failed);
         }
         if (res.redirected || res.status === 404 || res.status === 410) {
             throw Object.assign(new Error(
@@ -272,9 +273,22 @@ export async function initView(root, deps) {
                 + 'or was already claimed.'), { terminal: true });
         }
         if (!res.ok) {
-            throw new Error('The download failed — press Decrypt to retry.');
+            throw new Error(failed);
         }
 
+        try {
+            return await readCiphertext(res);
+        } catch (err) {
+            throw new Error(failed);
+        }
+    }
+
+    /**
+     * Reads a /download body, reporting progress in the status line.
+     * @param {Response} res
+     * @returns {Promise<Bytes>}
+     */
+    async function readCiphertext(res) {
         const total = Number(res.headers.get('Content-Length')) || 0;
         const reader = res.body && res.body.getReader ? res.body.getReader() : null;
         if (!reader) {
@@ -364,8 +378,8 @@ export async function initView(root, deps) {
                     passInput.disabled = false;
                 }
             } else if (!encryptedData && !(error && error.terminal)) {
-                // The ticket survives a failed fetch — Decrypt retries the
-                // download without re-proving the password.
+                // Decrypt retries the download with the same ticket, without
+                // re-proving the password; the server says if the share is gone.
                 decryptBtn.disabled = false;
             }
         }
