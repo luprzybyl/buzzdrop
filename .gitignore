@@ -97,3 +97,6 @@ coverage/
 # Playwright E2E output
 playwright-report/
 test-results/
+
+# Claude Code's isolated agent worktrees
+.claude/worktrees/
