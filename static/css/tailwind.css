@@ -321,7 +321,7 @@
      widest word. The words live in CSS, so the button's text is only the
      word on screen. */
   .btn-label {
-    @apply inline-grid *:col-start-1 *:row-start-1;
+    @apply inline-grid justify-items-center *:col-start-1 *:row-start-1;
   }
 
   .btn-label-sizer::before {

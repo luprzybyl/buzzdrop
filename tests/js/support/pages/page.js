@@ -105,6 +105,13 @@ export function addressOf(path, { link = 'plain', password = DEFAULT_PASSWORD, q
  * @property {string} [path] - the address, relative to ORIGIN
  * @property {boolean} [reducedMotion] - the visitor prefers reduced motion
  * @property {(html: string) => string} [edit] - what the server would render differently
+ * @property {ClipboardKind} [clipboard]
+ */
+
+/**
+ * The Clipboard API the page finds. blocked: the browser refuses clipboard
+ * access; unavailable: no Clipboard API at all (a non-secure context).
+ * @typedef {'ok' | 'blocked' | 'unavailable'} ClipboardKind
  */
 
 /** @type {import('happy-dom').Window[]} */
@@ -130,7 +137,7 @@ export async function closePages() {
  * @param {PageOptions} [options]
  * @returns {Page}
  */
-export function openPage(fixture, { path = '/', reducedMotion = false, edit } = {}) {
+export function openPage(fixture, { path = '/', reducedMotion = false, edit, clipboard = 'ok' } = {}) {
     const happyWindow = loadFixture(
         fixture,
         reducedMotion ? { device: { prefersReducedMotion: 'reduce' } } : {},
@@ -152,6 +159,16 @@ export function openPage(fixture, { path = '/', reducedMotion = false, edit } = 
         event.preventDefault();
     });
 
+    // No delay between keystrokes, so typing works under fake timers too.
+    // Setup also gives the page a clipboard the test can read, so it comes
+    // before anything below that holds or changes the clipboard.
+    const user = userEvent.setup({ document, delay: null });
+
+    // The system clipboard, held before the page's view of it is changed
+    // below: a copy by selection reaches it either way, and tests read it.
+    const systemClipboard = window.navigator.clipboard;
+    const writeToSystemClipboard = systemClipboard.writeText.bind(systemClipboard);
+
     // happy-dom has no copy command. This one copies the selection of the
     // input selected last into the clipboard, which is all the pages use it
     // for (happy-dom's select() doesn't focus, so the selection is tracked).
@@ -165,9 +182,16 @@ export function openPage(fixture, { path = '/', reducedMotion = false, edit } = 
     document.execCommand = (command) => {
         if (command !== 'copy' || !selected) return false;
         const { value, selectionStart, selectionEnd } = selected;
-        void window.navigator.clipboard.writeText(value.substring(selectionStart ?? 0, selectionEnd ?? value.length));
+        void writeToSystemClipboard(value.substring(selectionStart ?? 0, selectionEnd ?? value.length));
         return true;
     };
+
+    if (clipboard === 'blocked') {
+        vi.spyOn(systemClipboard, 'writeText').mockRejectedValue(new Error('denied'));
+    } else if (clipboard === 'unavailable') {
+        // lib.dom types navigator.clipboard as always present; a non-secure context lacks it.
+        vi.spyOn(window.navigator, 'clipboard', 'get').mockReturnValue(/** @type {any} */ (undefined));
+    }
 
     const setItem = vi.spyOn(window.Storage.prototype, 'setItem');
 
@@ -175,12 +199,10 @@ export function openPage(fixture, { path = '/', reducedMotion = false, edit } = 
     const page = {
         window,
         screen: within(document.body),
-        // No delay between keystrokes, so typing works under fake timers too;
-        // setup also gives the page a clipboard the test can read.
-        user: userEvent.setup({ document, delay: null }),
+        user,
         url: () => window.location.href,
         historyLength: () => window.history.length,
-        clipboardText: () => window.navigator.clipboard.readText(),
+        clipboardText: () => systemClipboard.readText(),
         formsSubmitted: () => [...submitted],
         storage: () => ({
             writes: setItem.mock.calls.length,
