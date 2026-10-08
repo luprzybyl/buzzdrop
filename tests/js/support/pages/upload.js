@@ -61,8 +61,7 @@ export const PASSWORDS = {
  * @property {number} [sharesPerPage] - the list's page size (5 as rendered)
  * @property {Array<{ name: ShareName, openedAt: string, openedFrom: string }>} [openedMeanwhile] -
  *   shares opened since the page was rendered: the status refresh reports them
- * @property {'ok' | 'blocked' | 'unavailable'} [clipboard] - blocked: the browser refuses
- *   clipboard access; unavailable: no Clipboard API at all (a non-secure context)
+ * @property {import('./page.js').ClipboardKind} [clipboard]
  * @property {import('./page.js').CryptoKind} [crypto] - real in the JS-integration layer
  * @property {Fake} [backend] - the server uploads go to, when a test needs one it made
  */
@@ -137,6 +136,7 @@ export function openUploadPage({
     const server = backend ?? makeProtocolFake({ owner });
     const page = openPage(fixture, {
         path,
+        clipboard,
         edit: (html) => (sharesPerPage
             ? replaceInFixture(html, 'data-page-size="5"', `data-page-size="${sharesPerPage}"`) : html),
     });
@@ -168,12 +168,6 @@ export function openUploadPage({
     };
     const { deps, navigations, alerts } = indexDeps(
         fetch, cryptoService, server.XMLHttpRequest);
-    if (clipboard === 'blocked') {
-        vi.spyOn(window.navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
-    } else if (clipboard === 'unavailable') {
-        // lib.dom types navigator.clipboard as always present; a non-secure context lacks it.
-        vi.spyOn(window.navigator, 'clipboard', 'get').mockReturnValue(/** @type {any} */ (undefined));
-    }
     initIndex(window.document, deps);
     initHeroFlow(window.document, {});
 

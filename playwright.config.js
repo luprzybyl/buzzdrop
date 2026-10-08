@@ -27,7 +27,9 @@ export default defineConfig({
         contextOptions: { reducedMotion: 'reduce' },
     },
     projects: [
-        { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+        // Chrome grants clipboard-write to a page on a click; Playwright's
+        // Chromium denies it unless granted. Firefox and WebKit need nothing.
+        { name: 'chromium', use: { ...devices['Desktop Chrome'], permissions: ['clipboard-write'] } },
         { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
         { name: 'webkit', use: { ...devices['Desktop Safari'] } },
     ],

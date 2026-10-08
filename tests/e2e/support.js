@@ -90,10 +90,24 @@ async function shareLink(page) {
  * @returns {Promise<string>}
  */
 export async function oneClickLink(page) {
-    // success.js builds the link from the fragment once the page has loaded.
-    const field = page.getByLabel('One-click link with password');
-    await expect(field).toHaveValue(/\/view\/[^#]+#./);
-    return field.inputValue();
+    // The page shows the link with its password masked, so the link is taken
+    // the way the sender takes it: from the Copy button. Reading the system
+    // clipboard back needs permissions not every browser grants, so the write
+    // is observed on its way there; the real writeText still runs, and the
+    // button only says "Copied!" if the browser accepted it.
+    await page.evaluate(() => {
+        const { clipboard } = window.navigator;
+        const writeText = clipboard.writeText.bind(clipboard);
+        /** @type {string | undefined} */
+        let copied;
+        clipboard.writeText = (text) => { copied = text; return writeText(text); };
+        Object.defineProperty(window, 'lastCopied', { get: () => copied });
+    });
+    // success.js enables Copy once it has built the link from the fragment.
+    const copy = page.getByRole('button', { name: 'Copy one-click link' });
+    await copy.click();
+    await expect(copy).toHaveText('Copied!');
+    return page.evaluate(() => /** @type {string} */ (/** @type {any} */ (window).lastCopied));
 }
 
 /**

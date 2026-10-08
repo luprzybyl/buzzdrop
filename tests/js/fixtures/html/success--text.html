@@ -136,21 +136,27 @@
                         <label for="password-display" class="field-label">Password</label>
                         <div class="copy-field">
                             <input type="password" id="password-display" readonly class="field-input flex-1 border-transparent bg-transparent font-mono shadow-none">
-                            <button id="toggle-password" type="button" aria-controls="password-display" class="btn-secondary shrink-0 px-4 py-2.5">Show</button>
+                            <div class="flex shrink-0 gap-2">
+                                <button id="toggle-password" type="button" aria-controls="password-display" class="btn-secondary flex-1 px-4 py-2.5">Show</button>
+                                <button id="copy-password-btn" type="button" aria-label="Copy password" class="btn-primary flex-1 px-4 py-2.5" disabled><span class="copy-label">Copy</span></button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <section class="rounded-2xl border border-white/[0.07] bg-white/2 p-5">
-                <h2 class="text-sm font-semibold text-white">One-click link</h2>
+            <section aria-labelledby="one-click-heading" class="rounded-2xl border border-white/[0.07] bg-white/2 p-5">
+                <h2 id="one-click-heading" class="text-sm font-semibold text-white">One-click link</h2>
                 <p class="mt-2 text-xs leading-5 text-slate-400">
                     The password rides along in the URL fragment. Convenient, but anyone holding the link holds
                     the key — this trades away the two-channel separation recommended above.
                 </p>
                 <div class="copy-field mt-4">
-                    <input type="text" id="share-link-with-password" readonly aria-label="One-click link with password" class="field-input flex-1 border-transparent bg-transparent shadow-none" value="">
-                    <button id="copy-one-click-btn" type="button" aria-label="Copy one-click link" class="btn-secondary shrink-0 px-4 py-2.5"><span class="copy-label">Copy</span></button>
+                    
+                    <p id="one-click-link" class="field-input flex min-w-0 flex-1 border-transparent bg-transparent shadow-none" hidden>
+                        <span class="truncate">http://localhost/view/00000000-0000-4000-8000-0000000000f2</span><span class="shrink-0" aria-hidden="true">#••••••</span><span class="sr-only">, with the password after the #</span>
+                    </p>
+                    <button id="copy-one-click-btn" type="button" aria-label="Copy one-click link" class="btn-secondary shrink-0 px-4 py-2.5" disabled><span class="copy-label">Copy</span></button>
                 </div>
             </section>
         </div>
