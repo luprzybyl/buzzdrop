@@ -40,7 +40,13 @@
                         <label for="share-link" class="field-label">Link</label>
                         <div class="copy-field">
                             <input type="text" value="{{ share_link }}" readonly class="field-input flex-1 border-transparent bg-transparent shadow-none" id="share-link">
-                            <button id="copy-link-btn" type="button" aria-label="Copy link" class="btn-primary shrink-0 px-4 py-2.5"><span class="copy-label">Copy</span></button>
+                            <button id="copy-link-btn" type="button" aria-label="Copy link" class="btn-primary shrink-0 px-4 py-2.5">
+                                <span class="btn-label">
+                                    <span class="copy-label">Copy</span>
+                                    <span class="btn-label-sizer" data-label="Copy" aria-hidden="true"></span>
+                                    <span class="btn-label-sizer" data-label="Copied!" aria-hidden="true"></span>
+                                </span>
+                            </button>
                         </div>
                     </div>
 
@@ -49,8 +55,23 @@
                         <div class="copy-field">
                             <input type="password" id="password-display" readonly class="field-input flex-1 border-transparent bg-transparent font-mono shadow-none">
                             <div class="flex shrink-0 gap-2">
-                                <button id="toggle-password" type="button" aria-controls="password-display" class="btn-secondary flex-1 px-4 py-2.5">Show</button>
-                                <button id="copy-password-btn" type="button" aria-label="Copy password" class="btn-primary flex-1 px-4 py-2.5" disabled><span class="copy-label">Copy</span></button>
+                                {# Each label sits over its every word drawn invisibly, so the
+                                   buttons keep one width as they flip and the field doesn't shift. #}
+                                <button id="toggle-password" type="button" aria-controls="password-display" class="btn-secondary flex-1 px-4 py-2.5">
+                                    <span class="btn-label">
+                                        <span id="toggle-password-label">Show</span>
+                                        <span class="btn-label-sizer" data-label="Show" aria-hidden="true"></span>
+                                        <span class="btn-label-sizer" data-label="Hide" aria-hidden="true"></span>
+                                    </span>
+                                </button>
+                                <button id="copy-password-btn" type="button" aria-label="Copy password" class="btn-primary flex-1 px-4 py-2.5" disabled>
+                                    <span class="btn-label">
+                                        <span class="copy-label">Copy</span>
+                                        <span class="btn-label-sizer" data-label="Copy" aria-hidden="true"></span>
+                                        <span class="btn-label-sizer" data-label="Copied!" aria-hidden="true"></span>
+                                        <span class="btn-label-sizer" data-label="Failed" aria-hidden="true"></span>
+                                    </span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -70,7 +91,14 @@
                     <p id="one-click-link" class="field-input flex min-w-0 flex-1 border-transparent bg-transparent shadow-none" hidden>
                         <span class="truncate">{{ share_link }}</span><span class="shrink-0" aria-hidden="true">#••••••</span><span class="sr-only">, with the password after the #</span>
                     </p>
-                    <button id="copy-one-click-btn" type="button" aria-label="Copy one-click link" class="btn-secondary shrink-0 px-4 py-2.5" disabled><span class="copy-label">Copy</span></button>
+                    <button id="copy-one-click-btn" type="button" aria-label="Copy one-click link" class="btn-secondary shrink-0 px-4 py-2.5" disabled>
+                        <span class="btn-label">
+                            <span class="copy-label">Copy</span>
+                            <span class="btn-label-sizer" data-label="Copy" aria-hidden="true"></span>
+                            <span class="btn-label-sizer" data-label="Copied!" aria-hidden="true"></span>
+                            <span class="btn-label-sizer" data-label="Failed" aria-hidden="true"></span>
+                        </span>
+                    </button>
                 </div>
             </section>
         </div>

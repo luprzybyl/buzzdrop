@@ -33,6 +33,7 @@ export function initSuccess(root, deps) {
     const copyPasswordBtn = required(root, '#copy-password-btn', 'button');
     const copyOneClickBtn = required(root, '#copy-one-click-btn', 'button');
     const toggleBtn = required(root, '#toggle-password', 'button');
+    const toggleLabel = required(toggleBtn, '#toggle-password-label', 'span');
 
     /**
      * One region for the page announces every copy; the button flash is visual.
@@ -52,7 +53,8 @@ export function initSuccess(root, deps) {
     /**
      * Flash the outcome on the button and announce it. Only the visible label
      * is rewritten: the button's accessible name comes from its aria-label,
-     * and setting textContent on the button itself would drop the label span.
+     * and setting textContent on the button itself would drop the label and
+     * the invisible words that keep the button one width.
      * @param {HTMLButtonElement} button
      * @param {string} label
      * @param {string} message
@@ -113,14 +115,14 @@ export function initSuccess(root, deps) {
         clearTimeout(hideTimer);
         if (pwdInput.type === 'password') {
             pwdInput.type = 'text';
-            toggleBtn.textContent = 'Hide';
+            toggleLabel.textContent = 'Hide';
             hideTimer = setTimeout(() => {
                 pwdInput.type = 'password';
-                toggleBtn.textContent = 'Show';
+                toggleLabel.textContent = 'Show';
             }, 5000);
         } else {
             pwdInput.type = 'password';
-            toggleBtn.textContent = 'Show';
+            toggleLabel.textContent = 'Show';
         }
     }
 
