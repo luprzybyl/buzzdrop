@@ -269,7 +269,7 @@
                 <h2 id="shared-files-heading" class="text-xl font-semibold tracking-tight text-white">Your drops</h2>
                 <p class="mt-1 text-sm text-slate-400">Track every buzz and copy links without exposing your private notes.</p>
             </div>
-            <span class="status-badge status-badge-slate">4 total</span>
+            <span class="status-badge status-badge-slate">6 total</span>
         </div>
 
         <div class="mt-6 flex flex-col gap-4 border-t border-white/6 pt-6 lg:flex-row lg:items-end lg:justify-between">
@@ -281,8 +281,8 @@
                 <label class="block sm:w-56">
                     <span class="field-label">Sort by</span>
                     <select id="shared-files-sort" class="field-input py-2.5">
-                        <option value="downloaded:desc" selected>Downloaded (newest)</option>
-                        <option value="uploaded:desc">Uploaded (newest)</option>
+                        <option value="uploaded:desc" selected>Uploaded (newest)</option>
+                        <option value="downloaded:desc">Downloaded (newest)</option>
                         <option value="expiry:asc">Expiry (soonest)</option>
                     </select>
                 </label>
@@ -292,41 +292,86 @@
 
         <div id="shared-files-list" class="mt-5 space-y-3" data-page-size="5" data-status-url="/api/user/files/status">
             
-            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000001" data-file-id="00000000-0000-4000-8000-000000000001" data-search-base="report.pdf  2025-01-01 12:00:00 cet 2099-01-01 00:00:00 cet" data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="2099-01-01 00:00:00 CET" data-downloaded-at="" data-search-text="report.pdf  active  2025-01-01 12:00:00 cet 2099-01-01 00:00:00 cet ">
+            
+            
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000006" data-file-id="00000000-0000-4000-8000-000000000006" data-search-base="text note · 21:35  2025-01-06 21:35:00 cet " data-uploaded-at="2025-01-06T21:35:00+01:00" data-expiry-at="" data-downloaded-at="" data-search-text="text note · 21:35  active active 2025-01-06 21:35:00 cet  ">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
-                        <button type="button" class="copy-url group inline-flex max-w-full cursor-pointer items-center gap-2 text-left text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000001" aria-label="Copy the share link for report.pdf" title="Copy share link">
-                            <span id="shared-file-name-00000000-0000-4000-8000-000000000001" class="truncate">report.pdf</span>
-                            <svg class="h-4 w-4 shrink-0 text-slate-600 transition group-hover:text-honey-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
-                                <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
-                            </svg>
-                            <span class="copy-flash" aria-hidden="true" hidden>Copied</span>
-                        </button>
+                        <h3 id="shared-file-name-00000000-0000-4000-8000-000000000006" class="truncate text-base font-semibold text-white">Text note · 21:35</h3>
                         
                         <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Uploaded</dt>
-                                <dd class="tabular-nums">2025-01-01 12:00:00 CET</dd>
+                                <dd class="tabular-nums"><time datetime="2025-01-06T21:35:00+01:00" title="2025-01-06 21:35:00 CET">2025-01-06 21:35:00 CET</time></dd>
                             </div>
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Expiry</dt>
-                                <dd class="tabular-nums">2099-01-01 00:00:00 CET</dd>
+                                <dd class="tabular-nums">No expiry</dd>
                             </div>
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Opened</dt>
-                                <dd class="tabular-nums" data-file-downloaded-at>No</dd>
+                                <dd class="tabular-nums" data-file-downloaded-at>Not yet</dd>
                             </div>
                             <div class="flex gap-1.5 break-all">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">From</dt>
-                                <dd class="tabular-nums" data-file-downloaded-by>-</dd>
+                                <dd class="tabular-nums" data-file-downloaded-by>—</dd>
                             </div>
                         </dl>
                     </div>
                     <div class="flex flex-wrap items-center gap-3 lg:justify-end">
-                        <span data-file-status class="status-badge status-badge-amber">
-                            Active
-                        </span>
+                        <span data-file-status data-status="active" class="status-badge">Active</span>
+                        <button type="button" class="copy-url btn-secondary px-4 py-2" data-url="http://localhost/view/00000000-0000-4000-8000-000000000006" aria-label="Copy link for Text note · 21:35">
+                            <span class="btn-label">
+                                <span class="copy-label">Copy link</span>
+                                <span class="btn-label-sizer" data-label="Copy link" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Copied!" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Failed" aria-hidden="true"></span>
+                            </span>
+                        </button>
+                        <form method="post" action="/delete/00000000-0000-4000-8000-000000000006" class="inline-block" data-confirm-message="Delete this file?">
+                            <input type="hidden" name="csrf_token" value="fixture-csrf-token">
+                            <button type="submit" class="btn-danger">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+            
+            
+            
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000001" data-file-id="00000000-0000-4000-8000-000000000001" data-search-base="report.pdf  2025-01-05 12:00:00 cet 2099-01-01 00:00:00 cet" data-uploaded-at="2025-01-05T12:00:00+01:00" data-expiry-at="2099-01-01T00:00:00+01:00" data-downloaded-at="" data-search-text="report.pdf  active active 2025-01-05 12:00:00 cet 2099-01-01 00:00:00 cet ">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="min-w-0 flex-1">
+                        <h3 id="shared-file-name-00000000-0000-4000-8000-000000000001" class="truncate text-base font-semibold text-white">report.pdf</h3>
+                        
+                        <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">Uploaded</dt>
+                                <dd class="tabular-nums"><time datetime="2025-01-05T12:00:00+01:00" title="2025-01-05 12:00:00 CET">2025-01-05 12:00:00 CET</time></dd>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">Expiry</dt>
+                                <dd class="tabular-nums"><time datetime="2099-01-01T00:00:00+01:00" title="2099-01-01 00:00:00 CET">2099-01-01 00:00:00 CET</time></dd>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">Opened</dt>
+                                <dd class="tabular-nums" data-file-downloaded-at>Not yet</dd>
+                            </div>
+                            <div class="flex gap-1.5 break-all">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">From</dt>
+                                <dd class="tabular-nums" data-file-downloaded-by>—</dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 lg:justify-end">
+                        <span data-file-status data-status="active" class="status-badge">Active</span>
+                        <button type="button" class="copy-url btn-secondary px-4 py-2" data-url="http://localhost/view/00000000-0000-4000-8000-000000000001" aria-label="Copy link for report.pdf">
+                            <span class="btn-label">
+                                <span class="copy-label">Copy link</span>
+                                <span class="btn-label-sizer" data-label="Copy link" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Copied!" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Failed" aria-hidden="true"></span>
+                            </span>
+                        </button>
                         <form method="post" action="/delete/00000000-0000-4000-8000-000000000001" class="inline-block" data-confirm-message="Delete this file?">
                             <input type="hidden" name="csrf_token" value="fixture-csrf-token">
                             <button type="submit" class="btn-danger">Delete</button>
@@ -335,43 +380,42 @@
                 </div>
             </article>
             
-            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000002" data-file-id="00000000-0000-4000-8000-000000000002" data-search-base="secret note for the auditor 2025-01-01 12:00:00 cet " data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="" data-downloaded-at="" data-search-text="secret note for the auditor active  2025-01-01 12:00:00 cet  ">
+            
+            
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000002" data-file-id="00000000-0000-4000-8000-000000000002" data-search-base="for the auditor for the auditor 2025-01-04 12:00:00 cet " data-uploaded-at="2025-01-04T12:00:00+01:00" data-expiry-at="" data-downloaded-at="" data-search-text="for the auditor for the auditor active active 2025-01-04 12:00:00 cet  ">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
-                        <button type="button" class="copy-url group inline-flex max-w-full cursor-pointer items-center gap-2 text-left text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000002" aria-label="Copy the share link for Secret Note" title="Copy share link">
-                            <span id="shared-file-name-00000000-0000-4000-8000-000000000002" class="truncate">Secret Note</span>
-                            <svg class="h-4 w-4 shrink-0 text-slate-600 transition group-hover:text-honey-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
-                                <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
-                            </svg>
-                            <span class="copy-flash" aria-hidden="true" hidden>Copied</span>
-                        </button>
-                        
-                            <p class="mt-2 text-sm text-slate-500">For the auditor</p>
+                        <h3 id="shared-file-name-00000000-0000-4000-8000-000000000002" class="truncate text-base font-semibold text-white">For the auditor</h3>
                         
                         <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Uploaded</dt>
-                                <dd class="tabular-nums">2025-01-01 12:00:00 CET</dd>
+                                <dd class="tabular-nums"><time datetime="2025-01-04T12:00:00+01:00" title="2025-01-04 12:00:00 CET">2025-01-04 12:00:00 CET</time></dd>
                             </div>
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Expiry</dt>
-                                <dd class="tabular-nums">None</dd>
+                                <dd class="tabular-nums">No expiry</dd>
                             </div>
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Opened</dt>
-                                <dd class="tabular-nums" data-file-downloaded-at>No</dd>
+                                <dd class="tabular-nums" data-file-downloaded-at>Not yet</dd>
                             </div>
                             <div class="flex gap-1.5 break-all">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">From</dt>
-                                <dd class="tabular-nums" data-file-downloaded-by>-</dd>
+                                <dd class="tabular-nums" data-file-downloaded-by>—</dd>
                             </div>
                         </dl>
                     </div>
                     <div class="flex flex-wrap items-center gap-3 lg:justify-end">
-                        <span data-file-status class="status-badge status-badge-amber">
-                            Active
-                        </span>
+                        <span data-file-status data-status="active" class="status-badge">Active</span>
+                        <button type="button" class="copy-url btn-secondary px-4 py-2" data-url="http://localhost/view/00000000-0000-4000-8000-000000000002" aria-label="Copy link for For the auditor">
+                            <span class="btn-label">
+                                <span class="copy-label">Copy link</span>
+                                <span class="btn-label-sizer" data-label="Copy link" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Copied!" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Failed" aria-hidden="true"></span>
+                            </span>
+                        </button>
                         <form method="post" action="/delete/00000000-0000-4000-8000-000000000002" class="inline-block" data-confirm-message="Delete this file?">
                             <input type="hidden" name="csrf_token" value="fixture-csrf-token">
                             <button type="submit" class="btn-danger">Delete</button>
@@ -380,30 +424,25 @@
                 </div>
             </article>
             
-            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000003" data-file-id="00000000-0000-4000-8000-000000000003" data-search-base="photo.png  2025-01-01 12:00:00 cet " data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="" data-downloaded-at="2025-01-02 09:30:00 CET" data-search-text="photo.png  active downloaded 2025-01-01 12:00:00 cet  203.0.113.7">
+            
+            
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000003" data-file-id="00000000-0000-4000-8000-000000000003" data-search-base="photo.png  2025-01-03 12:00:00 cet " data-uploaded-at="2025-01-03T12:00:00+01:00" data-expiry-at="" data-downloaded-at="2025-01-06T09:30:00+01:00" data-search-text="photo.png  active decrypted 2025-01-03 12:00:00 cet  203.0.113.7">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
-                        <button type="button" class="copy-url group inline-flex max-w-full cursor-pointer items-center gap-2 text-left text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000003" aria-label="Copy the share link for photo.png" title="Copy share link">
-                            <span id="shared-file-name-00000000-0000-4000-8000-000000000003" class="truncate">photo.png</span>
-                            <svg class="h-4 w-4 shrink-0 text-slate-600 transition group-hover:text-honey-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
-                                <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
-                            </svg>
-                            <span class="copy-flash" aria-hidden="true" hidden>Copied</span>
-                        </button>
+                        <h3 id="shared-file-name-00000000-0000-4000-8000-000000000003" class="truncate text-base font-semibold text-white">photo.png</h3>
                         
                         <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Uploaded</dt>
-                                <dd class="tabular-nums">2025-01-01 12:00:00 CET</dd>
+                                <dd class="tabular-nums"><time datetime="2025-01-03T12:00:00+01:00" title="2025-01-03 12:00:00 CET">2025-01-03 12:00:00 CET</time></dd>
                             </div>
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Expiry</dt>
-                                <dd class="tabular-nums">None</dd>
+                                <dd class="tabular-nums">No expiry</dd>
                             </div>
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Opened</dt>
-                                <dd class="tabular-nums" data-file-downloaded-at>2025-01-02 09:30:00 CET</dd>
+                                <dd class="tabular-nums" data-file-downloaded-at><time datetime="2025-01-06T09:30:00+01:00" title="2025-01-06 09:30:00 CET">2025-01-06 09:30:00 CET</time></dd>
                             </div>
                             <div class="flex gap-1.5 break-all">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">From</dt>
@@ -412,9 +451,15 @@
                         </dl>
                     </div>
                     <div class="flex flex-wrap items-center gap-3 lg:justify-end">
-                        <span data-file-status class="status-badge status-badge-green">
-                            Downloaded
-                        </span>
+                        <span data-file-status data-status="decrypted" class="status-badge">Decrypted</span>
+                        <button type="button" class="copy-url btn-secondary px-4 py-2" data-url="http://localhost/view/00000000-0000-4000-8000-000000000003" aria-label="Copy link for photo.png" hidden>
+                            <span class="btn-label">
+                                <span class="copy-label">Copy link</span>
+                                <span class="btn-label-sizer" data-label="Copy link" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Copied!" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Failed" aria-hidden="true"></span>
+                            </span>
+                        </button>
                         <form method="post" action="/delete/00000000-0000-4000-8000-000000000003" class="inline-block" data-confirm-message="Delete this file?">
                             <input type="hidden" name="csrf_token" value="fixture-csrf-token">
                             <button type="submit" class="btn-danger">Delete</button>
@@ -423,42 +468,87 @@
                 </div>
             </article>
             
-            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000004" data-file-id="00000000-0000-4000-8000-000000000004" data-search-base="old.txt  2025-01-01 12:00:00 cet 2000-01-01 00:00:00 cet" data-uploaded-at="2025-01-01 12:00:00 CET" data-expiry-at="2000-01-01 00:00:00 CET" data-downloaded-at="" data-search-text="old.txt  expired expired 2025-01-01 12:00:00 cet 2000-01-01 00:00:00 cet ">
+            
+            
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000004" data-file-id="00000000-0000-4000-8000-000000000004" data-search-base="old.txt  2025-01-02 12:00:00 cet 2000-01-01 00:00:00 cet" data-uploaded-at="2025-01-02T12:00:00+01:00" data-expiry-at="2000-01-01T00:00:00+01:00" data-downloaded-at="" data-search-text="old.txt  expired expired 2025-01-02 12:00:00 cet 2000-01-01 00:00:00 cet ">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
-                        <button type="button" class="copy-url group inline-flex max-w-full cursor-pointer items-center gap-2 text-left text-base font-semibold text-white transition hover:text-honey-300" data-url="http://localhost/view/00000000-0000-4000-8000-000000000004" aria-label="Copy the share link for old.txt" title="Copy share link">
-                            <span id="shared-file-name-00000000-0000-4000-8000-000000000004" class="truncate">old.txt</span>
-                            <svg class="h-4 w-4 shrink-0 text-slate-600 transition group-hover:text-honey-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
-                                <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
-                            </svg>
-                            <span class="copy-flash" aria-hidden="true" hidden>Copied</span>
-                        </button>
+                        <h3 id="shared-file-name-00000000-0000-4000-8000-000000000004" class="truncate text-base font-semibold text-white">old.txt</h3>
                         
                         <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Uploaded</dt>
-                                <dd class="tabular-nums">2025-01-01 12:00:00 CET</dd>
+                                <dd class="tabular-nums"><time datetime="2025-01-02T12:00:00+01:00" title="2025-01-02 12:00:00 CET">2025-01-02 12:00:00 CET</time></dd>
                             </div>
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Expiry</dt>
-                                <dd class="tabular-nums">2000-01-01 00:00:00 CET</dd>
+                                <dd class="tabular-nums"><time datetime="2000-01-01T00:00:00+01:00" title="2000-01-01 00:00:00 CET">2000-01-01 00:00:00 CET</time></dd>
                             </div>
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Opened</dt>
-                                <dd class="tabular-nums" data-file-downloaded-at>No</dd>
+                                <dd class="tabular-nums" data-file-downloaded-at>Not yet</dd>
                             </div>
                             <div class="flex gap-1.5 break-all">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">From</dt>
-                                <dd class="tabular-nums" data-file-downloaded-by>-</dd>
+                                <dd class="tabular-nums" data-file-downloaded-by>—</dd>
                             </div>
                         </dl>
                     </div>
                     <div class="flex flex-wrap items-center gap-3 lg:justify-end">
-                        <span data-file-status class="status-badge status-badge-red">
-                            Expired
-                        </span>
+                        <span data-file-status data-status="expired" class="status-badge">Expired</span>
+                        <button type="button" class="copy-url btn-secondary px-4 py-2" data-url="http://localhost/view/00000000-0000-4000-8000-000000000004" aria-label="Copy link for old.txt" hidden>
+                            <span class="btn-label">
+                                <span class="copy-label">Copy link</span>
+                                <span class="btn-label-sizer" data-label="Copy link" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Copied!" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Failed" aria-hidden="true"></span>
+                            </span>
+                        </button>
                         <form method="post" action="/delete/00000000-0000-4000-8000-000000000004" class="inline-block" data-confirm-message="Delete this file?">
+                            <input type="hidden" name="csrf_token" value="fixture-csrf-token">
+                            <button type="submit" class="btn-danger">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+            
+            
+            
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-00000000-0000-4000-8000-000000000007" data-file-id="00000000-0000-4000-8000-000000000007" data-search-base="locked.zip  2025-01-01 12:00:00 cet " data-uploaded-at="2025-01-01T12:00:00+01:00" data-expiry-at="" data-downloaded-at="" data-search-text="locked.zip  active locked out 2025-01-01 12:00:00 cet  ">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="min-w-0 flex-1">
+                        <h3 id="shared-file-name-00000000-0000-4000-8000-000000000007" class="truncate text-base font-semibold text-white">locked.zip</h3>
+                        
+                        <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">Uploaded</dt>
+                                <dd class="tabular-nums"><time datetime="2025-01-01T12:00:00+01:00" title="2025-01-01 12:00:00 CET">2025-01-01 12:00:00 CET</time></dd>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">Expiry</dt>
+                                <dd class="tabular-nums">No expiry</dd>
+                            </div>
+                            <div class="flex gap-1.5">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">Opened</dt>
+                                <dd class="tabular-nums" data-file-downloaded-at>Not yet</dd>
+                            </div>
+                            <div class="flex gap-1.5 break-all">
+                                <dt class="font-semibold uppercase tracking-wider text-slate-500">From</dt>
+                                <dd class="tabular-nums" data-file-downloaded-by>—</dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 lg:justify-end">
+                        <span data-file-status data-status="locked-out" class="status-badge">Locked out</span>
+                        <button type="button" class="copy-url btn-secondary px-4 py-2" data-url="http://localhost/view/00000000-0000-4000-8000-000000000007" aria-label="Copy link for locked.zip" hidden>
+                            <span class="btn-label">
+                                <span class="copy-label">Copy link</span>
+                                <span class="btn-label-sizer" data-label="Copy link" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Copied!" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Failed" aria-hidden="true"></span>
+                            </span>
+                        </button>
+                        <form method="post" action="/delete/00000000-0000-4000-8000-000000000007" class="inline-block" data-confirm-message="Delete this file?">
                             <input type="hidden" name="csrf_token" value="fixture-csrf-token">
                             <button type="submit" class="btn-danger">Delete</button>
                         </form>
@@ -472,7 +562,8 @@
 
         <p id="shared-files-empty-state" class="mt-4 hidden rounded-2xl border border-white/6 bg-white/2 px-5 py-6 text-center text-sm text-slate-500">No drops match this search.</p>
 
-        <div class="mt-6 flex flex-col gap-3 border-t border-white/6 pt-5 sm:flex-row sm:items-center sm:justify-between">
+        
+        <div id="shared-files-pagination" hidden class="mt-6 flex flex-col gap-3 border-t border-white/6 pt-5 sm:flex-row sm:items-center sm:justify-between">
             <span id="shared-files-page" class="text-sm font-medium text-slate-500"></span>
             <div class="flex gap-2">
                 <button id="shared-files-prev" type="button" class="btn-secondary px-4 py-2 disabled:pointer-events-none disabled:opacity-40">Previous</button>

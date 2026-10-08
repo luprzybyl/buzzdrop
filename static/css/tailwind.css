@@ -375,6 +375,24 @@
     @apply border-rose-400/25 bg-rose-400/10 text-rose-300;
   }
 
+  /* A drop's status (utils.STATUS_LABELS), coloured by what it means: still
+     live, opened, went wrong, or simply ran out. */
+  .status-badge[data-status='active'] {
+    @apply border-honey-400/25 bg-honey-400/10 text-honey-300;
+  }
+
+  .status-badge:is([data-status='decrypted'], [data-status='downloaded']) {
+    @apply border-emerald-400/25 bg-emerald-400/10 text-emerald-300;
+  }
+
+  .status-badge:is([data-status='decryption-failed'], [data-status='locked-out']) {
+    @apply border-rose-400/25 bg-rose-400/10 text-rose-300;
+  }
+
+  .status-badge[data-status='expired'] {
+    @apply border-white/10 bg-white/5 text-slate-300;
+  }
+
   .alert-banner {
     @apply flex gap-3 rounded-2xl border px-4 py-4 text-sm;
   }
@@ -463,14 +481,6 @@
 
   .pw-text-strong {
     @apply text-emerald-300;
-  }
-
-  .copy-flash {
-    @apply shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[0.65rem] leading-6 font-semibold uppercase tracking-wider text-emerald-300;
-  }
-
-  .copy-flash-error {
-    @apply border-rose-400/25 bg-rose-500/10 text-rose-300;
   }
 
   .file-chip {

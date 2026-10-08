@@ -8,7 +8,10 @@
  * A file's status as the shared-files table shows it.
  * @typedef {object} FileStatus
  * @property {string} status - 'active' or 'expired'
- * @property {string | null} [downloaded_at]
+ * @property {string} status_key - 'active', 'decrypted', 'decryption-failed',
+ *   'locked-out', 'downloaded' or 'expired'; only an active drop's link works
+ * @property {string | null} [downloaded_at] - for display
+ * @property {string | null} [downloaded_at_iso] - offset-aware ISO 8601
  * @property {string | null} [status_display]
  * @property {string | null} [downloaded_by_ip]
  */
@@ -62,20 +65,44 @@ export function buildSharedFilesUrl(currentUrl, page, searchTerm) {
     return url;
 }
 
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
 /**
- * Downloaded wins over expired, which wins over active.
- * @param {FileStatus} file
- * @returns {string}
+ * A timestamp as a short, scannable distance from now: "just now",
+ * "2 min ago", "yesterday", "in 3 days". Every unit is rounded down, and a
+ * month is 30 days, a year 365: this is for scanning, the full timestamp
+ * stays in the element's title.
+ * @param {number} then - epoch milliseconds
+ * @param {number} now - epoch milliseconds
+ * @returns {string | null} null when `then` is not a valid time
  */
-export function statusBadgeClass(file) {
-    if (file.downloaded_at) return 'status-badge-green';
-    if (file.status === 'expired') return 'status-badge-red';
-    return 'status-badge-amber';
+export function relativeTime(then, now) {
+    if (!Number.isFinite(then)) return null;
+    const future = then > now;
+    const elapsed = Math.abs(then - now);
+    /** @param {number} count @param {string} unit */
+    const phrase = (count, unit) => {
+        const amount = `${count} ${unit}`;
+        return future ? `in ${amount}` : `${amount} ago`;
+    };
+    /** @param {number} count @param {string} unit */
+    const plural = (count, unit) => phrase(count, count === 1 ? unit : `${unit}s`);
+
+    if (elapsed < MINUTE) return 'just now';
+    if (elapsed < HOUR) return phrase(Math.floor(elapsed / MINUTE), 'min');
+    if (elapsed < DAY) return phrase(Math.floor(elapsed / HOUR), 'h');
+    const days = Math.floor(elapsed / DAY);
+    if (days === 1) return future ? 'tomorrow' : 'yesterday';
+    if (days < 30) return plural(days, 'day');
+    if (days < 365) return plural(Math.floor(days / 30), 'month');
+    return plural(Math.floor(days / 365), 'year');
 }
 
 /**
  * @param {string} searchBase
- * @param {FileStatus} file
+ * @param {Pick<FileStatus, 'status' | 'status_display' | 'downloaded_by_ip'>} file
  * @returns {string}
  */
 export function rowSearchText(searchBase, file) {

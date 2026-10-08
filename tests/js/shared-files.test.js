@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSharedFilesUrl, getSharedFilesPage, rowSearchText, statusBadgeClass } from '../../static/js/shared-files.js';
+import { buildSharedFilesUrl, getSharedFilesPage, relativeTime, rowSearchText } from '../../static/js/shared-files.js';
 
 const rows = Array.from({ length: 12 }, (_, index) => ({
     dataset: { searchText: `file-${index}.txt` },
@@ -26,17 +26,36 @@ test('preserves other URL parameters while changing search and page state', () =
     assert.equal(url.searchParams.get('shared_search'), 'report');
 });
 
-test('gives a downloaded file the green badge, even once expired', () => {
-    assert.equal(statusBadgeClass({ downloaded_at: '2025-01-01 10:00', status: 'active' }), 'status-badge-green');
-    assert.equal(statusBadgeClass({ downloaded_at: '2025-01-01 10:00', status: 'expired' }), 'status-badge-green');
+const NOW = Date.parse('2026-10-06T21:37:00+02:00');
+/** @param {string} iso */
+const ago = (iso) => relativeTime(Date.parse(iso), NOW);
+
+test('calls the last minute "just now"', () => {
+    assert.equal(ago('2026-10-06T21:36:30+02:00'), 'just now');
+    assert.equal(ago('2026-10-06T21:37:20+02:00'), 'just now');
 });
 
-test('gives an expired, undownloaded file the red badge', () => {
-    assert.equal(statusBadgeClass({ downloaded_at: null, status: 'expired' }), 'status-badge-red');
+test('counts minutes and hours, in the past and the future', () => {
+    assert.equal(ago('2026-10-06T21:35:00+02:00'), '2 min ago');
+    assert.equal(ago('2026-10-06T21:42:00+02:00'), 'in 5 min');
+    assert.equal(ago('2026-10-06T18:30:00+02:00'), '3 h ago');
+    assert.equal(ago('2026-10-07T01:37:00+02:00'), 'in 4 h');
 });
 
-test('gives an active, undownloaded file the amber badge', () => {
-    assert.equal(statusBadgeClass({ downloaded_at: null, status: 'active' }), 'status-badge-amber');
+test('says "yesterday" and "tomorrow" a day away', () => {
+    assert.equal(ago('2026-10-05T20:00:00+02:00'), 'yesterday');
+    assert.equal(ago('2026-10-07T23:00:00+02:00'), 'tomorrow');
+});
+
+test('counts days, months and years further out', () => {
+    assert.equal(ago('2026-10-01T21:37:00+02:00'), '5 days ago');
+    assert.equal(ago('2026-12-06T21:37:00+01:00'), 'in 2 months');
+    assert.equal(ago('2025-01-01T12:00:00+01:00'), '1 year ago');
+    assert.equal(ago('2099-01-01T00:00:00+01:00'), 'in 72 years');
+});
+
+test('has no relative time for an unreadable timestamp', () => {
+    assert.equal(relativeTime(Number.NaN, NOW), null);
 });
 
 test('builds lowercase row search text from the base and the file status', () => {

@@ -510,8 +510,8 @@
                 <label class="block sm:w-56">
                     <span class="field-label">Sort by</span>
                     <select id="shared-files-sort" class="field-input py-2.5">
-                        <option value="downloaded:desc" selected>Downloaded (newest)</option>
-                        <option value="uploaded:desc">Uploaded (newest)</option>
+                        <option value="uploaded:desc" selected>Uploaded (newest)</option>
+                        <option value="downloaded:desc">Downloaded (newest)</option>
                         <option value="expiry:asc">Expiry (soonest)</option>
                     </select>
                 </label>
@@ -521,43 +521,45 @@
 
         <div id="shared-files-list" class="mt-5 space-y-3" data-page-size="5" data-status-url="{{ url_for('user_file_statuses') }}">
             {% for file in user_files %}
-            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-{{ file.id }}" data-file-id="{{ file.id }}" data-search-base="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or ''))|lower }}" data-uploaded-at="{{ file.created_at or '' }}" data-expiry-at="{{ file.expiry_at or '' }}" data-downloaded-at="{{ file.downloaded_at or '' }}" data-search-text="{{ (file.original_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.status ~ ' ' ~ file.status_display ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or '') ~ ' ' ~ (file.downloaded_by_ip or ''))|lower }}">
+            {# Times render in full; the page script swaps in a relative time and keeps
+               the full one in the title. Only an active drop's link still works. #}
+            {% macro timestamp(shown, iso) %}<time datetime="{{ iso or '' }}" title="{{ shown }}">{{ shown }}</time>{% endmacro %}
+            <article class="dashboard-item shared-file-row" aria-labelledby="shared-file-name-{{ file.id }}" data-file-id="{{ file.id }}" data-search-base="{{ (file.display_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or ''))|lower }}" data-uploaded-at="{{ file.created_at_iso or '' }}" data-expiry-at="{{ file.expiry_at_iso or '' }}" data-downloaded-at="{{ file.downloaded_at_iso or '' }}" data-search-text="{{ (file.display_name ~ ' ' ~ (file.private_note or '') ~ ' ' ~ file.status ~ ' ' ~ file.status_display ~ ' ' ~ file.created_at ~ ' ' ~ (file.expiry_at or '') ~ ' ' ~ (file.downloaded_by_ip or ''))|lower }}">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div class="min-w-0 flex-1">
-                        <button type="button" class="copy-url group inline-flex max-w-full cursor-pointer items-center gap-2 text-left text-base font-semibold text-white transition hover:text-honey-300" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}" aria-label="Copy the share link for {{ file.original_name }}" title="Copy share link">
-                            <span id="shared-file-name-{{ file.id }}" class="truncate">{{ file.original_name }}</span>
-                            <svg class="h-4 w-4 shrink-0 text-slate-600 transition group-hover:text-honey-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path d="M7 3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6.414A2 2 0 0 0 14.414 5L12 2.586A2 2 0 0 0 10.586 2H7Z"/>
-                                <path d="M3 7a2 2 0 0 1 2-2v9a2 2 0 0 0 2 2h6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>
-                            </svg>
-                            <span class="copy-flash" aria-hidden="true" hidden>Copied</span>
-                        </button>
-                        {% if file.private_note %}
+                        <h3 id="shared-file-name-{{ file.id }}" class="truncate text-base font-semibold text-white">{{ file.display_name }}</h3>
+                        {% if file.private_note and file.type != 'text' %}
                             <p class="mt-2 text-sm text-slate-500">{{ file.private_note }}</p>
                         {% endif %}
                         <dl class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-400">
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Uploaded</dt>
-                                <dd class="tabular-nums">{{ file.created_at }}</dd>
+                                <dd class="tabular-nums">{{ timestamp(file.created_at, file.created_at_iso) }}</dd>
                             </div>
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Expiry</dt>
-                                <dd class="tabular-nums">{{ file.expiry_at or 'None' }}</dd>
+                                <dd class="tabular-nums">{% if file.expiry_at %}{{ timestamp(file.expiry_at, file.expiry_at_iso) }}{% else %}No expiry{% endif %}</dd>
                             </div>
                             <div class="flex gap-1.5">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">Opened</dt>
-                                <dd class="tabular-nums" data-file-downloaded-at>{{ file.downloaded_at or 'No' }}</dd>
+                                <dd class="tabular-nums" data-file-downloaded-at>{% if file.downloaded_at %}{{ timestamp(file.downloaded_at, file.downloaded_at_iso) }}{% else %}Not yet{% endif %}</dd>
                             </div>
                             <div class="flex gap-1.5 break-all">
                                 <dt class="font-semibold uppercase tracking-wider text-slate-500">From</dt>
-                                <dd class="tabular-nums" data-file-downloaded-by>{{ file.downloaded_by_ip or '-' }}</dd>
+                                <dd class="tabular-nums" data-file-downloaded-by>{{ file.downloaded_by_ip or '—' }}</dd>
                             </div>
                         </dl>
                     </div>
                     <div class="flex flex-wrap items-center gap-3 lg:justify-end">
-                        <span data-file-status class="status-badge {% if file.downloaded_at %}status-badge-green{% elif file.status == 'expired' %}status-badge-red{% else %}status-badge-amber{% endif %}">
-                            {{ file.status_display or 'Active' }}
-                        </span>
+                        <span data-file-status data-status="{{ file.status_key }}" class="status-badge">{{ file.status_display }}</span>
+                        <button type="button" class="copy-url btn-secondary px-4 py-2" data-url="{{ url_for('view_file', file_id=file.id, _external=True) }}" aria-label="Copy link for {{ file.display_name }}"{% if file.status_key != 'active' %} hidden{% endif %}>
+                            <span class="btn-label">
+                                <span class="copy-label">Copy link</span>
+                                <span class="btn-label-sizer" data-label="Copy link" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Copied!" aria-hidden="true"></span>
+                                <span class="btn-label-sizer" data-label="Failed" aria-hidden="true"></span>
+                            </span>
+                        </button>
                         <form method="post" action="{{ url_for('delete_file', file_id=file.id) }}" class="inline-block" data-confirm-message="Delete this file?">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn-danger">Delete</button>
@@ -572,7 +574,8 @@
 
         <p id="shared-files-empty-state" class="mt-4 hidden rounded-2xl border border-white/6 bg-white/2 px-5 py-6 text-center text-sm text-slate-500">No drops match this search.</p>
 
-        <div class="mt-6 flex flex-col gap-3 border-t border-white/6 pt-5 sm:flex-row sm:items-center sm:justify-between">
+        {# Shown by the page script once there is more than one page. #}
+        <div id="shared-files-pagination" hidden class="mt-6 flex flex-col gap-3 border-t border-white/6 pt-5 sm:flex-row sm:items-center sm:justify-between">
             <span id="shared-files-page" class="text-sm font-medium text-slate-500"></span>
             <div class="flex gap-2">
                 <button id="shared-files-prev" type="button" class="btn-secondary px-4 py-2 disabled:pointer-events-none disabled:opacity-40">Previous</button>

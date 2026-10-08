@@ -49,16 +49,24 @@ def _file(file_id, name, **fields):
     return record
 
 
-# One row per status the index list renders, plus a file shared with
+# One row per status the index list renders, each uploaded on its own day
+# (newest first here, as the list sorts them), plus a file shared with
 # testuser by another account.
 LISTED_FILES = [
-    _file('00000000-0000-4000-8000-000000000001', 'report.pdf', expiry_at=FUTURE),
+    _file('00000000-0000-4000-8000-000000000006', 'Secret Note', type='text',
+          created_at='2025-01-06T21:35:00'),
+    _file('00000000-0000-4000-8000-000000000001', 'report.pdf',
+          created_at='2025-01-05T12:00:00', expiry_at=FUTURE),
     _file('00000000-0000-4000-8000-000000000002', 'Secret Note', type='text',
-          private_note='For the auditor'),
+          created_at='2025-01-04T12:00:00', private_note='For the auditor'),
     _file('00000000-0000-4000-8000-000000000003', 'photo.png',
-          downloaded_at='2025-01-02T09:30:00', downloaded_by_ip='203.0.113.7'),
+          created_at='2025-01-03T12:00:00', downloaded_at='2025-01-06T09:30:00',
+          downloaded_by_ip='203.0.113.7', decryption_success=True),
     _file('00000000-0000-4000-8000-000000000004', 'old.txt',
-          expiry_at=PAST, status='expired'),
+          created_at='2025-01-02T12:00:00', expiry_at=PAST, status='expired'),
+    # Key-release lockout: never downloaded, never decrypted.
+    _file('00000000-0000-4000-8000-000000000007', 'locked.zip',
+          decryption_success=False),
     _file('00000000-0000-4000-8000-000000000005', 'shared.docx',
           uploaded_by='adminuser', shared_with=['testuser']),
 ]

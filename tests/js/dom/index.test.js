@@ -14,6 +14,10 @@ const clipboardStatus = () => screen.getByRole('status', { name: 'Clipboard' });
 const passwordCopyStatus = () => screen.getByRole('status', { name: 'Password clipboard' });
 /** @param {string} name */
 const shareRow = (name) => within(screen.getByRole('article', { name }));
+/** @param {string} name */
+const copyLinkButton = (name) => shareRow(name).getByRole('button', { name: `Copy link for ${name}` });
+/** @param {string} name */
+const queryCopyLinkButton = (name) => shareRow(name).queryByRole('button', { name: `Copy link for ${name}` });
 
 describe('index page', () => {
     describe('share mode tabs', () => {
@@ -306,11 +310,12 @@ describe('index page', () => {
 
             await vi.waitFor(() => expect(clipboardStatus()).toHaveTextContent('Share link copied to clipboard.'));
             expect(await upload.clipboardText()).toBe('http://localhost/view/00000000-0000-4000-8000-000000000001');
-            expect(shareRow('report.pdf').getByText('Copied')).toBeVisible();
+            expect(shareRow('report.pdf').getByText('Copied!')).toBeVisible();
 
             vi.advanceTimersByTime(1800);
 
-            expect(shareRow('report.pdf').getByText('Copied')).not.toBeVisible();
+            expect(shareRow('report.pdf').queryByText('Copied!')).toBeNull();
+            expect(shareRow('report.pdf').getByText('Copy link')).toBeVisible();
             expect(clipboardStatus()).toBeEmptyDOMElement();
         });
 
@@ -321,7 +326,17 @@ describe('index page', () => {
 
             await vi.waitFor(() => expect(clipboardStatus())
                 .toHaveTextContent('Your browser blocked clipboard access, so the link was not copied.'));
-            expect(shareRow('report.pdf').getByText('Copy failed')).toBeVisible();
+            expect(shareRow('report.pdf').getByText('Failed')).toBeVisible();
+        });
+
+        it('offers the link only while the drop can still be opened', () => {
+            openUploadPage({ sharesPerPage: 10 });
+
+            expect(copyLinkButton('report.pdf')).toBeVisible();
+            expect(copyLinkButton('Text note · 21:35')).toBeVisible();
+            expect(queryCopyLinkButton('photo.png')).toBeNull();
+            expect(queryCopyLinkButton('old.txt')).toBeNull();
+            expect(queryCopyLinkButton('locked.zip')).toBeNull();
         });
     });
 
@@ -342,6 +357,45 @@ describe('index page', () => {
     });
 
     describe('shared files list', () => {
+        it('names each status for what happened to the drop', () => {
+            openUploadPage({ sharesPerPage: 10 });
+
+            expect(shareRow('report.pdf').getByText('Active')).toBeVisible();
+            expect(shareRow('photo.png').getByText('Decrypted')).toBeVisible();
+            expect(shareRow('old.txt').getByText('Expired')).toBeVisible();
+            expect(shareRow('locked.zip').getByText('Locked out')).toBeVisible();
+        });
+
+        it('titles a text note by its private note, or else by its time', () => {
+            const upload = openUploadPage({ sharesPerPage: 10 });
+
+            expect(upload.sharesShown()).toContain('For the auditor');
+            expect(upload.sharesShown()).toContain('Text note · 21:35');
+            // The note is the title, so it isn't repeated under it.
+            expect(shareRow('For the auditor').getAllByText('For the auditor')).toHaveLength(1);
+        });
+
+        it('says plainly when there is no expiry, opening or address yet', () => {
+            openUploadPage();
+
+            expect(shareRow('Text note · 21:35').getByText('No expiry')).toBeVisible();
+            expect(shareRow('report.pdf').getByText('Not yet')).toBeVisible();
+            expect(shareRow('report.pdf').getByText('—')).toBeVisible();
+        });
+
+        it('shows times relative to now, with the full timestamp on hover', () => {
+            openUploadPage();
+
+            expect(shareRow('Text note · 21:35').getByText('14 h ago'))
+                .toHaveAttribute('title', '2025-01-06 21:35:00 CET');
+            expect(shareRow('report.pdf').getByText('2 days ago'))
+                .toHaveAttribute('title', '2025-01-05 12:00:00 CET');
+            expect(shareRow('report.pdf').getByText('in 74 years'))
+                .toHaveAttribute('title', '2099-01-01 00:00:00 CET');
+            expect(shareRow('photo.png').getByText('yesterday'))
+                .toHaveAttribute('title', '2025-01-06 09:30:00 CET');
+        });
+
         it('search filters the rows and is kept in the URL', async () => {
             const upload = openUploadPage();
 
@@ -359,40 +413,58 @@ describe('index page', () => {
 
             expect(upload.sharesShown()).toEqual([]);
             expect(screen.getByText('No drops match this search.')).toBeVisible();
-            expect(screen.getByText('Page 0 of 0')).toBeVisible();
             expect(screen.getByText('No matching drops')).toBeVisible();
-            expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
-            expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+            expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
         });
 
-        it('sorting reorders the rows', async () => {
-            const upload = openUploadPage();
+        it('lists the newest upload first, and sorting reorders the rows', async () => {
+            const upload = openUploadPage({ sharesPerPage: 10 });
 
-            expect(upload.sharesShown()).toEqual(['photo.png', 'report.pdf', 'Secret Note', 'old.txt']);
+            expect(screen.getByRole('combobox', { name: 'Sort by' })).toHaveDisplayValue('Uploaded (newest)');
+            expect(upload.sharesShown()).toEqual(
+                ['Text note · 21:35', 'report.pdf', 'For the auditor', 'photo.png', 'old.txt', 'locked.zip']);
 
             await upload.sortSharesBy('Expiry (soonest)');
 
-            expect(upload.sharesShown()).toEqual(['old.txt', 'report.pdf', 'Secret Note', 'photo.png']);
+            expect(upload.sharesShown().slice(0, 2)).toEqual(['old.txt', 'report.pdf']);
+
+            await upload.sortSharesBy('Downloaded (newest)');
+
+            expect(upload.sharesShown()[0]).toBe('photo.png');
+        });
+
+        it('hides the page controls when everything fits on one page', async () => {
+            const upload = openUploadPage();
+
+            expect(screen.getByText('Page 1 of 2')).toBeVisible();
+
+            await upload.searchShares('photo');
+
+            expect(screen.getByText(/^Page \d/)).not.toBeVisible();
+            expect(screen.queryByRole('button', { name: 'Previous' })).toBeNull();
+            expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
         });
 
         it('pages through the rows and keeps the page in the URL', async () => {
             const upload = openUploadPage({ sharesPerPage: 2 });
 
-            expect(upload.sharesShown()).toEqual(['photo.png', 'report.pdf']);
-            expect(screen.getByText('Page 1 of 2')).toBeVisible();
+            expect(upload.sharesShown()).toEqual(['Text note · 21:35', 'report.pdf']);
+            expect(screen.getByText('Page 1 of 3')).toBeVisible();
             expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
 
             await upload.nextSharesPage();
+            await upload.nextSharesPage();
 
-            expect(upload.sharesShown()).toEqual(['Secret Note', 'old.txt']);
-            expect(screen.getByText('Page 2 of 2')).toBeVisible();
-            expect(screen.getByText('Showing 3-4 of 4 drops')).toBeVisible();
+            expect(upload.sharesShown()).toEqual(['old.txt', 'locked.zip']);
+            expect(screen.getByText('Page 3 of 3')).toBeVisible();
+            expect(screen.getByText('Showing 5-6 of 6 drops')).toBeVisible();
             expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
-            expect(new URL(upload.url()).searchParams.get('shared_page')).toBe('2');
+            expect(new URL(upload.url()).searchParams.get('shared_page')).toBe('3');
 
             await upload.previousSharesPage();
+            await upload.previousSharesPage();
 
-            expect(upload.sharesShown()).toEqual(['photo.png', 'report.pdf']);
+            expect(upload.sharesShown()).toEqual(['Text note · 21:35', 'report.pdf']);
             expect(new URL(upload.url()).searchParams.has('shared_page')).toBe(false);
         });
 
@@ -400,28 +472,29 @@ describe('index page', () => {
             const upload = openUploadPage({ path: '/?shared_search=cet&shared_page=2', sharesPerPage: 2 });
 
             expect(screen.getByRole('searchbox', { name: 'Quick search' })).toHaveValue('cet');
-            expect(screen.getByText('Page 2 of 2')).toBeVisible();
+            expect(screen.getByText('Page 2 of 3')).toBeVisible();
             expect(upload.sharesShown()).toHaveLength(2);
         });
 
         it('a page change refreshes its rows\' status and re-renders', async () => {
             const upload = openUploadPage({
                 sharesPerPage: 2,
-                openedMeanwhile: [{ name: 'Secret Note', openedAt: '2025-03-01 10:00:00 CET', openedFrom: '198.51.100.9' }],
+                openedMeanwhile: [{ name: 'For the auditor', openedAt: '2025-01-07T10:00:00+01:00', openedFrom: '198.51.100.9' }],
             });
 
             await upload.nextSharesPage();
 
-            // Now the newest download, the note sorts onto page 1.
-            await vi.waitFor(() => expect(upload.sharesShown()).toEqual(['report.pdf', 'old.txt']));
-            expect(upload.statusChecks()).toEqual([['Secret Note', 'old.txt']]);
+            await vi.waitFor(() => expect(shareRow('For the auditor').getByText('Downloaded')).toBeVisible());
+            expect(upload.statusChecks()).toEqual([['For the auditor', 'photo.png']]);
+            expect(shareRow('For the auditor').getByText('2 h ago'))
+                .toHaveAttribute('title', '2025-01-07 10:00:00 CET');
+            expect(shareRow('For the auditor').getByText('198.51.100.9')).toBeVisible();
+            expect(queryCopyLinkButton('For the auditor')).toBeNull();
 
-            await upload.previousSharesPage();
+            // The refreshed address is searchable.
+            await upload.searchShares('198.51.100.9');
 
-            expect(upload.sharesShown()).toEqual(['Secret Note', 'photo.png']);
-            expect(shareRow('Secret Note').getByText('Downloaded')).toBeVisible();
-            expect(shareRow('Secret Note').getByText('2025-03-01 10:00:00 CET')).toBeVisible();
-            expect(shareRow('Secret Note').getByText('198.51.100.9')).toBeVisible();
+            expect(upload.sharesShown()).toEqual(['For the auditor']);
         });
     });
 

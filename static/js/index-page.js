@@ -4,7 +4,7 @@
 // neither, so lookups into those parts keep their null checks.
 
 import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
-import { buildSharedFilesUrl, getSharedFilesPage, rowSearchText, statusBadgeClass } from './shared-files.js';
+import { buildSharedFilesUrl, getSharedFilesPage, relativeTime, rowSearchText } from './shared-files.js';
 import { isAllowedFile } from './file-extensions.js';
 import { buildOneClickLink } from './fragment-password.js';
 import { assessPassword, generatePassphrase } from './passphrase.js';
@@ -17,6 +17,7 @@ import { required, requiredWindow } from './required.js';
  * @property {(url: string) => void} navigate
  * @property {(message: string) => void} alert
  * @property {Pick<CryptoService, 'encrypt' | 'receiptHash'>} crypto
+ * @property {() => number} now - epoch milliseconds, for the drop list's relative times
  */
 
 /**
@@ -78,6 +79,7 @@ export function browserDeps() {
         navigate: (url) => { window.location.href = url; },
         alert: (message) => window.alert(message),
         crypto: new CryptoService(),
+        now: () => Date.now(),
     };
 }
 
@@ -739,44 +741,42 @@ export function initIndex(root, deps) {
         if (region) region.textContent = message;
     }
 
-    root.querySelectorAll('.copy-url').forEach(el => {
-        const flash = /** @type {HTMLElement | null} */ (el.querySelector('.copy-flash'));
+    /** @type {NodeListOf<HTMLButtonElement>} */ (root.querySelectorAll('.copy-url')).forEach((button) => {
+        const label = required(button, '.copy-label', 'span');
+        const idleText = label.textContent;
         /** @type {ReturnType<typeof setTimeout> | undefined} */
         let flashTimer;
 
         /**
          * Inline confirmation beats a modal dialog for something this small. The
-         * pill carries the outcome for sighted users, the shared region announces
-         * it, and a failure lingers longer because it has to be read.
-         * @param {string} label
+         * button's label carries the outcome for sighted users (its accessible
+         * name stays its aria-label), the shared region announces it, and a
+         * failure lingers longer because it has to be read.
+         * @param {string} outcome
          * @param {string} message
          * @param {boolean} failed
          */
-        const showResult = (label, message, failed) => {
+        const showResult = (outcome, message, failed) => {
             setCopyStatus(message);
-            if (flash) {
-                flash.textContent = label;
-                flash.classList.toggle('copy-flash-error', failed);
-                flash.hidden = false;
-            }
+            label.textContent = outcome;
             clearTimeout(flashTimer);
             flashTimer = setTimeout(() => {
-                if (flash) flash.hidden = true;
+                label.textContent = idleText;
                 // Emptying it means the next copy writes fresh text, which is
                 // what makes assistive tech announce it again.
                 setCopyStatus('');
             }, failed ? 4000 : 1800);
         };
 
-        el.addEventListener('click', (e) => {
+        button.addEventListener('click', (e) => {
             e.preventDefault();
             // Every .copy-url in the template carries its link in data-url.
-            const url = /** @type {string} */ (el.getAttribute('data-url'));
+            const url = /** @type {string} */ (button.getAttribute('data-url'));
             window.navigator.clipboard.writeText(url).then(
-                () => showResult('Copied', 'Share link copied to clipboard.', false),
+                () => showResult('Copied!', 'Share link copied to clipboard.', false),
                 // A denied permission or a non-secure context rejects here. Say so
                 // rather than leaving the click with no feedback at all.
-                () => showResult('Copy failed', 'Your browser blocked clipboard access, so the link was not copied.', true),
+                () => showResult('Failed', 'Your browser blocked clipboard access, so the link was not copied.', true),
             );
         });
     });
@@ -799,10 +799,11 @@ export function initIndex(root, deps) {
         const emptyState = root.getElementById('shared-files-empty-state');
         const summary = root.getElementById('shared-files-summary');
         const pageLabel = root.getElementById('shared-files-page');
+        const pagination = root.getElementById('shared-files-pagination');
         const prevButton = /** @type {HTMLButtonElement | null} */ (root.getElementById('shared-files-prev'));
         const nextButton = /** @type {HTMLButtonElement | null} */ (root.getElementById('shared-files-next'));
 
-        if (!list || !searchInput || !sortInput || !emptyState || !summary || !pageLabel || !prevButton || !nextButton) {
+        if (!list || !searchInput || !sortInput || !emptyState || !summary || !pagination || !pageLabel || !prevButton || !nextButton) {
             return;
         }
 
@@ -810,6 +811,20 @@ export function initIndex(root, deps) {
         if (rows.length === 0) {
             return;
         }
+
+        /**
+         * Swap each full timestamp for one relative to now; the full one stays
+         * in the element's title (the template sets it).
+         * @param {ParentNode} container
+         */
+        const showRelativeTimes = (container) => {
+            const now = deps.now();
+            /** @type {NodeListOf<HTMLTimeElement>} */ (container.querySelectorAll('time[datetime]')).forEach((time) => {
+                const relative = relativeTime(Date.parse(time.dateTime), now);
+                if (relative) time.textContent = relative;
+            });
+        };
+        showRelativeTimes(list);
 
         const pageSize = Math.max(parseInt(list.dataset.pageSize || '5', 10), 1);
         const params = new URLSearchParams(window.location.search);
@@ -824,11 +839,15 @@ export function initIndex(root, deps) {
                 downloaded: 'downloadedAt'
             })[sortField];
             const sortMultiplier = sortDirection === 'desc' ? -1 : 1;
+            // ISO times with offsets: compared as instants, since CET and CEST
+            // strings don't sort lexically.
+            /** @param {SharedFileRow} row */
+            const instant = (row) => Date.parse(row.dataset[timestampField] || '');
             const sortedRows = [...rows].sort((a, b) => {
-                const aTimestamp = a.dataset[timestampField] || '';
-                const bTimestamp = b.dataset[timestampField] || '';
-                if (!aTimestamp || !bTimestamp) {
-                    return aTimestamp ? -1 : bTimestamp ? 1 : 0;
+                const aTimestamp = instant(a);
+                const bTimestamp = instant(b);
+                if (Number.isNaN(aTimestamp) || Number.isNaN(bTimestamp)) {
+                    return !Number.isNaN(aTimestamp) ? -1 : !Number.isNaN(bTimestamp) ? 1 : 0;
                 }
                 if (aTimestamp === bTimestamp) {
                     return 0;
@@ -858,6 +877,7 @@ export function initIndex(root, deps) {
                 summary.textContent = `Showing ${page.startIndex + 1}-${Math.min(page.startIndex + pageSize, totalResults)} of ${totalResults} drops`;
             }
 
+            pagination.hidden = page.totalPages <= 1;
             prevButton.disabled = currentPage <= 1 || totalResults === 0;
             nextButton.disabled = currentPage >= page.totalPages || totalResults === 0;
             return page;
@@ -891,12 +911,22 @@ export function initIndex(root, deps) {
                     const downloadedAt = required(row, '[data-file-downloaded-at]', 'dd');
                     const downloadedBy = required(row, '[data-file-downloaded-by]', 'dd');
                     const statusBadge = required(row, '[data-file-status]', 'span');
-                    downloadedAt.textContent = file.downloaded_at || 'No';
-                    downloadedBy.textContent = file.downloaded_by_ip || '-';
-                    row.dataset.downloadedAt = file.downloaded_at || '';
-                    statusBadge.textContent = file.status_display || 'Active';
-                    statusBadge.classList.remove('status-badge-green', 'status-badge-red', 'status-badge-amber');
-                    statusBadge.classList.add(statusBadgeClass(file));
+                    const copyButton = required(row, '.copy-url', 'button');
+                    if (file.downloaded_at) {
+                        const time = root.createElement('time');
+                        time.dateTime = file.downloaded_at_iso || '';
+                        time.title = file.downloaded_at;
+                        time.textContent = file.downloaded_at;
+                        downloadedAt.replaceChildren(time);
+                        showRelativeTimes(downloadedAt);
+                    } else {
+                        downloadedAt.textContent = 'Not yet';
+                    }
+                    downloadedBy.textContent = file.downloaded_by_ip || '—';
+                    row.dataset.downloadedAt = file.downloaded_at_iso || '';
+                    statusBadge.textContent = file.status_display || '';
+                    statusBadge.dataset.status = file.status_key;
+                    copyButton.hidden = file.status_key !== 'active';
                     row.dataset.searchText = rowSearchText(row.dataset.searchBase, file);
                     updated = true;
                 });

@@ -112,7 +112,7 @@ def test_index_logged_in_user_with_own_files(client, app, files_store):
     assert b'my_document.txt' in response.data
     assert b'id="shared-files-search"' in response.data
     assert b'id="shared-files-sort"' in response.data
-    assert b'value="downloaded:desc" selected' in response.data
+    assert b'value="uploaded:desc" selected' in response.data
     assert b'data-uploaded-at=' in response.data
     assert b'data-expiry-at=' in response.data
     assert b'data-downloaded-at=' in response.data
@@ -149,8 +149,10 @@ def test_user_file_status_endpoint_returns_only_owned_file_statuses(client, app,
     assert status == {
         'id': 'file-5',
         'status': 'active',
+        'status_key': 'downloaded',
         'status_display': 'Downloaded',
         'downloaded_at': '2025-01-02 12:00:00 CET',
+        'downloaded_at_iso': '2025-01-02T12:00:00+01:00',
         'downloaded_by_ip': None,
     }
 
@@ -243,3 +245,24 @@ def test_manage_users_page_for_admin(client, app, db_instance):
 
 # Removing the duplicated test_manage_users_page_passwords_not_exposed
 # The refined test_manage_users_page_for_admin covers the necessary checks.
+
+def test_index_lists_own_files_newest_upload_first(client, app, files_store):
+    """The list's default sort is Uploaded (newest); the server renders that
+    order too, so the page reads right before (or without) the page script."""
+    login_user(client, 'testuser', 'password')
+    for file_id, created_at in (('b-older', '2025-01-01T12:00:00'),
+                                ('a-newer', '2025-01-03T12:00:00'),
+                                ('c-middle', '2025-01-02T12:00:00')):
+        files_store.insert({
+            'id': file_id,
+            'original_name': f'{file_id}.txt',
+            'path': f'/fake/{file_id}',
+            'uploaded_by': 'testuser',
+            'created_at': created_at,
+            'status': 'active',
+        })
+
+    html = client.get(url_for('index')).data.decode()
+
+    assert html.index('a-newer.txt') < html.index('c-middle.txt') < html.index('b-older.txt')
+    assert re.search(r'<div id="shared-files-pagination"[^>]*\bhidden\b', html)
