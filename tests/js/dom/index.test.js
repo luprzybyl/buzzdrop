@@ -373,6 +373,9 @@ describe('index page', () => {
             expect(upload.sharesShown()).toContain('Text note · 21:35');
             // The note is the title, so it isn't repeated under it.
             expect(shareRow('For the auditor').getAllByText('For the auditor')).toHaveLength(1);
+            // A long note is truncated in the heading, so its title holds it whole.
+            expect(screen.getByRole('heading', { name: 'For the auditor' }))
+                .toHaveAttribute('title', 'For the auditor');
         });
 
         it('says plainly when there is no expiry, opening or address yet', () => {

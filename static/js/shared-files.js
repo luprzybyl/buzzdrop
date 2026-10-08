@@ -5,11 +5,15 @@
  */
 
 /**
+ * utils.STATUS_LABELS' keys, which the badge's data-status styles by.
+ * @typedef {'active' | 'decrypted' | 'downloaded' | 'locked-out' | 'expired'} StatusKey
+ */
+
+/**
  * A file's status as the shared-files table shows it.
  * @typedef {object} FileStatus
  * @property {string} status - 'active' or 'expired'
- * @property {string} status_key - 'active', 'decrypted', 'decryption-failed',
- *   'locked-out', 'downloaded' or 'expired'; only an active drop's link works
+ * @property {StatusKey} status_key - only an active drop's link works
  * @property {string | null} [downloaded_at] - for display
  * @property {string | null} [downloaded_at_iso] - offset-aware ISO 8601
  * @property {string | null} [status_display]

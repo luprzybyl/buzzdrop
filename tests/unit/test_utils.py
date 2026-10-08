@@ -138,23 +138,25 @@ def test_status_display_downloaded_without_decryption_report():
     assert f['status_key'] == 'downloaded'
 
 
-def test_status_display_decryption_outcomes():
-    for success, key, label in ((True, 'decrypted', 'Decrypted'),
-                                (False, 'decryption-failed', 'Decryption failed')):
-        f = {
-            'status': 'active',
-            'downloaded_at': '2026-10-04T21:21:08',
-            'decryption_success': success,
-        }
-        enhance_file_display(f)
-        assert (f['status_key'], f['status_display']) == (key, label)
-
-
-def test_status_display_lockout_before_download():
-    """Key-release lockout stamps decryption_success=False without a download."""
-    f = {'status': 'active', 'downloaded_at': None, 'decryption_success': False}
+def test_status_display_decrypted():
+    f = {
+        'status': 'active',
+        'downloaded_at': '2026-10-04T21:21:08',
+        'decryption_success': True,
+    }
     enhance_file_display(f)
-    assert (f['status_key'], f['status_display']) == ('locked-out', 'Locked out')
+    assert (f['status_key'], f['status_display']) == ('decrypted', 'Decrypted')
+
+
+def test_status_display_lockout_with_or_without_download():
+    """Key-release lockout stamps decryption_success=False. The browser
+    downloads the blob before asking for the key, so the real flow has a
+    download; a direct /release call doesn't."""
+    for downloaded_at in ('2026-10-04T21:21:08', None):
+        f = {'status': 'active', 'downloaded_at': downloaded_at,
+             'decryption_success': False}
+        enhance_file_display(f)
+        assert (f['status_key'], f['status_display']) == ('locked-out', 'Locked out')
 
 
 def test_status_display_expired_and_active():

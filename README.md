@@ -154,7 +154,7 @@ Buzzdrop takes security seriously. Here's how we protect your secrets:
 - **Optional uploader notifications**: A one-time email can include the share name/type, open timestamp, and whether client-side decryption was reported as successful or failed.
 - **Sanitized Logging**: No sensitive data (bucket names, file paths) exposed in logs.
 - **Dashboard status badges**: each drop on your dashboard reports exactly one state —
-  `Active` (link live, unclaimed — the only state that offers **Copy link**) · `Downloaded` (blob claimed, no decryption report arrived) · `Decrypted` (receipt-backed report: client decrypted OK) · `Decryption failed` (a receipt-backed report said decryption failed) · `Locked out` (the key-release attempt counter ran out before the password was proven — a terminal never-decrypted) · `Expired` (deadline passed unclaimed).
+  `Active` (link live, unclaimed — the only state that offers **Copy link**) · `Downloaded` (blob claimed, no decryption report arrived) · `Decrypted` (receipt-backed report: client decrypted OK) · `Locked out` (the key-release attempt counter ran out before the password was proven — a terminal never-decrypted) · `Expired` (deadline passed unclaimed).
   The file row is kept after claim as the delivery audit trail (`downloaded_at`, `downloaded_by_ip`, `decryption_success`) until you delete it.
 
 ### Rate Limiting:

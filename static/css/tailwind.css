@@ -385,7 +385,7 @@
     @apply border-emerald-400/25 bg-emerald-400/10 text-emerald-300;
   }
 
-  .status-badge:is([data-status='decryption-failed'], [data-status='locked-out']) {
+  .status-badge[data-status='locked-out'] {
     @apply border-rose-400/25 bg-rose-400/10 text-rose-300;
   }
 

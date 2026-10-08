@@ -64,8 +64,10 @@ LISTED_FILES = [
           downloaded_by_ip='203.0.113.7', decryption_success=True),
     _file('00000000-0000-4000-8000-000000000004', 'old.txt',
           created_at='2025-01-02T12:00:00', expiry_at=PAST, status='expired'),
-    # Key-release lockout: never downloaded, never decrypted.
+    # Key-release lockout: the browser fetches the blob before it asks for
+    # the key, so a locked-out drop was downloaded but never decrypted.
     _file('00000000-0000-4000-8000-000000000007', 'locked.zip',
+          downloaded_at='2025-01-05T08:00:00', downloaded_by_ip='203.0.113.9',
           decryption_success=False),
     _file('00000000-0000-4000-8000-000000000005', 'shared.docx',
           uploaded_by='adminuser', shared_with=['testuser']),

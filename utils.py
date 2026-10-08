@@ -94,7 +94,6 @@ def format_file_timestamps(file_dict: dict, tz_name: str = DEFAULT_TIMEZONE) -> 
 STATUS_LABELS = {
     'active': 'Active',
     'decrypted': 'Decrypted',
-    'decryption-failed': 'Decryption failed',
     'locked-out': 'Locked out',
     'downloaded': 'Downloaded',
     'expired': 'Expired',
@@ -143,12 +142,13 @@ def enhance_file_display(file_dict: dict, tz_name: str = DEFAULT_TIMEZONE) -> di
     # downloaded_at outranks expired: a drop that was claimed before its
     # deadline was consumed, not expired — and a downloaded drop with no
     # decryption report (e.g. wrong password, share burned) must not fall
-    # through to Active. decryption_success=False without a download is
-    # the key-release lockout (the password was never proven).
+    # through to Active. decryption_success=False is the key-release
+    # lockout: a False report needs the receipt, which only a successful
+    # decrypt yields, so the browser never sends one that sticks.
     if file_dict.get('decryption_success') is True:
         status_key = 'decrypted'
     elif file_dict.get('decryption_success') is False:
-        status_key = 'decryption-failed' if file_dict.get('downloaded_at') else 'locked-out'
+        status_key = 'locked-out'
     elif file_dict.get('downloaded_at'):
         status_key = 'downloaded'
     elif file_dict.get('status') == 'expired':

@@ -246,6 +246,7 @@ def test_manage_users_page_for_admin(client, app, db_instance):
 # Removing the duplicated test_manage_users_page_passwords_not_exposed
 # The refined test_manage_users_page_for_admin covers the necessary checks.
 
+
 def test_index_lists_own_files_newest_upload_first(client, app, files_store):
     """The list's default sort is Uploaded (newest); the server renders that
     order too, so the page reads right before (or without) the page script."""

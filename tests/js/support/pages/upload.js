@@ -31,7 +31,7 @@ const SHARE_IDS = {
 };
 
 /** When the page is looked at: the day after the fixture's newest upload. */
-export const NOW = '2025-01-07T12:00:00+01:00';
+const NOW = '2025-01-07T12:00:00+01:00';
 
 /** @typedef {keyof typeof SHARE_IDS} ShareName */
 
@@ -67,7 +67,6 @@ export const PASSWORDS = {
  * @property {Array<{ name: ShareName, openedAt: string, openedFrom: string }>} [openedMeanwhile] -
  *   shares opened since the page was rendered, at an ISO time with an offset
  *   (Warsaw's, as the server sends): the status refresh reports them
- * @property {string} [now] - the time the page is looked at (NOW unless given)
  * @property {import('./page.js').ClipboardKind} [clipboard]
  * @property {import('./page.js').CryptoKind} [crypto] - real in the JS-integration layer
  * @property {Fake} [backend] - the server uploads go to, when a test needs one it made
@@ -84,9 +83,9 @@ export const PASSWORDS = {
  * @param {typeof globalThis.fetch} fetch
  * @param {import('../../../../static/js/index-page.js').IndexDeps['crypto']} crypto
  * @param {typeof XMLHttpRequest} xhr
- * @param {number} [now] - epoch milliseconds the page takes for now
  */
-function indexDeps(fetch, crypto, xhr, now = Date.parse(NOW)) {
+function indexDeps(fetch, crypto, xhr) {
+    const now = Date.parse(NOW);
     /** @type {string[]} */
     const navigations = [];
     /** @type {string[]} */
@@ -137,7 +136,6 @@ export function openUploadPage({
     path = '/',
     sharesPerPage,
     openedMeanwhile = [],
-    now = NOW,
     clipboard = 'ok',
     crypto = 'stub',
     backend,
@@ -179,7 +177,7 @@ export function openUploadPage({
         return response;
     };
     const { deps, navigations, alerts } = indexDeps(
-        fetch, cryptoService, server.XMLHttpRequest, Date.parse(now));
+        fetch, cryptoService, server.XMLHttpRequest);
     initIndex(window.document, deps);
     initHeroFlow(window.document, {});
 
