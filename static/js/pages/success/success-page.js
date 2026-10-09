@@ -5,7 +5,7 @@
 // - Auto-filling the password and one-click link from the URL fragment
 
 import { copyWithFeedback } from '../../features/clipboard-feedback/index.js';
-import { buildOneClickLink, readFragmentPassword } from '../../lib/one-click-link.js';
+import { buildOneClickLink, takeFragmentPassword } from '../../lib/one-click-link.js';
 import { required, requiredWindow } from '../../lib/required.js';
 
 /**
@@ -79,13 +79,9 @@ export function initSuccess(root, deps) {
     toggleBtn.addEventListener('click', togglePasswordVisibility);
 
     // Auto-fill the password from the URL fragment (the upload flow navigates
-    // here with it). Read it once, then scrub it from the address bar and
-    // history entry — nothing is persisted. The entry is a module script, so
-    // the DOM is already parsed when this runs.
-    if (window.location.hash.length <= 1) return;
-    const pwd = readFragmentPassword(window.location.hash);
-    window.history.replaceState(
-        null, '', window.location.pathname + window.location.search);
+    // here with it). The entry is a module script, so the DOM is already
+    // parsed when this runs.
+    const pwd = takeFragmentPassword(window);
     if (pwd) {
         pwdInput.value = pwd;
         toggleBtn.disabled = false;

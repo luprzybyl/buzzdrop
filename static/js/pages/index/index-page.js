@@ -8,7 +8,7 @@ import { createShare } from '../../features/share-protocol/index.js';
 import { buildSharedFilesUrl, getSharedFilesPage, relativeTime, rowSearchText } from '../../features/shared-files/index.js';
 import { isAllowedFile } from '../../lib/file-extensions.js';
 import * as shareCrypto from '../../lib/crypto.js';
-import { buildOneClickLink } from '../../lib/one-click-link.js';
+import { buildOneClickLink, takeFragmentPassword } from '../../lib/one-click-link.js';
 import { assessPassword, generatePassphrase } from '../../lib/passphrase.js';
 import { required, requiredWindow } from '../../lib/required.js';
 
@@ -74,12 +74,8 @@ export function initIndex(root, deps) {
 
     // The index page never uses URL fragments — a stray one here can only be a
     // password leaked by fragment inheritance across a redirect (e.g. a dead
-    // one-click link). Scrub it so it does not linger in the address bar or
-    // history.
-    if (window.location.hash.length > 1) {
-        window.history.replaceState(
-            null, '', window.location.pathname + window.location.search);
-    }
+    // one-click link). Taking it scrubs it from the address bar and history.
+    takeFragmentPassword(window);
 
     /**
      * Parse allowed file extensions from a hidden JSON element injected by the server

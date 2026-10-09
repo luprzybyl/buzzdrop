@@ -10,7 +10,7 @@
 import { copyWithFeedback } from '../../features/clipboard-feedback/index.js';
 import { claimShare, downloadShare } from '../../features/share-protocol/index.js';
 import * as shareCrypto from '../../lib/crypto.js';
-import { readFragmentPassword } from '../../lib/one-click-link.js';
+import { takeFragmentPassword } from '../../lib/one-click-link.js';
 import { required, requiredWindow } from '../../lib/required.js';
 
 /** @typedef {import('../../lib/crypto.js').Bytes} Bytes */
@@ -91,19 +91,13 @@ export async function initView(root, deps) {
     }
     const { sealed } = download;
 
-    // One-click links carry the password in the URL fragment — read it
-    // once and scrub it from the address bar and history entry; nothing is
-    // persisted.
-    const fragmentPassword = readFragmentPassword(window.location.hash);
-    if (window.location.hash.length > 1) {
-        window.history.replaceState(
-            null, '', window.location.pathname + window.location.search);
-        if (fragmentPassword) {
-            passInput.value = fragmentPassword;
-            // Files show a press-Decrypt hint; notes render none.
-            const passwordStatus = /** @type {HTMLElement | null} */ (root.querySelector('#password-status'));
-            if (passwordStatus) passwordStatus.style.display = 'flex';
-        }
+    // One-click links carry the password in the URL fragment.
+    const fragmentPassword = takeFragmentPassword(window);
+    if (fragmentPassword) {
+        passInput.value = fragmentPassword;
+        // Files show a press-Decrypt hint; notes render none.
+        const passwordStatus = /** @type {HTMLElement | null} */ (root.querySelector('#password-status'));
+        if (passwordStatus) passwordStatus.style.display = 'flex';
     }
 
     /** @param {Bytes} fileBytes */
