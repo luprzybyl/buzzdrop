@@ -63,6 +63,10 @@ export async function initView(root, deps) {
         fileType,
     } = JSON.parse(required(root, '#view-config-json', 'script').text);
 
+    // One-click links carry the password in the URL fragment. Taken before
+    // anything else, so it is scrubbed whatever happens to the share.
+    const fragmentPassword = takeFragmentPassword(window);
+
     const download = await downloadShare(downloadUrl, deps);
     const decryptForm = required(root, '#decrypt-form', 'form');
     const decryptBtn = required(root, '#decrypt-btn', 'button');
@@ -91,8 +95,6 @@ export async function initView(root, deps) {
     }
     const { sealed } = download;
 
-    // One-click links carry the password in the URL fragment.
-    const fragmentPassword = takeFragmentPassword(window);
     if (fragmentPassword) {
         passInput.value = fragmentPassword;
         // Files show a press-Decrypt hint; notes render none.

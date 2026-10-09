@@ -60,9 +60,9 @@ From [Which page-script logic is extracted into pure, unit-tested modules?](http
 |---|---|---|
 | `lib/one-click-link.js` | `readFragmentPassword(hash) → string \| null`, `takeFragmentPassword(window)`, `buildOneClickLink(shareUrl, password)` | `""`, `#`, `#abc`, `#%E2%9C%93`, `#a%20b`, malformed `#%ZZ` → `null`; encode↔decode round trip |
 | `lib/file-extensions.js` | `isAllowedFile(name, allowedExtensions)` | No dot, trailing dot, dotfile, double extension, uppercase. **Pins current behaviour** (`README` → `readme`). |
-| `features/shared-files/shared-files.js` | + `statusBadgeClass(file)`, `rowSearchText(searchBase, file)`, `compareRows(sort)` | Badge priority downloaded > expired > active; null IP or missing display; sort by instant, rows without the time last |
+| `features/shared-files/shared-files.js` | `getSharedFilesPage`, `buildSharedFilesUrl`, `relativeTime`, `rowSearchText(searchBase, file)`, `compareRows(sort)` | Paging and search; relative-time rounding; null IP or missing display; sort by instant, rows without the time last |
 
-The fragment scrub lives in `takeFragmentPassword(window)`, so every page that reads a one-click password scrubs it the same way (#251 reversed the earlier "an effect, so it stays in each page"). The strength-meter mapping stays in the index page, since `assessPassword` is already unit-tested. Tests live at `tests/js/<name>.test.js`.
+The fragment scrub lives in `takeFragmentPassword(window)`, so every page that reads a one-click password scrubs it the same way (#251 reversed the earlier "an effect, so it stays in each page"). The strength-meter mapping stays in `features/password-gate/` and is DOM-tested through the index page, since `assessPassword` is already unit-tested. Tests live at `tests/js/<name>.test.js`.
 
 ## 4. DOM fixtures
 
@@ -147,8 +147,8 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 **Granularity.** A test earns its place by catching a mistake that would weaken security or break a journey; the mutation table below names those mistakes. File and note run as separate cases only where their code differs: they share `createShare`, so the error paths run once, in file mode. Which message the UI shows for which status is a DOM concern, not an integration one.
 
 ### Unit (`node --test`)
-- Existing: `crypto`, `hex`, `passphrase`, `shared-files`, `architecture` (the layer rules) (the crypto fixtures are byte-identical to `tests/unit/test_cli_crypto.py`).
-- New: `one-click-link.test.js`, `file-extensions.test.js`; `shared-files.test.js` gains the badge and search-text cases (§3).
+- Existing: `crypto`, `passphrase`, `shared-files` (the crypto fixtures are byte-identical to `tests/unit/test_cli_crypto.py`).
+- New: `one-click-link.test.js`, `file-extensions.test.js`, `hex.test.js`, `architecture.test.js` (the layer rules, #251); `shared-files.test.js` gains the search-text and `compareRows` cases (§3).
 - `required.test.js`: the element lookups (§3) return the match, and throw on a missing element, a wrong tag or a windowless document.
 
 ### DOM (Vitest + happy-dom, against the template fixtures)
@@ -174,7 +174,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 - **Share options sent on upload, for file and for note:** expiry, private note, notify-on-open, notification email. Asserted on the request bodies.
 - **Upload error paths, file mode only:** begin fails → the retry runs a fresh begin; upload fails → the retry finishes the newly issued share, not the stale one; 413 shows its message and the UI unlocks.
 - **View:** fetch the blob → release → decrypt → report the receipt, plus one upload → view round trip on one fake instance. 403 with `attempts_remaining`. The other `/release` statuses only pick a message and are DOM-tested.
-- **Share protocol (`features/share-protocol/`) on its own:** a successful open runs PBKDF2 once; a large note uploads and arrives whole.
+- **Share protocol (`features/share-protocol/`) on its own:** a successful open runs PBKDF2 once; a large note uploads and arrives whole; a server share of the wrong length is a refused handshake.
 
 ### E2E journeys (Playwright, against the app container)
 1. File: upload → success → share link → confirm → decrypt → downloaded bytes equal the original.

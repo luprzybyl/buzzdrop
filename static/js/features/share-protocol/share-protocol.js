@@ -9,6 +9,9 @@
 
 import { bytesToHex, hexToBytes } from '../../lib/hex.js';
 
+// The server share H that /upload/begin mints (docs/true-one-time.md §6).
+const SERVER_SHARE_BYTES = 32;
+
 /**
  * @typedef {import('../../lib/hex.js').Bytes} Bytes
  * @typedef {import('../../lib/crypto.js').ShareCrypto} ShareCrypto
@@ -118,6 +121,7 @@ export async function createShare(payload, password, options, deps) {
         const body = await begun.json();
         fileId = body.file_id;
         h = hexToBytes(body.h);
+        if (h.length !== SERVER_SHARE_BYTES) throw new Error('server share H has the wrong length');
     } catch {
         return handshakeRefused;
     }

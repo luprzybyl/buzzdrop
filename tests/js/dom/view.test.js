@@ -160,6 +160,13 @@ describe('view page', () => {
         expect(decryptButton()).toBeDisabled();
     });
 
+    it('an unsupported share still scrubs a one-click password from the URL', async () => {
+        const share = await openShare({ share: 'unsupported-format', link: 'one-click' });
+
+        expect(share.url()).toBe(`http://localhost/view/${share.fileId}/confirm`);
+        expect(passwordField()).toHaveValue('');
+    });
+
     it('a one-click link fills the password and says so', async () => {
         await openShare({ type: 'file', link: 'one-click' });
 
