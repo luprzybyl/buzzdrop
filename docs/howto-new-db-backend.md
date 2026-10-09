@@ -51,10 +51,12 @@ Full signatures: `db/base.py`. The semantics the contract suite enforces:
 | `claim_notification_send(file_id) -> bool` | ditto, for the `notification_sent_at` field |
 | `record_decryption_result(file_id, success) -> bool` | **ATOMIC** — conditional write `WHERE decryption_success IS NULL`; `True` only for the first valid report |
 | `create_key_share(file_id, h, created_by=None, created_at=None) -> bool` | `False` when a share for `file_id` already exists; `created_by` records the uploading account for owner binding |
-| `get_key_share(file_id)` | dict or `None` — includes `h`, `v`, `attempts`, `released_at`, `created_by`, `created_at` |
-| `bind_key_verifier(file_id, v) -> bool` | single-shot: `True` only when `v` is currently NULL |
+| `get_key_share(file_id)` | dict or `None` — includes `h`, `v`, `salt`, `ticket_hash`, `attempts`, `released_at`, `created_by`, `created_at` |
+| `bind_key_verifier(file_id, v, salt=None) -> bool` | single-shot: `True` only when `v` is currently NULL; stores the envelope salt with it |
 | `attempt_key_release(file_id, v, max_attempts, burn_on_lockout) -> dict` | **ATOMIC — one transaction covering read, expiry check, verifier compare, attempt counting, lockout/burn and release.** Statuses: `missing_file`/`missing_share`/`pending`/`released`/`locked`/`expired`/`ok`/`denied`. On `ok`: return `h`, set `released_at`, wipe `h`/`v`. On `denied`: increment `attempts`. On `expired`: delete the share row and mark the file expired. Expired-after-release still reports `released` |
 | `delete_key_share(file_id) -> bool` / `burn_key_share(file_id) -> bool` | delete the row; `burn` additionally runs whatever WAL/vacuum hygiene the engine needs so deleted bytes don't linger in journals |
+| `claim_download_with_ticket(file_id, ticket, ip, download_ttl_seconds=None) -> dict` | **ATOMIC — one transaction covering the files and share rows.** Statuses: `missing`/`already_downloaded`/`expired`/`not_released`/`bad_ticket`/`ok`. Compare `SHA-256(ticket)` to `ticket_hash` in constant time. On `ok`: stamp `downloaded_at`/`downloaded_by_ip` (guarded by `downloaded_at IS NULL`) and clear `ticket_hash`. On `expired` (past `expiry_at`, or released at least `download_ttl_seconds` ago — malformed `released_at` counts as stale): mark the file expired, delete the share row, return `path` |
+| `expire_unclaimed_releases(older_than_seconds) -> list` | one transaction: every released, never-downloaded, not-yet-expired drop whose `released_at` is at least that old (or malformed) is marked expired and its share row deleted; returns `[{'id', 'path'}]` for the caller to delete the blobs |
 | `purge_stale_key_shares(older_than_seconds) -> int` | delete pending (unbound, `v` NULL) shares older than the TTL; malformed `created_at` counts as stale |
 | `delete(file_id) -> bool` / `truncate()` | — |
 

@@ -90,7 +90,7 @@ From [What does the JS-integration layer's protocol fake look like?](https://git
 - **Shape:** `makeProtocolFake(opts)` → `{ handle, fetch, XMLHttpRequest, state, log, failNext, seedShare }`.
   - **`handle(request) → { status, headers, body }`** is the raw core that holds all protocol logic.
   - **`fetch` and the XHR class** are thin adapters that add browser behaviour: following a 302 (`redirected: true`, final URL) and firing `upload.onprogress`.
-- **State** is what the server would hold: the pending share (H, owner, bound V), the stored blob, `downloaded`, `released_at`, `attempts`, `receipt_hash`, `decryption_success`.
+- **State** is what the server would hold: the pending share (H, owner, bound V), the stored blob, `downloaded`, `released_at`, the download-ticket digest the release stores, `attempts`, `receipt_hash`, `decryption_success`.
 - **One instance spans upload → view**, which gives a browser-only round trip. `seedShare({ password, plaintext })` builds a valid share directly for view-only tests.
 - **Routes:** exactly five: `/upload/begin`, `/upload`, `/download/<id>`, `/release/<id>`, `/report_decryption/<id>`. **Any other request throws.** The shared-files status poll and `/api/token` are answered by their page drivers (§7a); `/delete` is a native form POST, which the page harness records and stops.
 - **Enforces:**
@@ -98,20 +98,23 @@ From [What does the JS-integration layer's protocol fake look like?](https://git
   - owner and `file_id` binding
   - the format of `file_id`, `key_verifier` and `receipt_hash`
   - the V match on release
-  - one-time download and one-time release
+  - one-time release, then a one-time download that needs the ticket derived from the released H (`X-Download-Ticket`)
   - the receipt on `/report_decryption`
 
   A failed check returns **the server's own status and body**. It never throws.
 
   **Deliberately stricter than the server** where the page never takes the other path, so a page change that would take it fails loudly: CSRF only via the `X-CSRF-Token` header (no form/JSON field, no `Authorization` exemption), a `/upload` without `X-Requested-With` or a multipart body throws instead of getting the server's HTML redirect, and `/upload/begin` or `/upload` with no logged-in user throws instead of meeting the login check. **Not enforced:** the file-extension allow-list on `/upload` (the page checks it before sending; DOM-tested), and a malformed configured account email (a server-config error). The header of `protocol-fake.js` lists these.
-- **Options** mirror the server config: `maxAttempts`, `burnOnLockout`, `owner` (the logged-in account; `state.user` switches it mid-test), plus the session's `csrfToken` (defaults to the DOM fixtures' token), `notificationsConfigured` (SMTP set up) and `accountEmails` (who may ask for open notifications); the contract test takes all of these from the recording.
+- **Options** mirror the server config: `maxAttempts`, `burnOnLockout`, `downloadTtlSeconds`, `owner` (the logged-in account; `state.user` switches it mid-test), plus the session's `csrfToken` (defaults to the DOM fixtures' token), `notificationsConfigured` (SMTP set up) and `accountEmails` (who may ask for open notifications); the contract test takes all of these from the recording.
 - **Failures produced by state:**
   - wrong V → 403 + `attempts_remaining`
   - second release → 410
   - exhausted attempts → 429 (burn off) or 404 (burn on)
   - other owner → 403 on `/upload`
   - re-finish → 409
-  - download twice → 302 to `/`
+  - download before any release → 403
+  - download of a released share without the winner's ticket → 410 (claimed)
+  - download after the download window (`downloadTtlSeconds`, from `KEY_RELEASE_DOWNLOAD_TTL_SECONDS`) → 410 (expired)
+  - download twice → 410 (302 to `/` for a request without `X-Requested-With`)
 - **Injected failures:** `failNext(route, { status, body } | 'network')` is one-shot. For 413 and rate-limit 429 the body defaults to the **recorded** one (see §6). 500, malformed JSON and network errors are hand-specified.
 - **Request log:** every request is recorded (method, URL, headers, body). The security invariants assert on it.
 - **Source of truth:** `app.py`, not `CLAUDE.md`.
@@ -163,7 +166,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
   - Copy-to-clipboard status.
   - Delete confirmation via `data-confirm-message`.
   - Shared files: search, sort (newest upload first by default), pagination and their URL sync; the page controls hidden while everything fits on one page. Each status's label; a note titled by its private note, or by its time; plain words for a missing expiry, opening or address; times relative to the driver's fixed clock, with the full timestamp in the title. Copy link offered only on an active drop. Status refresh updates the row (status, opened time, address, Copy link withdrawn) and its search text (one row, answered by the driver).
-- **View page (`pages/view/`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment, Enter in the field decrypting without navigating, Decrypt disabled until the share has downloaded, the attempts warning (and the field's description of it) going after the first try, the status line as a live region.
+- **View page (`pages/view/`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment, Enter in the field decrypting without navigating, Decrypt enabled at once with no request sent before the password is proven (the ciphertext downloads only after a winning release), the attempts warning (and the field's description of it) going after the first try, the status line as a live region.
 - **Success page (`pages/success/`):** copy link, password and one-click link (with "Failed" when the clipboard is blocked or missing, while Copy link, which copies by selection, still works without a Clipboard API), password visibility toggle, the fields filled from a well-formed fragment and the one-click link shown with its fragment masked.
 - **Confirm page (`pages/confirm-download/`):** the fragment password carried across the confirm POST (one well-formed case).
 - **Hero flow (`pages/hero-flow/`):** reduced motion means no autoplay; the toggle pauses it. The stage on screen is the list item with `aria-current="step"`.
@@ -173,13 +176,13 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 - **Two-phase upload, for file and for note:** begin → encrypt under H → upload with `file_id`, verifier and `receipt_hash` → progress updates → redirect to success.
 - **Share options sent on upload, for file and for note:** expiry, private note, notify-on-open, notification email. Asserted on the request bodies.
 - **Upload error paths, file mode only:** begin fails → the retry runs a fresh begin; upload fails → the retry finishes the newly issued share, not the stale one; 413 shows its message and the UI unlocks.
-- **View:** fetch the blob → release → decrypt → report the receipt, plus one upload → view round trip on one fake instance. 403 with `attempts_remaining`. The other `/release` statuses only pick a message and are DOM-tested.
+- **View:** release → ticketed download of the blob → decrypt → report the receipt, plus one upload → view round trip on one fake instance. 403 with `attempts_remaining`. The other `/release` statuses only pick a message and are DOM-tested.
 - **Share protocol (`features/share-protocol/`) on its own:** a successful open runs PBKDF2 once; a large note uploads and arrives whole; a server share of the wrong length is a refused handshake.
 
 ### E2E journeys (Playwright, against the app container)
 1. File: upload → success → share link → confirm → decrypt → downloaded bytes equal the original.
 2. Text note round trip, with the plaintext shown on the page; the password is submitted with Enter.
-3. A second visit to a consumed link fails (download gone, release returns 410).
+3. A second visit to a consumed link fails (the page says the drop is gone, the download is gone, release returns 410).
 4. One wrong password burns the file under the default profile; a later correct password fails.
 5. A one-click `#password` link decrypts without typing, and the fragment is gone from the URL afterwards.
 6. The uploader deletes the file from the index list, and the link is dead.

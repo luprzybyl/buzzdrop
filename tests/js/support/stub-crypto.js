@@ -31,6 +31,26 @@ async function sha256(input) {
  * @returns {import('../../../static/js/lib/crypto.js').ShareCrypto}
  */
 export function makeStubCrypto({ unsupportedFormat = false, corrupted = false } = {}) {
+    /**
+     * @param {Bytes} [data] - plaintext a pre-downloaded share carries
+     * @returns {import('../../../static/js/lib/crypto.js').SealedShare}
+     */
+    function stubShare(data) {
+        return {
+            async unlock(password) {
+                return {
+                    verifier: await sha256(password),
+                    async finish(_h, blob) {
+                        if (corrupted) throw new Error('');
+                        // A salt-only share gets its payload from the blob
+                        // finish() receives; a downloaded one carries it.
+                        const bytes = blob ?? data;
+                        return { data: (bytes ?? new Uint8Array()).slice(MAGIC.length), receipt: RECEIPT };
+                    },
+                };
+            },
+        };
+    }
     return {
         async seal(data, password) {
             const blob = new Uint8Array(MAGIC.length + data.length);
@@ -44,17 +64,13 @@ export function makeStubCrypto({ unsupportedFormat = false, corrupted = false } 
         open(blob) {
             const magic = new TextDecoder().decode(blob.slice(0, MAGIC.length));
             if (unsupportedFormat || magic !== 'STUB') throw new Error('Unsupported share format');
-            return {
-                async unlock(password) {
-                    return {
-                        verifier: await sha256(password),
-                        async finish() {
-                            if (corrupted) throw new Error('');
-                            return { data: blob.slice(MAGIC.length), receipt: RECEIPT };
-                        },
-                    };
-                },
-            };
+            return stubShare(blob);
+        },
+        // The salt-only share the view page builds: the ciphertext arrives
+        // at finish() time, after the release won.
+        openSalted() {
+            if (unsupportedFormat) throw new Error('Unsupported share format');
+            return stubShare();
         },
     };
 }

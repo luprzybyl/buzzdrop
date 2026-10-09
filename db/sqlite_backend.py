@@ -10,6 +10,8 @@ and a busy timeout, so concurrent writers serialize through SQLite locking
 instead of racing a shared file. Per-thread connections live as long as
 their worker threads; they are all closed by Backend.close().
 """
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -18,7 +20,7 @@ import secrets
 import sqlite3
 import threading
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from db.base import Backend, FileStore, TokenStore
@@ -220,6 +222,8 @@ CREATE TABLE IF NOT EXISTS file_keys (
     file_id TEXT UNIQUE,
     h TEXT,
     v TEXT,
+    salt TEXT,
+    ticket_hash TEXT,
     attempts INTEGER NOT NULL DEFAULT 0,
     released_at TEXT,
     created_at TEXT,
@@ -233,7 +237,28 @@ CREATE TABLE IF NOT EXISTS file_keys (
 _MIGRATABLE_COLUMNS = (
     ('files', 'receipt_hash', 'TEXT'),
     ('file_keys', 'created_by', 'TEXT'),
+    ('file_keys', 'salt', 'TEXT'),
+    ('file_keys', 'ticket_hash', 'TEXT'),
 )
+
+# Domain label for the bearer ticket a released share downloads with. The
+# ticket is deterministic — HKDF-SHA256(ikm=H) — so the winner recomputes
+# it from the H /release handed it; the server stores only its SHA-256 and
+# the ticket itself never leaves either side in a response body.
+_DOWNLOAD_TICKET_INFO = b'buzzdrop-download-ticket'
+
+
+def _download_ticket(h_hex: str) -> str:
+    """Derive the download ticket (hex) from the server share H —
+    RFC 5869 HKDF-SHA256 with a zero salt, one expand block."""
+    prk = hmac.new(b'\x00' * 32, bytes.fromhex(h_hex), hashlib.sha256).digest()
+    return hmac.new(prk, _DOWNLOAD_TICKET_INFO + b'\x01',
+                    hashlib.sha256).hexdigest()
+
+
+def _ticket_digest(ticket_hex: str) -> str:
+    """What the store keeps of a ticket: its SHA-256, never the ticket."""
+    return hashlib.sha256(bytes.fromhex(ticket_hex)).hexdigest()
 
 
 def _serialize_value(column: str, value: Any,
@@ -483,18 +508,20 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
             # file_id UNIQUE collision — a share already exists
             return False
 
-    def bind_key_verifier(self, file_id: str, v_hex: str) -> bool:
+    def bind_key_verifier(self, file_id: str, v_hex: str,
+                          salt_hex: Optional[str] = None) -> bool:
         cursor = self._conn().execute(
-            'UPDATE file_keys SET v = ? '
+            'UPDATE file_keys SET v = ?, salt = ? '
             'WHERE file_id = ? AND v IS NULL AND released_at IS NULL',
-            (v_hex, file_id),
+            (v_hex, salt_hex, file_id),
         )
         return cursor.rowcount > 0
 
     def get_key_share(self, file_id: str) -> Optional[Dict[str, Any]]:
         row = self._conn().execute(
-            'SELECT file_id, h, v, attempts, released_at, created_at, '
-            'created_by FROM file_keys WHERE file_id = ?',
+            'SELECT file_id, h, v, salt, ticket_hash, attempts, '
+            'released_at, created_at, created_by '
+            'FROM file_keys WHERE file_id = ?',
             (file_id,),
         ).fetchone()
         return dict(row) if row else None
@@ -517,7 +544,10 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
                             marked expired; caller deletes the blob via
                             the returned ``path``)
           'ok'            — verifier matched; ``h`` released once and
-                            h/v wiped from the row
+                            h/v wiped from the row; the digest of the
+                            download ticket derived from H is stored on
+                            the row (the ticket itself is not returned —
+                            the client recomputes it from ``h``)
           'denied'        — verifier miss; ``attempts``/``attempts_remaining``
                             describe the counted failure
         """
@@ -565,14 +595,17 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
             # leak timing. Everything above and below runs under the write
             # lock, so only this attempt observes this share state.
             elif secrets.compare_digest(row['v'], v_hex):
+                ticket_hash = _ticket_digest(_download_ticket(row['h']))
                 conn.execute(
                     'UPDATE file_keys SET released_at = ?, '
-                    'h = NULL, v = NULL WHERE file_id = ?',
-                    (datetime.now().isoformat(), file_id),
+                    'h = NULL, v = NULL, ticket_hash = ? WHERE file_id = ?',
+                    (datetime.now().isoformat(), ticket_hash, file_id),
                 )
                 # H and V are wiped with the claim: post-release the row
-                # keeps only bookkeeping, so a later DB theft yields
-                # nothing crackable.
+                # keeps only bookkeeping plus the ticket digest, so a
+                # later DB theft yields nothing crackable. The ticket
+                # itself is never stored nor sent — the winner recomputes
+                # it from the H it just got.
                 result = {'status': 'ok', 'h': row['h']}
             else:
                 conn.execute(
@@ -613,6 +646,20 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
             (file_id,))
 
     @staticmethod
+    def _release_stale(released_at: Optional[str],
+                       ttl_seconds: Optional[int]) -> bool:
+        """True when a released share's download window has closed —
+        released at least ttl_seconds ago, or an unparseable timestamp
+        (fail closed)."""
+        if released_at is None or ttl_seconds is None:
+            return False
+        try:
+            released = datetime.fromisoformat(released_at)
+        except (TypeError, ValueError):
+            return True
+        return datetime.now() >= released + timedelta(seconds=ttl_seconds)
+
+    @staticmethod
     def _share_file_expired(joined_row) -> bool:
         """True when the joined files row is expired/expiring now."""
         if joined_row['file_status'] == 'expired':
@@ -632,6 +679,131 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
             (1 if success else 0, file_id),
         )
         return cursor.rowcount > 0
+
+    def claim_download_with_ticket(self, file_id: str,
+                                   ticket_hex: Optional[str],
+                                   ip_address: str,
+                                   download_ttl_seconds: Optional[int] = None
+                                   ) -> Dict[str, Any]:
+        """
+        Verify the bearer ticket a release minted and claim the blob in one
+        BEGIN IMMEDIATE transaction, so the read-check-claim cycle
+        serializes like attempt_key_release.
+
+        Returns a dict with ``status``:
+          'missing'            — no files row for file_id
+          'already_downloaded' — downloaded_at already stamped
+          'expired'            — file past expiry_at, or released at least
+                                 download_ttl_seconds ago (share row
+                                 destroyed; ``path`` for blob cleanup)
+          'not_released'       — no share row, or its H was never released:
+                                 the blob cannot be legitimately fetched yet
+          'bad_ticket'         — share released but the ticket doesn't match
+          'ok'                 — ticket matched; downloaded_at stamped and
+                                 ticket_hash consumed
+        """
+        conn = self._conn()
+        destroyed = False
+        conn.execute('BEGIN IMMEDIATE')
+        try:
+            row = conn.execute(
+                'SELECT f.status AS file_status, f.expiry_at, f.path, '
+                '       f.downloaded_at, k.released_at, k.ticket_hash '
+                'FROM files f LEFT JOIN file_keys k ON k.file_id = f.id '
+                'WHERE f.id = ?',
+                (file_id,),
+            ).fetchone()
+
+            if row is None:
+                result: Dict[str, Any] = {'status': 'missing'}
+            elif row['downloaded_at'] is not None:
+                result = {'status': 'already_downloaded'}
+            elif self._share_file_expired(row) or self._release_stale(
+                    row['released_at'], download_ttl_seconds):
+                # A release nobody downloaded in time is as dead as an
+                # expired file: same flip, same share destruction.
+                if row['file_status'] != 'expired':
+                    conn.execute(
+                        "UPDATE files SET status = 'expired' WHERE id = ?",
+                        (file_id,))
+                conn.execute(
+                    'DELETE FROM file_keys WHERE file_id = ?', (file_id,))
+                destroyed = True
+                result = {'status': 'expired', 'path': row['path']}
+            elif row['released_at'] is None:
+                # No share row, a pending share, or one never released —
+                # nobody holds a ticket for it.
+                result = {'status': 'not_released'}
+            else:
+                presented = (
+                    _ticket_digest(ticket_hex)
+                    if isinstance(ticket_hex, str)
+                    and len(ticket_hex) == 64
+                    and all(c in '0123456789abcdef' for c in ticket_hex)
+                    else None
+                )
+                if (row['ticket_hash'] is None or presented is None
+                        or not secrets.compare_digest(
+                            row['ticket_hash'], presented)):
+                    result = {'status': 'bad_ticket'}
+                else:
+                    now = datetime.now().isoformat()
+                    cursor = conn.execute(
+                        'UPDATE files SET downloaded_at = ?, '
+                        'downloaded_by_ip = ? '
+                        'WHERE id = ? AND downloaded_at IS NULL',
+                        (now, ip_address, file_id),
+                    )
+                    if cursor.rowcount:
+                        conn.execute(
+                            'UPDATE file_keys SET ticket_hash = NULL '
+                            'WHERE file_id = ?',
+                            (file_id,))
+                        result = {'status': 'ok'}
+                    else:
+                        result = {'status': 'already_downloaded'}
+            conn.execute('COMMIT')
+        except Exception:
+            conn.execute('ROLLBACK')
+            raise
+        if destroyed:
+            self._backend.checkpoint_wal()
+        return result
+
+    def expire_unclaimed_releases(self, older_than_seconds: int
+                                  ) -> List[Dict[str, Any]]:
+        cutoff_iso = (
+            datetime.now() - timedelta(seconds=older_than_seconds)
+        ).isoformat()
+        conn = self._conn()
+        conn.execute('BEGIN IMMEDIATE')
+        try:
+            # Released, never downloaded, window closed: H is gone and the
+            # ticket is no longer honoured, so the blob serves no one.
+            # Malformed released_at counts as stale — fail closed.
+            rows = conn.execute(
+                'SELECT f.id, f.path FROM files f '
+                'JOIN file_keys k ON k.file_id = f.id '
+                'WHERE k.released_at IS NOT NULL '
+                'AND f.downloaded_at IS NULL '
+                "AND COALESCE(f.status, '') != 'expired' "
+                'AND (k.released_at <= ? '
+                '     OR NOT is_iso_timestamp(k.released_at))',
+                (cutoff_iso,),
+            ).fetchall()
+            for row in rows:
+                conn.execute(
+                    "UPDATE files SET status = 'expired' WHERE id = ?",
+                    (row['id'],))
+                conn.execute(
+                    'DELETE FROM file_keys WHERE file_id = ?', (row['id'],))
+            conn.execute('COMMIT')
+        except Exception:
+            conn.execute('ROLLBACK')
+            raise
+        if rows:
+            self._backend.checkpoint_wal()
+        return [{'id': row['id'], 'path': row['path']} for row in rows]
 
     def purge_stale_key_shares(self, older_than_seconds: int) -> int:
         cutoff = (

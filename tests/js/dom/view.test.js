@@ -28,16 +28,26 @@ describe('view page', () => {
         expect(share.formsSubmitted()).toEqual([]);
     });
 
-    // A submit before the page's listener exists would navigate natively (a
-    // GET of the POST-only confirm page) and lose the share, whose download
-    // is served once — so Decrypt stays disabled until the download is in.
-    it('Decrypt stays disabled until the share has downloaded', async () => {
+    // The blob is dead without H, so it isn't fetched up front: /download
+    // only answers the ticket a winning /release minted. Decrypt is ready
+    // immediately.
+    it('the blob downloads only after the password is proven', async () => {
         const share = await openShare({ download: 'in-progress' });
-        expect(screen.getByRole('button', { name: 'Decrypt and view' })).toBeDisabled();
+        expect(decryptButton()).toBeEnabled();
+        // No upfront fetch — the ciphertext waits for a winning /release.
+        expect(share.requestsSent()).toEqual([]);
 
+        const attempt = share.decryptWithPassword(DEFAULT_PASSWORD);
+        // The held download: the attempt can't finish before it lands.
         await share.finishDownload();
+        await attempt;
 
-        expect(screen.getByRole('button', { name: 'Decrypt and view' })).toBeEnabled();
+        expect(decryptedText()).toHaveTextContent(DEFAULT_MESSAGE);
+        expect(share.requestsSent().map((request) => new URL(request.url).pathname)).toEqual([
+            `/release/${share.fileId}`,
+            `/download/${share.fileId}`,
+            `/report_decryption/${share.fileId}`,
+        ]);
     });
 
     it('the status line is a live region, so outcomes are announced', async () => {
@@ -106,7 +116,7 @@ describe('view page', () => {
         ['a refused release', { server: /** @type {const} */ ('error') }, DEFAULT_PASSWORD,
             'The server refused to release the key.'],
         ['an unreachable server', { server: /** @type {const} */ ('unreachable') }, DEFAULT_PASSWORD,
-            'Could not reach the server to release the key.'],
+            'Could not reach the server — check the connection and press Decrypt to retry.'],
         ['a decryption failure without a message', { share: /** @type {const} */ ('corrupted') }, DEFAULT_PASSWORD,
             'Incorrect password or corrupted file. Ask the author to upload the file again.'],
     ])('%s shows its message', async (_, options, password, message) => {

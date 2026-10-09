@@ -82,6 +82,10 @@ API_TOKENS = [{
 }]
 SHARE_FILE = _file('00000000-0000-4000-8000-0000000000f1', 'contract.pdf')
 SHARE_TEXT = _file('00000000-0000-4000-8000-0000000000f2', 'Secret Note', type='text')
+# The bound share behind each view fixture — the salt it carries lands in
+# view-config-json; the JS page drivers substitute the real share's salt.
+SHARE_V = 'cc' * 32
+SHARE_SALT = 'aa' * 16
 
 SCRIPT_SRC_TAG = re.compile(r'[ \t]*<script\b[^>]*\bsrc=[^>]*>\s*</script>[ \t]*\n?')
 IMPORT_MAP_TAG = re.compile(r'[ \t]*<script type="importmap">.*?</script>[ \t]*\n?', re.DOTALL)
@@ -140,6 +144,10 @@ def render_all():
 
     for kind, record in (('file', SHARE_FILE), ('text', SHARE_TEXT)):
         _reset([record])
+        with flask_app.app_context():
+            files = get_backend().files
+            files.create_key_share(record['id'], 'bb' * 32, created_by='testuser')
+            files.bind_key_verifier(record['id'], SHARE_V, SHARE_SALT)
         view_path = f"/view/{record['id']}"
         fixtures.append(_render(f'confirm_download--{kind}', _client(), 'GET', view_path))
         fixtures.append(_render(f'view--{kind}', _client(), 'POST', f'{view_path}/confirm',

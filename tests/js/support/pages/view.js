@@ -24,6 +24,9 @@ const FIXTURES = {
     message: { fixture: 'view--text', fileId: '00000000-0000-4000-8000-0000000000f2' },
 };
 
+/** The salt render_dom_fixtures.py writes into the fixtures' config. */
+const FIXTURE_SALT = 'aa'.repeat(16);
+
 /** What a share holds when a test doesn't say. */
 export const DEFAULT_MESSAGE = 'meet at the hive at noon';
 
@@ -79,8 +82,8 @@ const WRONG_VERIFIER = 'f'.repeat(64);
 
 /**
  * Open a share's view page, the way the confirm page lands on it, and wait
- * until it is ready for a password (or, with download: 'in-progress', until
- * it is waiting for the share).
+ * until it is ready for a password (with download: 'in-progress', the
+ * ticketed download a winning release starts is held until finishDownload()).
  * @param {ShareOptions} [options]
  * @returns {Promise<ShareView>}
  */
@@ -107,12 +110,20 @@ export async function openShare({
     const logStart = backend.log.length;
 
     const { fixture, fileId: fixtureId } = FIXTURES[type];
+    // The server renders the share's envelope salt into the page's config,
+    // so the fixture's placeholder is replaced with the seeded share's
+    // real salt — the verifier the page derives is wrong otherwise.
+    const shareSalt = bytesToHex(
+        (backend.state.files.get(fileId)?.blob ?? new Uint8Array(20)).slice(4, 20));
     const page = openPage(fixture, {
         path: addressOf(`/view/${fileId}/confirm`, { link, password, query }),
         clipboard,
         // As the server renders it for this share.
-        edit: (html) => replaceInFixture(replaceInFixture(html, fixtureId, fileId),
-            'You have one attempt', maxAttempts === 1 ? 'You have one attempt' : `You have ${maxAttempts} attempts`),
+        edit: (html) => replaceInFixture(
+            replaceInFixture(replaceInFixture(html, fixtureId, fileId),
+                'You have one attempt',
+                maxAttempts === 1 ? 'You have one attempt' : `You have ${maxAttempts} attempts`),
+            FIXTURE_SALT, shareSalt),
     });
     const { window, screen, user } = page;
 
@@ -142,7 +153,7 @@ export async function openShare({
     });
 
     const ready = initView(window.document, { fetch, crypto: cryptoService });
-    if (download === 'done') await ready;
+    await ready;
 
     const status = () => screen.getByRole('status');
     const passwordField = () => screen.getByLabelText('Password');

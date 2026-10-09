@@ -24,6 +24,7 @@ from flask import (
 from werkzeug.exceptions import InternalServerError, NotFound, RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 from flask_limiter import Limiter
+from typing import Optional
 from db import create_backend
 from dotenv import load_dotenv
 import base64
@@ -446,7 +447,8 @@ def sweep_expired_files() -> int:
     Expire every active drop whose expiry_at has passed: delete the
     stored blob (local or S3 — check_and_handle_expiry goes through the
     storage abstraction), burn the key share, and mark the record
-    expired.
+    expired. Drops released but not downloaded within
+    KEY_RELEASE_DOWNLOAD_TTL_SECONDS of the release go the same way.
 
     Expiry must not depend on someone touching the link — this runs
     once at startup and, when EXPIRY_SWEEP_INTERVAL_SECONDS > 0, again
@@ -464,6 +466,17 @@ def sweep_expired_files() -> int:
             # One bad row must not stop the sweep — keep going.
             app.logger.exception(
                 'Expiry sweep failed for file %s', file_info.get('id'))
+    # Released but never downloaded within the window: the ticket is no
+    # longer honoured and H is gone, so the blob serves no one.
+    for stale in file_repo.expire_unclaimed_releases(
+            app.config['KEY_RELEASE_DOWNLOAD_TTL_SECONDS']):
+        try:
+            storage.delete(stale['path'])
+        except Exception:
+            app.logger.exception(
+                'Expiry sweep could not delete the blob of unclaimed '
+                'release %s', stale['id'])
+        expired_count += 1
     return expired_count
 
 
@@ -585,7 +598,25 @@ def _openable_drop(file_id):
     if (not file_info or file_info['downloaded_at'] is not None
             or check_and_handle_expiry(file_info)):
         return None
+    share = file_repo.get_key_share(file_id)
+    # A released, burned or never-bound share leads nowhere — the same
+    # dead link as every other gone drop (a ciphertext without H is dead).
+    if (not share or share.get('released_at') is not None
+            or share.get('v') is None):
+        return None
     return file_info
+
+
+_ENVELOPE_MAGIC = b'BKV3'
+_ENVELOPE_PREFIX_LENGTH = 20  # 'BKV3' + salt(16)
+
+
+def _envelope_salt(prefix: bytes) -> Optional[str]:
+    """The BKV3 envelope salt as hex, or None when the prefix isn't one."""
+    if len(prefix) >= _ENVELOPE_PREFIX_LENGTH and \
+            prefix[:len(_ENVELOPE_MAGIC)] == _ENVELOPE_MAGIC:
+        return prefix[len(_ENVELOPE_MAGIC):_ENVELOPE_PREFIX_LENGTH].hex()
+    return None
 
 
 def _drop_gone():
@@ -988,7 +1019,10 @@ def upload_file():
         # Handle text note upload
         # Decode base64 encrypted data
         text_bytes = base64.b64decode(note_text)
-        
+
+        # The envelope salt rides on the share row so /view can hand it to
+        # the client before it has proved the password (V needs the salt).
+        salt_hex = _envelope_salt(text_bytes[:_ENVELOPE_PREFIX_LENGTH])
         # Parse expiry date
         expiry_raw = request.form.get('expiry')
         expiry_iso = None
@@ -1003,7 +1037,7 @@ def upload_file():
 
         # Binding V atomically claims the pending share — a racing second
         # finish loses here, before any blob or record is written.
-        if not file_repo.bind_key_verifier(unique_id, key_verifier):
+        if not file_repo.bind_key_verifier(unique_id, key_verifier, salt_hex):
             return _fail('Key-release upload was finalized elsewhere', 409)
 
         # Compensation: a bound share with no file record is dangling —
@@ -1057,9 +1091,19 @@ def upload_file():
         # The file_id was minted by /upload/begin
         unique_id = file_id
 
+        # The envelope salt rides on the share row so /view can hand it to
+        # the client before it has proved the password (V needs the salt).
+        salt_hex = None
+        try:
+            head = file.stream.read(_ENVELOPE_PREFIX_LENGTH)
+            file.stream.seek(0)
+            salt_hex = _envelope_salt(head)
+        except Exception:
+            salt_hex = None
+
         # Binding V atomically claims the pending share — a racing second
         # finish loses here, before any blob or record is written.
-        if not file_repo.bind_key_verifier(unique_id, key_verifier):
+        if not file_repo.bind_key_verifier(unique_id, key_verifier, salt_hex):
             return _fail('Key-release upload was finalized elsewhere', 409)
 
         # Parse expiry date
@@ -1121,28 +1165,76 @@ def upload_file():
     error_message=RATE_LIMIT_EXCEEDED_MESSAGE,
 )
 def download_file(file_id):
+    """
+    Serve the ciphertext once, to the caller that won /release.
+
+    The ticket is a bearer credential derived from H (HKDF-SHA256, info
+    'buzzdrop-download-ticket'): the release stores only its digest and
+    never sends it — the winner recomputes it from the H it got. The blob
+    is no longer the one-time claim, so fetching it early protects
+    nothing. The ticket is consumed with the claim, before the body
+    streams, and the blob is deleted after it: a transfer that breaks off
+    is not resumable — deliberately, no retry surface. Without a
+    valid ticket an unreleased share answers a bare 403 to everyone; a
+    released share answers 'claimed', since only the release winner holds
+    the ticket.
+    """
+    xhr = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     file_info = file_repo.get_by_id(file_id)
     if not file_info:
+        if xhr:
+            return {'error': 'File not found'}, 404
         flash('File not found')
         return redirect(url_for('index'))
     if 'downloaded_at' in file_info and file_info['downloaded_at'] is not None:
+        if xhr:
+            return {'error': 'This file has already been downloaded'}, 410
         flash('This file has already been downloaded at {}'.format(file_info['downloaded_at']))
         return redirect(url_for('index'))
     if check_and_handle_expiry(file_info):
+        if xhr:
+            return {'error': 'File has expired'}, 410
         flash('File has expired')
         return redirect(url_for('index'))
 
-    # Get client IP address
-    client_ip = get_client_ip()
+    ticket = request.headers.get('X-Download-Ticket')
+    if isinstance(ticket, str):
+        ticket = ticket.strip().lower()
 
-    # Atomically claim the file — exactly one concurrent requester wins.
-    if not file_repo.mark_downloaded(file_id, client_ip):
-        # Losers get the reason that fits: expired vs. already consumed.
-        latest = file_repo.get_by_id(file_id) or {}
-        if latest.get('status') == 'expired':
-            flash('File has expired')
-        else:
-            flash('This file has already been downloaded')
+    # Verify the ticket and claim the blob in one transaction — exactly
+    # one concurrent requester wins, and the ticket is consumed with the
+    # claim.
+    result = file_repo.claim_download_with_ticket(
+        file_id, ticket, get_client_ip(),
+        current_app.config['KEY_RELEASE_DOWNLOAD_TTL_SECONDS'])
+    status = result['status']
+
+    if status == 'not_released':
+        return {'error': 'Forbidden'}, 403
+    if status == 'bad_ticket':
+        if xhr:
+            return {'error': 'This drop has already been claimed'}, 410
+        flash('This file has already been claimed')
+        return redirect(url_for('index'))
+    if status == 'already_downloaded':
+        if xhr:
+            return {'error': 'This file has already been downloaded'}, 410
+        flash('This file has already been downloaded')
+        return redirect(url_for('index'))
+    if status == 'expired':
+        if result.get('path'):
+            try:
+                storage.delete(result['path'])
+            except Exception:
+                pass
+        if xhr:
+            return {'error': 'File has expired'}, 410
+        flash('File has expired')
+        return redirect(url_for('index'))
+    if status == 'missing':
+        if xhr:
+            return {'error': 'File not found'}, 404
+        flash('File not found')
         return redirect(url_for('index'))
 
     # Stream file from storage
@@ -1160,12 +1252,21 @@ def download_file(file_id):
                 storage.delete(file_info['path'])
             except Exception:
                 pass
-    
+
+    headers = {
+        'Content-Disposition': f'attachment; filename="{file_info.get("original_name") or "download"}"'
+    }
+    try:
+        # Lets the client report real download progress.
+        headers['Content-Length'] = str(storage.size(file_info['path']))
+    except StorageError:
+        current_app.logger.warning(
+            'Could not stat claimed file %s — download progress disabled',
+            file_id)
+
     response = current_app.response_class(
         generate(),
-        headers={
-            'Content-Disposition': f'attachment; filename="{file_info.get("original_name") or "download"}"'
-        },
+        headers=headers,
         mimetype='application/octet-stream'
     )
     return response
@@ -1239,8 +1340,21 @@ def confirm_view_file(file_id):
     if not _is_valid_csrf_token():
         flash('Invalid request')
         return redirect(url_for('view_file', file_id=file_id))
+    # The client needs the envelope salt before it can prove the password
+    # (V derives from it) — the ciphertext only comes after. The salt is
+    # read off the share row bound at upload; shares uploaded before that
+    # existed fall back to the blob's envelope prefix in storage.
+    share = file_repo.get_key_share(file_id)
+    salt = (share or {}).get('salt')
+    if salt is None:
+        try:
+            salt = _envelope_salt(
+                storage.read_prefix(file_info['path'], _ENVELOPE_PREFIX_LENGTH))
+        except StorageError:
+            salt = None
     file_type = file_info.get('type', 'file')
     return render_template('view.html', file_id=file_id, original_name=file_info.get('original_name'), file_type=file_type,
+                           salt=salt,
                            max_attempts=current_app.config['KEY_RELEASE_MAX_ATTEMPTS'])
 
 
@@ -1286,6 +1400,8 @@ def release_key(file_id):
     if status == 'ok':
         current_app.logger.info(
             'Key-release share %s released (ip=%s)', file_id, client_ip)
+        # The ticket itself isn't sent: the client derives it from H
+        # (HKDF), and the server keeps only its digest on the share row.
         return {'h': result['h']}
     if status == 'denied':
         current_app.logger.warning(

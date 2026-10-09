@@ -105,6 +105,33 @@ def test_sweep_survives_one_bad_row(files_store, file_record):
     assert files_store.get_by_id(good_id)['status'] == 'expired'
 
 
+def test_sweep_expires_unclaimed_release(app, files_store, file_record):
+    """A release nobody downloaded within the window loses its blob and
+    share; a fresh release is left alone."""
+    file_id = file_record()
+    path = storage.save(file_id, b'ciphertext')
+    files_store.update_fields(file_id, {'path': path})
+    files_store.create_key_share(
+        file_id, secrets.token_hex(32), created_by='testuser')
+    files_store.bind_key_verifier(file_id, 'cc' * 32)
+    assert files_store.attempt_key_release(
+        file_id, 'cc' * 32, 1, True)['status'] == 'ok'
+
+    original = app.config['KEY_RELEASE_DOWNLOAD_TTL_SECONDS']
+    try:
+        assert sweep_expired_files() == 0
+        assert os.path.exists(path)
+
+        app.config['KEY_RELEASE_DOWNLOAD_TTL_SECONDS'] = 0
+        assert sweep_expired_files() == 1
+    finally:
+        app.config['KEY_RELEASE_DOWNLOAD_TTL_SECONDS'] = original
+
+    assert files_store.get_by_id(file_id)['status'] == 'expired'
+    assert files_store.get_key_share(file_id) is None
+    assert not os.path.exists(path)
+
+
 def test_sweep_thread_disabled_returns_none():
     assert start_expiry_sweep_thread(0) is None
     assert start_expiry_sweep_thread(-5) is None

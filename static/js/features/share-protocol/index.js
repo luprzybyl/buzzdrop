@@ -1,6 +1,6 @@
 // The share protocol: creating a share (begin → seal → upload) and claiming
 // one (release → decrypt → report), as typed results for a page to word.
-export { claimShare, createShare, downloadShare } from './share-protocol.js';
+export { claimShare, createShare } from './share-protocol.js';
 
 /**
  * @typedef {import('./share-protocol.js').Payload} Payload

@@ -112,12 +112,16 @@ class FileStore(ABC):
         """
 
     @abstractmethod
-    def bind_key_verifier(self, file_id: str, v_hex: str) -> bool:
+    def bind_key_verifier(self, file_id: str, v_hex: str,
+                          salt_hex: Optional[str] = None) -> bool:
         """
         Bind the password verifier to a pending share.
 
         Sets ``v`` iff the share exists, is not yet bound
-        (``v IS NULL``), and has not been released.
+        (``v IS NULL``), and has not been released. ``salt_hex`` is the
+        BKV3 envelope salt (hex) parsed from the uploaded blob: the view
+        page needs it before /release so the client can derive V without
+        fetching the ciphertext first.
 
         Returns:
             True when the verifier was bound, False otherwise.
@@ -128,8 +132,10 @@ class FileStore(ABC):
         """
         Return the key-share record for a file_id, or None.
 
-        Dict shape: ``{file_id, h, v, attempts, released_at, created_at,
-        created_by}``. ``v is None`` marks a pending (unfinished) share.
+        Dict shape: ``{file_id, h, v, salt, ticket_hash, attempts,
+        released_at, created_at, created_by}``. ``v is None`` marks a
+        pending (unfinished) share. ``ticket_hash`` is the SHA-256 of the
+        download ticket minted at release; it is consumed by the claim.
         """
 
     @abstractmethod
@@ -167,8 +173,65 @@ class FileStore(ABC):
             terminal never-decrypted outcome), ``'expired'`` (share row
             deleted, files row marked expired, ``path`` included for
             blob cleanup),
-            ``'ok'`` (with ``h``), or ``'denied'`` (with ``attempts``
-            and ``attempts_remaining``).
+            ``'ok'`` (with ``h`` — the released server share; on a
+            release the implementation also stores the digest of the
+            download ticket derived from H), or
+            ``'denied'`` (with ``attempts`` and ``attempts_remaining``).
+        """
+
+    @abstractmethod
+    def claim_download_with_ticket(self, file_id: str,
+                                   ticket_hex: Optional[str],
+                                   ip_address: str,
+                                   download_ttl_seconds: Optional[int] = None
+                                   ) -> Dict[str, Any]:
+        """
+        Verify the download ticket and claim the blob atomically.
+
+        Verify-then-claim MUST run inside one transaction that serializes
+        against concurrent claims (e.g. ``BEGIN IMMEDIATE``), covering the
+        share row AND the joined files row. The ticket comparison MUST be
+        constant-time (``secrets.compare_digest``) against the stored
+        digest — never the raw ticket. A successful claim stamps
+        ``downloaded_at``/``downloaded_by_ip`` with the
+        ``downloaded_at IS NULL`` guard AND consumes the stored ticket
+        digest in the same transaction.
+
+        A released share whose ``released_at`` is at least
+        ``download_ttl_seconds`` old (or unparseable — fail closed) is
+        expired in the same transaction, exactly like a file past
+        ``expiry_at``: files row marked expired, share row deleted.
+
+        Args:
+            file_id: Public file id.
+            ticket_hex: The ticket presented by the client (hex), or None.
+            ip_address: Downloader IP, recorded on the claim.
+            download_ttl_seconds: How long after release the ticket is
+                honoured; None disables the window.
+
+        Returns:
+            A dict with ``status`` one of: ``'missing'``,
+            ``'already_downloaded'``, ``'expired'`` (share row destroyed,
+            ``path`` included for blob cleanup), ``'not_released'`` (no
+            share row or H never released — nobody legitimately holds a
+            ticket), ``'bad_ticket'``, or ``'ok'``.
+        """
+
+    @abstractmethod
+    def expire_unclaimed_releases(self, older_than_seconds: int
+                                  ) -> List[Dict[str, Any]]:
+        """
+        Expire drops whose share was released but whose blob was never
+        downloaded within ``older_than_seconds`` of the release.
+
+        One transaction: every matching files row (``released_at`` at
+        least that old or unparseable — fail closed — ``downloaded_at``
+        NULL, status not yet expired) is marked expired and its share row
+        deleted. The caller deletes the blobs.
+
+        Returns:
+            ``[{'id': file_id, 'path': storage_path}, ...]`` for the drops
+            expired by this call.
         """
 
     @abstractmethod

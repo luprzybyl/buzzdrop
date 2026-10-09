@@ -19,6 +19,8 @@ or if two runs differ.
 Usage: python tests/fixtures/record_protocol_contract.py   (or: npm run fixtures)
 """
 import base64
+import hashlib
+import hmac
 import io
 import json
 import logging
@@ -35,10 +37,11 @@ from protocol_scenarios import SCENARIOS
 OUT_FILE = ROOT / 'tests' / 'js' / 'fixtures' / 'protocol-contract.json'
 DEFAULT_USER = 'testuser'
 # Recorded with every scenario, overridden or not: the fake takes them as
-# its maxAttempts / burnOnLockout options, plus NOTIFICATIONS_CONFIGURED
-# (SMTP set up, as app.py's _notifications_configured decides) as
-# notificationsConfigured.
-FAKE_CONFIG = ('KEY_RELEASE_MAX_ATTEMPTS', 'KEY_RELEASE_BURN_ON_LOCKOUT')
+# its maxAttempts / burnOnLockout / downloadTtlSeconds options, plus
+# NOTIFICATIONS_CONFIGURED (SMTP set up, as app.py's
+# _notifications_configured decides) as notificationsConfigured.
+FAKE_CONFIG = ('KEY_RELEASE_MAX_ATTEMPTS', 'KEY_RELEASE_BURN_ON_LOCKOUT',
+               'KEY_RELEASE_DOWNLOAD_TTL_SECONDS')
 
 UUID = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
 HEX64 = re.compile(r'\b[0-9a-f]{64}\b')
@@ -59,11 +62,25 @@ def _normalise(value):
     return value
 
 
+def _download_ticket(h_hex):
+    """The ticket /download requires, derived as the client derives it —
+    RFC 5869 HKDF-SHA256(ikm=H, salt=zero, info='buzzdrop-download-ticket').
+    Independent of db/sqlite_backend's copy, so a divergence breaks the
+    recorded contract loudly."""
+    prk = hmac.new(b'\x00' * 32, bytes.fromhex(h_hex), hashlib.sha256).digest()
+    return hmac.new(prk, b'buzzdrop-download-ticket' + b'\x01',
+                    hashlib.sha256).hexdigest()
+
+
 def _resolve(value, responses):
-    """Replace ``{"$ref": "<step>.<field>"}`` with that step's response field."""
+    """Replace ``{"$ref": "<step>.<field>"}`` with that step's response
+    field, and ``{"$ticket": "<step>"}`` with the download ticket derived
+    from the H that step's release returned."""
     if isinstance(value, dict) and set(value) == {'$ref'}:
         step, field = value['$ref'].split('.', 1)
         return responses[step][field]
+    if isinstance(value, dict) and set(value) == {'$ticket'}:
+        return _download_ticket(responses[value['$ticket']]['h'])
     if isinstance(value, dict):
         return {key: _resolve(item, responses) for key, item in value.items()}
     if isinstance(value, list):

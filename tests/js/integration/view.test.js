@@ -34,7 +34,7 @@ const requestText = (request) => {
 };
 
 describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
-    it('fetches the blob, releases H, decrypts the file and reports the receipt', async () => {
+    it('releases H, fetches the blob with the ticket, decrypts and reports the receipt', async () => {
         const share = await openShare({ crypto: 'real', type: 'file', password: PASSWORD, content: FILE_BYTES });
 
         await share.decryptWithPassword(PASSWORD);
@@ -42,11 +42,25 @@ describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
         expect(await share.decryptionRecorded()).toBe(true);
         expect(await share.savedFile()).toEqual({ name: 'contract.pdf', bytes: FILE_BYTES });
         expect(share.requestsSent().map((request) => `${request.method} ${pathOf(request)}`)).toEqual([
-            `GET /download/${share.fileId}`,
             `POST /release/${share.fileId}`,
+            `GET /download/${share.fileId}`,
             `POST /report_decryption/${share.fileId}`,
         ]);
         expect(share.backend.state.keys.get(share.fileId)?.releasedAt).not.toBeNull();
+    });
+
+    it('the ciphertext refuses a link holder who never released the key', async () => {
+        const share = await openShare({ crypto: 'real', type: 'file', password: PASSWORD, content: FILE_BYTES });
+
+        const early = await share.backend.fetch(`/download/${share.fileId}`);
+        expect(early.status).toBe(403);
+
+        await share.decryptWithPassword(PASSWORD);
+        expect(await share.decryptionRecorded()).toBe(true);
+
+        const claimed = await share.backend.fetch(`/download/${share.fileId}`,
+            { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        expect(claimed.status).toBe(410);
     });
 
     it('opens a message the index page uploaded to the same server', async () => {
@@ -62,7 +76,7 @@ describe('view page decryption', { timeout: TEST_TIMEOUT }, () => {
         expect(screen.getByRole('region', { name: 'Decrypted text' })).toHaveTextContent(NOTE);
         expect(share.backend.log.map(pathOf)).toEqual([
             '/upload/begin', '/upload',
-            `/download/${fileId}`, `/release/${fileId}`, `/report_decryption/${fileId}`,
+            `/release/${fileId}`, `/download/${fileId}`, `/report_decryption/${fileId}`,
         ]);
     });
 

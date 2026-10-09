@@ -105,6 +105,9 @@
         </form>
 
         
+        <progress id="download-progress" class="mt-4 w-full accent-honey-400" max="100" value="0" aria-label="Download progress" hidden></progress>
+
+        
         <p id="password-status" class="mt-4 flex items-center justify-center gap-2 text-sm font-medium text-emerald-300" style="display: none;">
             <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 0 1 0 1.414l-8 8a1 1 0 0 1-1.414 0l-4-4a1 1 0 1 1 1.414-1.414L8 12.586l7.293-7.293a1 1 0 0 1 1.414 0Z" clip-rule="evenodd"/>
@@ -130,7 +133,7 @@
         Decryption happens entirely in your browser. Your password stays in your browser; only a derived check value is sent.
     </p>
 </div>
-<script id="view-config-json" type="application/json">{"downloadUrl": "/download/00000000-0000-4000-8000-0000000000f1", "fileType": "file", "originalName": "contract.pdf", "releaseUrl": "/release/00000000-0000-4000-8000-0000000000f1", "reportDecryptionUrl": "/report_decryption/00000000-0000-4000-8000-0000000000f1"}</script>
+<script id="view-config-json" type="application/json">{"downloadUrl": "/download/00000000-0000-4000-8000-0000000000f1", "fileType": "file", "originalName": "contract.pdf", "releaseUrl": "/release/00000000-0000-4000-8000-0000000000f1", "reportDecryptionUrl": "/report_decryption/00000000-0000-4000-8000-0000000000f1", "salt": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}</script>
 
         </main>
 
