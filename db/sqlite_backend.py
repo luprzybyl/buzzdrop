@@ -544,9 +544,10 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
                             marked expired; caller deletes the blob via
                             the returned ``path``)
           'ok'            — verifier matched; ``h`` released once and
-                            h/v wiped from the row; ``download_ticket``
-                            carries the bearer ticket /download needs, and
-                            its digest is stored on the row
+                            h/v wiped from the row; the digest of the
+                            download ticket derived from H is stored on
+                            the row (the ticket itself is not returned —
+                            the client recomputes it from ``h``)
           'denied'        — verifier miss; ``attempts``/``attempts_remaining``
                             describe the counted failure
         """

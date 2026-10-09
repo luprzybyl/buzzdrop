@@ -1156,9 +1156,13 @@ def download_file(file_id):
     """
     Serve the ciphertext once, to the caller that won /release.
 
-    The ticket is a bearer credential the release mints (HMAC of H — the
-    client can recompute it from the H it holds): the blob is no longer
-    the one-time claim, so fetching it early protects nothing. Without a
+    The ticket is a bearer credential derived from H (HKDF-SHA256, info
+    'buzzdrop-download-ticket'): the release stores only its digest and
+    never sends it — the winner recomputes it from the H it got. The blob
+    is no longer the one-time claim, so fetching it early protects
+    nothing. The ticket is consumed with the claim, before the body
+    streams, and the blob is deleted after it: a transfer that breaks off
+    is not resumable — deliberately, no retry surface. Without a
     valid ticket an unreleased share answers a bare 403 to everyone; a
     released share answers 'claimed', since only the release winner holds
     the ticket.

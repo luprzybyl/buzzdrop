@@ -82,8 +82,8 @@ const WRONG_VERIFIER = 'f'.repeat(64);
 
 /**
  * Open a share's view page, the way the confirm page lands on it, and wait
- * until it is ready for a password (or, with download: 'in-progress', until
- * it is waiting for the share).
+ * until it is ready for a password (with download: 'in-progress', the
+ * ticketed download a winning release starts is held until finishDownload()).
  * @param {ShareOptions} [options]
  * @returns {Promise<ShareView>}
  */

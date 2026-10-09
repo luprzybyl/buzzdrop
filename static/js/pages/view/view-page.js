@@ -5,8 +5,9 @@
 //    the ciphertext is NOT fetched up front (a blob without H is dead,
 //    so fetching it early protects nothing; docs/true-one-time.md §6.4)
 // 2. Wait for user to enter password and click 'Decrypt'
-// 3. Prove the password to /release, which hands out the server share H
-//    and the one-time download ticket, then fetch the ciphertext with it
+// 3. Prove the password to /release, which hands out the server share H;
+//    derive the one-time download ticket from H, then fetch the
+//    ciphertext with it
 // 4. Save file to disk and notify server
 
 import { copyWithFeedback } from '../../features/clipboard-feedback/index.js';

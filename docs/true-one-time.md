@@ -265,9 +265,17 @@ abandons the page.
 The ticket closes the window a plain reorder would open: `/download`
 doesn't know the password, so without it any link holder could claim
 the blob between someone's `/release` and their download. Deriving it
-from H means the winner can recompute it (a lost response isn't fatal),
+from H means the winner can recompute it (a `/download` request that
+never reached the server can be sent again without another release),
 the wire never carries it, and the DB stores only a digest — a stolen
 DB ticket_hash is not a usable ticket.
+
+The ticket is consumed when the claim commits, **before** the body
+streams, and the blob is deleted once streaming ends — even if it broke
+off. A transfer interrupted mid-way is therefore not resumable: the
+share is gone. This is deliberate. Any resume or re-download window is
+a second way to obtain the ciphertext, and shares are mostly small
+documents, so the occasional lost large transfer is the accepted price.
 
 **H leaves the server exactly once, at one moment:** in response to
 the winning `/release`, after a successful `V' == V` check. No match —
