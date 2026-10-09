@@ -121,6 +121,8 @@ export function initHowItWorks(root, deps) {
         stepButtons.forEach((button, i) => {
             if (i === index) button.setAttribute('aria-current', 'step');
             else button.removeAttribute('aria-current');
+            // The steps behind the reader, for the step list to tick off.
+            button.classList.toggle('is-done', i < index);
         });
         counter.textContent = `Step ${index + 1} of ${steps.length}`;
         prev.disabled = index === 0;

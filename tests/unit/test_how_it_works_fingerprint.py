@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / 'docs' / 'how-it-works.md'
-PAGE = 'templates/how_it_works.html'
+PAGE = 'templates/_how_it_works_content.html'
 
 FINGERPRINT = re.compile(r'<!-- how-it-works-fingerprint: sha256:([0-9a-f]{64}) -->')
 
@@ -94,12 +94,3 @@ def test_explainer_is_in_step_with_the_flow():
         f'in the doc to sha256:{current}'
     )
 
-
-def test_page_has_the_doc_steps_in_order():
-    step_id = re.compile(r'id="(step-[a-z-]+)"')
-    doc_steps = step_id.findall(DOC.read_text(encoding='utf-8'))
-    page_steps = [i for i in step_id.findall((ROOT / PAGE).read_text(encoding='utf-8'))
-                  if not i.endswith('-title')]
-
-    assert doc_steps, 'docs/how-it-works.md has no step anchors'
-    assert page_steps == doc_steps

@@ -14,7 +14,16 @@ export { screen } from './page.js';
  */
 
 /**
+ * The page's two layouts, under comparison: /how-it-works and /how-it-works/v2.
+ * @typedef {'v1' | 'v2'} Layout
+ */
+
+/** Which fixture renders each layout. */
+const FIXTURES = { v1: 'how_it_works--default', v2: 'how_it_works_v2--default' };
+
+/**
  * @typedef {object} HowItWorksOptions
+ * @property {Layout} [layout]
  * @property {string} [path] - the address, e.g. '/how-it-works?sender=cli'
  * @property {boolean} [reducedMotion]
  */
@@ -23,8 +32,8 @@ export { screen } from './page.js';
  * Open the page as anyone: it needs no login.
  * @param {HowItWorksOptions} [options]
  */
-export function openHowItWorks({ path = '/how-it-works', reducedMotion = false } = {}) {
-    const page = openPage('how_it_works--default', { path, reducedMotion });
+export function openHowItWorks({ layout = 'v1', path = '/how-it-works', reducedMotion = false } = {}) {
+    const page = openPage(FIXTURES[layout], { path, reducedMotion });
     initHowItWorks(page.window.document, {});
     const { screen, user } = page;
     /** @param {string} name */

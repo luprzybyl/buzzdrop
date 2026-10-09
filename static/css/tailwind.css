@@ -886,7 +886,7 @@
     scale: 0 1;
   }
 
-  .is-playing .hiw-stepper-btn[aria-current='step'] .hiw-stepper-progress {
+  .is-playing [data-step-id][aria-current='step'] .hiw-stepper-progress {
     animation: hiw-fill var(--hiw-hold) linear both;
   }
 
@@ -930,7 +930,7 @@
   /* As specific as the rules that start them, whose animation shorthand
      would otherwise reset the play state. */
   .is-paused .hiw-play-ring.is-counting .hiw-play-fill,
-  .is-paused .hiw-stepper-btn[aria-current='step'] .hiw-stepper-progress {
+  .is-paused [data-step-id][aria-current='step'] .hiw-stepper-progress {
     animation-play-state: paused;
   }
 
@@ -1068,6 +1068,11 @@
     @apply pt-2 text-xs font-semibold tracking-[0.12em] text-slate-500 uppercase sm:pt-0.5;
   }
 
+  /* What a reader must not miss: the visible filename, the one-click risk. */
+  .hiw-caveat {
+    @apply font-semibold text-honey-200;
+  }
+
   .hiw-facts dd {
     @apply text-slate-300;
   }
@@ -1105,8 +1110,286 @@
     @apply text-white;
   }
 
-  :is(.hiw-facts, .hiw-table, .hiw-list, .hiw-art) code {
+  :is(.hiw-facts, .hiw-table, .hiw-list, .hiw-art, .hv) code {
     @apply rounded bg-white/[0.06] px-1 font-mono text-[0.85em] text-honey-200;
+  }
+
+  /* --------------------------------------- How it works, second layout */
+
+  .hv-title {
+    @apply text-4xl leading-[1.05] font-semibold tracking-tight text-white sm:text-5xl lg:text-6xl;
+  }
+
+  .hv-promise {
+    @apply flex gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5 shadow-hairline backdrop-blur-sm;
+  }
+
+  .hv-promise-icon {
+    @apply grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-honey-400/10 text-honey-300 ring-1 ring-honey-400/25;
+  }
+
+  .hv-flow {
+    @apply relative overflow-hidden rounded-3xl border border-white/[0.07] bg-hive-900/70 shadow-buzz backdrop-blur-xl;
+  }
+
+  .hv-flow::before {
+    content: '';
+    @apply pointer-events-none absolute inset-x-10 top-0 h-px bg-linear-to-r from-transparent via-honey-400/60 to-transparent;
+  }
+
+  .hv-flow-head {
+    @apply flex flex-col gap-5 border-b border-white/[0.06] p-5 sm:p-7 lg:flex-row lg:items-end lg:justify-between;
+  }
+
+  .hv-legend {
+    @apply mb-1.5 text-[0.65rem] font-semibold tracking-[0.18em] text-slate-500 uppercase;
+  }
+
+  .hv-choice label {
+    @apply inline-flex items-center gap-2 px-3.5;
+  }
+
+  .hv-flow-body {
+    @apply grid lg:grid-cols-[16.5rem_1fr];
+  }
+
+  /* The step list: a row of numbered dots on phones, a timeline beside the
+     stage from lg up. A line runs through the dots either way. */
+  .hv-rail {
+    @apply border-b border-white/[0.06] px-4 py-4 sm:px-7 lg:border-r lg:border-b-0 lg:p-5;
+  }
+
+  .hv-rail ol {
+    @apply relative flex justify-between lg:flex-col lg:gap-1;
+  }
+
+  .hv-rail ol::before {
+    content: '';
+    @apply absolute top-3.5 right-3.5 left-3.5 h-px bg-white/10 lg:top-5 lg:right-auto lg:bottom-5 lg:left-[1.625rem] lg:h-auto lg:w-px;
+  }
+
+  .hv-rail-btn {
+    @apply relative flex w-full flex-col items-center gap-2 rounded-xl pb-2 text-left transition duration-200 focus-visible:outline-2 focus-visible:outline-honey-300 lg:flex-row lg:gap-3 lg:px-3 lg:py-2.5 lg:hover:bg-white/[0.03];
+  }
+
+  .hv-rail-btn[aria-current='step'] {
+    @apply lg:bg-honey-400/[0.07] lg:ring-1 lg:ring-honey-400/20;
+  }
+
+  .hv-rail-num {
+    @apply relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/15 bg-hive-900 text-xs font-bold text-slate-400 transition duration-300;
+  }
+
+  .hv-rail-btn.is-done .hv-rail-num {
+    @apply border-honey-400/50 text-honey-300;
+  }
+
+  .hv-rail-btn[aria-current='step'] .hv-rail-num {
+    @apply border-honey-300 bg-honey-400 text-hive-950 shadow-honey;
+  }
+
+  .hv-rail-check {
+    @apply hidden;
+  }
+
+  .hv-rail-btn.is-done .hv-rail-check {
+    @apply block;
+  }
+
+  .hv-rail-btn.is-done .hv-rail-digit {
+    @apply hidden;
+  }
+
+  .hv-rail-title {
+    @apply sr-only text-sm leading-snug text-slate-400 lg:not-sr-only;
+  }
+
+  .hv-rail-btn[aria-current='step'] .hv-rail-title {
+    @apply font-medium text-white;
+  }
+
+  .hv-rail-btn .hiw-stepper-progress {
+    @apply inset-x-2 rounded-full lg:inset-x-3 lg:bottom-1;
+  }
+
+  .hv-step {
+    @apply p-5 sm:p-7;
+  }
+
+  /* The stage: you, the server and the recipient, and what passes between
+     them. A column on phones, a row from sm up; packets reuse the first
+     layout's wires and motion. */
+  .hv-scene {
+    @apply relative grid grid-cols-1 items-center justify-items-center overflow-hidden rounded-2xl border border-white/[0.06] p-5 sm:grid-cols-[auto_1fr_auto_1fr_auto] sm:px-6 sm:py-8;
+    background:
+      radial-gradient(ellipse 60% 80% at 50% 0%, rgb(255 182 39 / 0.07), transparent 70%),
+      var(--color-hive-850);
+  }
+
+  .hv-actor {
+    @apply z-10 flex w-28 flex-col items-center gap-2 text-center;
+  }
+
+  .hv-actor-icon {
+    @apply grid h-14 w-14 place-items-center rounded-2xl border border-honey-400/50 bg-hive-900 text-honey-200 shadow-honey transition duration-300;
+  }
+
+  .hv-actor-label {
+    @apply text-[0.7rem] leading-tight font-semibold text-slate-200;
+  }
+
+  .hv-actor.is-idle .hv-actor-icon {
+    @apply border-white/10 text-slate-600 shadow-none;
+  }
+
+  .hv-actor.is-idle .hv-actor-label {
+    @apply text-slate-600;
+  }
+
+  .hv-actor.is-burning .hv-actor-icon {
+    @apply border-rose-400/50 text-rose-300 shadow-none;
+  }
+
+  .is-active .hv-actor.is-burning .hv-actor-icon {
+    animation: hiw-burn 1.6s ease-in-out 0.4s 2 both;
+  }
+
+  .hv-actor-doing {
+    @apply rounded-full bg-emerald-400/10 px-2 py-0.5 text-[0.65rem] font-medium whitespace-nowrap text-emerald-300 ring-1 ring-emerald-400/25;
+  }
+
+  .is-active .hv-actor-doing {
+    animation: hv-glow 1.4s ease-in-out 3;
+  }
+
+  .hv-scene .hiw-wire {
+    @apply sm:mx-1;
+  }
+
+  .hv-scene .hiw-wire:not(.is-idle)::before {
+    @apply bg-honey-400/60 shadow-[0_0_10px_rgb(255_182_39/0.45)];
+  }
+
+  .hv-scene .hiw-packet {
+    @apply rounded-full px-2.5 py-1 shadow-honey;
+  }
+
+  .hv-bypass {
+    @apply mt-5;
+  }
+
+  .hv-step-head {
+    @apply mt-7 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6;
+  }
+
+  .hv-step-title {
+    @apply flex flex-col gap-1 text-xl font-semibold tracking-tight text-white sm:text-2xl;
+  }
+
+  .hv-step-kicker {
+    @apply text-[0.68rem] font-semibold tracking-[0.2em] text-honey-300 uppercase;
+  }
+
+  /* How much the server sees at this step, at a glance. */
+  .hv-lens {
+    @apply inline-flex shrink-0 items-center gap-2 self-start rounded-full px-3 py-1.5 text-xs ring-1;
+  }
+
+  .hv-lens.is-none {
+    @apply bg-emerald-400/10 text-emerald-200 ring-emerald-400/25;
+  }
+
+  .hv-lens.is-some {
+    @apply bg-honey-400/10 text-honey-100 ring-honey-400/25;
+  }
+
+  .hv-lens.is-burn {
+    @apply bg-rose-400/10 text-rose-200 ring-rose-400/25;
+  }
+
+  .hv-lens-label {
+    @apply font-semibold;
+  }
+
+  .hv-facts {
+    @apply mt-6 grid text-sm leading-relaxed sm:grid-cols-[9.5rem_1fr] sm:gap-x-8;
+  }
+
+  .hv-facts dt {
+    @apply border-t border-white/[0.06] pt-3 text-[0.68rem] font-semibold tracking-[0.14em] text-slate-500 uppercase sm:pb-3;
+  }
+
+  .hv-facts dd {
+    @apply pt-1 pb-3 text-slate-300 sm:border-t sm:border-white/[0.06] sm:pt-3;
+  }
+
+  .hv-facts dt:first-of-type,
+  .hv-facts dt:first-of-type + dd {
+    @apply border-t-0;
+  }
+
+  .hv-controls {
+    @apply flex items-center justify-between gap-3 border-t border-white/[0.06] px-5 py-4 sm:px-7;
+  }
+
+  .hv-sees {
+    @apply space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5;
+  }
+
+  .hv-sees-label {
+    @apply text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase;
+  }
+
+  .hv-sees-row {
+    @apply flex gap-3 rounded-xl p-3 text-sm leading-relaxed text-slate-200;
+  }
+
+  .hv-sees-row svg {
+    @apply mt-0.5;
+  }
+
+  .hv-sees-row.is-seen {
+    @apply bg-honey-400/[0.06] text-honey-300;
+  }
+
+  .hv-sees-row.is-unseen {
+    @apply bg-emerald-400/[0.06] text-emerald-300;
+  }
+
+  .hv-sees-row p {
+    @apply text-slate-200;
+  }
+
+  .hv-sees-kind {
+    @apply mb-0.5 block text-[0.65rem] font-semibold tracking-[0.16em] uppercase;
+  }
+
+  .is-seen .hv-sees-kind {
+    @apply text-honey-300;
+  }
+
+  .is-unseen .hv-sees-kind {
+    @apply text-emerald-300;
+  }
+
+  .hv-keep {
+    @apply rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 shadow-hairline;
+  }
+
+  .hv-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-honey-400/25 bg-honey-400/10 px-2.5 py-1 text-xs font-medium text-honey-200;
+  }
+
+  .hv-limits {
+    @apply divide-y divide-white/[0.06] rounded-2xl border border-white/[0.07] bg-white/[0.02];
+  }
+
+  .hv-limits li {
+    @apply flex gap-4 p-5 text-sm leading-relaxed text-slate-400;
+  }
+
+  .hv-limit-icon {
+    @apply grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-honey-400/10 text-honey-300;
   }
 
 }
@@ -1156,7 +1439,9 @@
   /* The how-it-works diagrams show each step's finished state. */
   .hiw-step,
   .hiw-art *,
-  .hiw-art *::before {
+  .hiw-art *::before,
+  .hv-scene *,
+  .hv-scene *::before {
     animation: none !important;
   }
 
@@ -1254,6 +1539,11 @@
 @keyframes hiw-countdown {
   from { stroke-dashoffset: 100; }
   to { stroke-dashoffset: 0; }
+}
+
+@keyframes hv-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(52 211 153 / 0); }
+  50% { box-shadow: 0 0 14px 2px rgb(52 211 153 / 0.35); }
 }
 
 @keyframes hiw-burn {

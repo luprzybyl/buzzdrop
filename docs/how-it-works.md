@@ -1,6 +1,6 @@
 # How Buzzdrop works
 
-The user-facing account of what happens when you share a file or a note with Buzzdrop: what runs where, what crosses the wire, what the server can and can't see, and why. It is the written source of truth for the public page at `/how-it-works` (`templates/how_it_works.html`), which mirrors it step for step under the same step ids. Every claim the page makes lives here first.
+The user-facing account of what happens when you share a file or a note with Buzzdrop: what runs where, what crosses the wire, what the server can and can't see, and why. It is the written source of truth for the public page at `/how-it-works`, which mirrors it step for step under the same step ids. The page's words live in `templates/_how_it_works_content.html`, which both of its layouts render (`how_it_works.html` at `/how-it-works`, and `how_it_works_v2.html` at `/how-it-works/v2` while the two are compared). Every claim the page makes lives here first.
 
 The design behind it, and the reasoning for each choice, is in [`true-one-time.md`](true-one-time.md) (§3 for what no design can fix, §6.3–6.7 for the key-release protocol). This doc doesn't argue the design; it describes it.
 

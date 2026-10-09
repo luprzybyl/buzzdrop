@@ -1,0 +1,150 @@
+{# The words of the "How it works" pages (#245), shared by every layout of
+   them (how_it_works.html, how_it_works_v2.html), so the layouts can differ
+   and the claims can't. docs/how-it-works.md is their source of truth: every
+   claim here is made there first, under the same step ids.
+
+   Import it with context: the variants depend on the page's sender and
+   content, and the release step on the configured key-release policy.
+   Parts that differ per switch carry data-show="<switch>:<value>"; the
+   server hides the ones the address didn't ask for, and
+   pages/how-it-works/ switches them live. #}
+
+{% macro show(switch, value) -%}
+data-show="{{ switch }}:{{ value }}"{% if (sender if switch == 'sender' else content) != value %} hidden{% endif %}
+{%- endmacro %}
+
+{# id, title #}
+{% set steps = [
+    ('upload-begin', 'Upload, phase 1'),
+    ('encrypt', 'Encrypt where you are'),
+    ('upload-finish', 'Upload, phase 2'),
+    ('share', 'Share'),
+    ('release', 'The recipient proves the password'),
+    ('download', 'Download once'),
+    ('decrypt', 'Decrypt in the browser'),
+    ('expiry', 'Expiry and manual delete'),
+] %}
+
+{% set intro %}What happens when you share a file or a note: what runs where, what crosses the wire, and what our server can and can&rsquo;t see at each moment.{% endset %}
+
+{% set flow_lead %}Web app or CLI, file or text: it is the same protocol and the same crypto. Pick a view and the steps change to match.{% endset %}
+
+{% set keep_link %}<a href="#what-we-keep" class="footer-link">What we keep, and for how long</a>{% endset %}
+
+{# key, title, body #}
+{% set takeaways = [
+    ('private', 'We can’t read your files or notes', 'They are encrypted before they leave your device. The server only holds ciphertext and never sees the password.'),
+    ('once', 'One time really means one time', 'The server holds half of the key and gives it out once, only to someone who proves the password. Then it destroys it.'),
+    ('metadata', 'We do keep some metadata', 'A file’s name, timestamps and the IP address it was opened from. ' ~ keep_link ~ '.'),
+] %}
+
+{# The facts of one step, as <dt>/<dd> pairs for the layout's <dl>. #}
+{% macro facts(id) -%}
+{% if id == 'upload-begin' %}
+<dt>Who acts</dt>
+<dd><span {{ show('sender', 'web') }}>Your browser</span><span {{ show('sender', 'cli') }}>Your terminal (<code>buzz</code>)</span>, then the server.</dd>
+<dt>What crosses the wire</dt>
+<dd>A request to <code>POST /upload/begin</code>, <span {{ show('sender', 'web') }}>signed in by your login session, with a CSRF token</span><span {{ show('sender', 'cli') }}>signed in by your API token in <code>Authorization: Bearer</code></span>. The server answers with a fresh <code>file_id</code> and a random 32-byte key share <code>H</code>.</dd>
+<dt>What the server sees</dt>
+<dd>That your account is starting an upload. Nothing about the file or note yet.</dd>
+<dt>Why</dt>
+<dd>The file key needs <code>H</code>, so <code>H</code> has to exist before anything is encrypted. The server keeps it: this is the half of the key it will hand out exactly once. An upload begun and never finished is swept once it is over an hour old, at the next upload or restart.</dd>
+{% elif id == 'encrypt' %}
+<dt>Who acts</dt>
+<dd><span {{ show('sender', 'web') }}>Your browser, in the page&rsquo;s JavaScript</span><span {{ show('sender', 'cli') }}>Your terminal, in the <code>buzz</code> CLI</span>, alone. Nothing crosses the wire.</dd>
+<dt>What happens</dt>
+<dd>
+    <span {{ show('sender', 'web') }}>You type a password, or have the page generate a 6-word passphrase.</span><span {{ show('sender', 'cli') }}><code>buzz</code> generates a 6-word passphrase unless you pass one with <code>-p</code>, and zips a folder (or, with <code>-z</code>, a file) first.</span>
+    The password goes through PBKDF2 with 600,000 iterations; from the result come two keys, <code>Kp</code> for encrypting and a verifier <code>V</code> for proving the password later. The file key is <code>HKDF(Kp&nbsp;&#8214;&nbsp;H)</code>, so it needs both the password and the server&rsquo;s share. A random receipt goes in front of the <span {{ show('content', 'file') }}>file</span><span {{ show('content', 'text') }}>note</span>, and AES-GCM encrypts the lot.
+</dd>
+<dt>What the server sees</dt>
+<dd>Nothing. The password and <code>Kp</code> never leave your device.</dd>
+<dt>Why</dt>
+<dd>Ciphertext and <code>H</code> without the password can&rsquo;t be decrypted, and neither can ciphertext and the password without <code>H</code>. The receipt is how the recipient will later prove they decrypted it.</dd>
+{% elif id == 'upload-finish' %}
+<dt>Who acts</dt>
+<dd><span {{ show('sender', 'web') }}>Your browser</span><span {{ show('sender', 'cli') }}>Your terminal</span>, then the server.</dd>
+<dt>What crosses the wire</dt>
+<dd><code>POST /upload</code> with <span {{ show('content', 'file') }}>the ciphertext as a multipart <code>file</code></span><span {{ show('content', 'text') }}>the ciphertext, base64-encoded, in a <code>note_text</code> field</span>, plus the <code>file_id</code>, <code>V</code> and <code>SHA-256(receipt)</code>. It is <span {{ show('sender', 'web') }}>signed in by your session and CSRF token</span><span {{ show('sender', 'cli') }}>signed in by your API token (<code>Authorization: Bearer</code>)</span>, and only the account that ran phase 1 may finish it.</dd>
+<dt>What the server sees</dt>
+<dd>The ciphertext and its approximate size, <code>V</code>, the receipt&rsquo;s hash, the expiry you chose, an optional private note to yourself, and <span {{ show('content', 'file') }}><strong class="hiw-caveat">the file&rsquo;s original filename, in plain text</strong></span><span {{ show('content', 'text') }}>the label &ldquo;Secret Note&rdquo;</span>. It stores the ciphertext and binds <code>V</code> to <code>H</code>.</dd>
+<dt>Why</dt>
+<dd><code>V</code> lets the server check the password later without ever learning it, and it can&rsquo;t be turned back into <code>Kp</code>.</dd>
+{% elif id == 'share' %}
+<dt>Who acts</dt>
+<dd>You.</dd>
+<dt>What crosses the wire</dt>
+<dd>Nothing to us. You send the link one way, and ideally the password another: a different app, a call.</dd>
+<dt>What the server sees</dt>
+<dd>Nothing. The link alone opens nothing: it names the drop, and the drop needs the password.</dd>
+<dt>The one-click link</dt>
+<dd><span {{ show('sender', 'web') }}>The success page</span><span {{ show('sender', 'cli') }}><code>buzz</code></span> also offers a link with the password after the <code>#</code>. Browsers never send that part to a server, so we still don&rsquo;t see the password. But <strong class="hiw-caveat">anyone who has that link can open the drop</strong>, and chat history, link previews and exports keep a copy. It&rsquo;s convenient; sending link and password separately is stronger.</dd>
+{% elif id == 'release' %}
+<dt>Who acts</dt>
+<dd>The recipient&rsquo;s browser, then the server.</dd>
+<dt>What crosses the wire</dt>
+<dd>The browser derives <code>V</code> from the typed password and posts it to <code>POST /release</code>. Never the password.</dd>
+<dt>What the server sees</dt>
+<dd><code>V</code>, and the recipient&rsquo;s IP address, which it logs with a successful or wrong attempt. It compares <code>V</code> with the stored one in a single database transaction.</dd>
+<dt>On a match</dt>
+<dd>The server hands over <code>H</code>, once, and wipes <code>H</code> and <code>V</code> from its database. It keeps only a fingerprint of a one-time download ticket, which the browser works out from <code>H</code>.</dd>
+<dt>On a wrong password</dt>
+<dd>{% if max_attempts == 1 %}One wrong password locks the drop{% else %}After {{ max_attempts }} wrong passwords the drop locks{% endif %}{% if burn_on_lockout %} and destroys <code>H</code>, so nobody can open it after that, the recipient included{% else %}, and the server refuses every later attempt{% endif %}.</dd>
+<dt>Why</dt>
+<dd>This is what makes one time real. Without <code>H</code> the ciphertext is dead bytes, and <code>H</code> comes out exactly once, after the password has been proven, in a transaction only one requester can win.</dd>
+{% elif id == 'download' %}
+<dt>Who acts</dt>
+<dd>The recipient&rsquo;s browser, then the server.</dd>
+<dt>What crosses the wire</dt>
+<dd><code>GET /download</code> with the ticket. The server streams the ciphertext back.</dd>
+<dt>What the server sees</dt>
+<dd>The ticket, and the recipient&rsquo;s IP address, which it stores with the time of the download.</dd>
+<dt>Then</dt>
+<dd>The ticket is used up before the first byte goes out, and the ciphertext is deleted from storage once the stream ends, even if it broke off. A drop released but not downloaded within 10 minutes expires the same way.</dd>
+<dt>Why</dt>
+<dd>Only the browser that won the release can claim the ciphertext, and there is no second copy to come back for.</dd>
+{% elif id == 'decrypt' %}
+<dt>Who acts</dt>
+<dd>The recipient&rsquo;s browser, then the server.</dd>
+<dt>What happens</dt>
+<dd>The browser builds the file key from <code>Kp</code> (from the password) and <code>H</code>, decrypts, and takes out the receipt. <span {{ show('content', 'file') }}>The file is saved as a download.</span><span {{ show('content', 'text') }}>The note is shown on the page, with a Copy button.</span></dd>
+<dt>What crosses the wire</dt>
+<dd>The receipt, to <code>POST /report_decryption</code>, so your list shows the drop as opened and, if you asked for it, you get an email.</dd>
+<dt>What the server sees</dt>
+<dd>The receipt, which only matches its stored hash if the drop was really decrypted. It learns that decryption worked, never the content.</dd>
+{% elif id == 'expiry' %}
+<dt>Who acts</dt>
+<dd>The server, or you.</dd>
+<dt>What happens</dt>
+<dd>When a drop&rsquo;s expiry passes, or you delete it from your list, <code>H</code> is destroyed and the ciphertext is deleted from storage. Expiry is checked whenever the link is opened and on a timer (every five minutes by default). The database overwrites what it deletes, which reduces, but doesn&rsquo;t rule out, traces of <code>H</code> left in its file.</dd>
+<dt>Why</dt>
+<dd><code>H</code> never outlives the drop. Even if deleting the ciphertext from storage failed, without <code>H</code> it can&rsquo;t be decrypted.</dd>
+{% endif %}
+{%- endmacro %}
+
+{# What the server sees, row by row: label, sees, never sees. #}
+{% set name_seen %}<span {{ show('content', 'file') }}>The <strong class="hiw-caveat">original filename, in plain text</strong>. It is stored, sent with the download and shown on the recipient&rsquo;s confirm page.</span><span {{ show('content', 'text') }}>The label &ldquo;Secret Note&rdquo;</span>{% endset %}
+{% set name_unseen %}<span {{ show('content', 'file') }}>&mdash;</span><span {{ show('content', 'text') }}>Anything in the note</span>{% endset %}
+{% set sees_rows = [
+    ('Content', 'Ciphertext and its approximate size', 'The plaintext'),
+    ('Password', '<code>V</code>, a one-way fingerprint of it', 'The password, <code>Kp</code>, the file key'),
+    ('Name', name_seen, name_unseen),
+    ('People', 'The sender’s account; the recipient’s IP address', 'Who the recipient is'),
+] %}
+
+{# What we keep: what, how long (in brief), and the whole of it. #}
+{% set keep_items = [
+    ('The ciphertext', 'Until opened', 'Until it is downloaded, it expires, or the sender deletes it. Then it is deleted from storage.'),
+    ('<code>H</code> and <code>V</code>', 'Until released', 'Until the release succeeds, the drop locks, it expires, or it is deleted, whichever comes first.'),
+    ('The drop’s record', 'Until you delete it', 'The filename (or “Secret Note”), the sender’s account, when it was created, its expiry, when it was opened and from which IP address, whether decryption worked, and the sender’s optional private note and notification address. It stays in the sender’s list until the sender deletes it; nothing purges it automatically.'),
+    ('Server logs', 'Operator’s choice', 'Every successful or wrong password attempt is logged with the requester’s IP address. How long logs are kept is up to whoever runs the server.'),
+] %}
+
+{% set limits_lead = 'What Buzzdrop does not protect against. No design can fix these.' %}
+{% set limits_items = [
+    ('The recipient can keep a copy.', 'Once a file or note is decrypted, it can be saved, copied or photographed. One time means the key is handed out once, not that the content can’t be kept.'),
+    ('Whoever runs the server controls the code.', 'The web app’s encryption code comes from the server, so someone in control of it could serve code that leaks the password, or log <code>V</code> and <code>H</code>. The CLI’s code comes from GitHub Releases instead, but the recipient’s side always runs in a browser.'),
+    ('Weak passwords.', 'Someone who steals the database and the stored files together can try passwords offline. 600,000 PBKDF2 iterations make every guess slow; a long passphrase makes the search hopeless, a short password doesn’t.'),
+    ('A one-click link is the key.', 'Whoever has it can open the drop.'),
+    ('A wrong guess can destroy a drop.', 'Anyone with the link can spend the attempt and lock it, and then the real recipient can’t open it either.'),
+] %}

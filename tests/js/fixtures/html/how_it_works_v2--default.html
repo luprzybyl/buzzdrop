@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="fixture-csrf-token">
+    <meta name="theme-color" content="#07080B">
+    <meta name="description" content="BuzzDrop: secure, one-time file sharing. Upload encrypted files or secret notes, send a link, and let them vanish as soon as the recipient downloads them.">
+    <title>BuzzDrop: Secure, One-Time File Sharing</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/css/app.css?v=sha384-FIXTURE">
+</head>
+<body class="min-h-full">
+    <!-- Ambient layers: warm light pooling at the top, drifting honeycomb lattice. -->
+    <div class="glow-field" aria-hidden="true"></div>
+    <div class="hex-veil" aria-hidden="true"></div>
+
+    <div class="relative z-10 flex min-h-screen flex-col">
+        <div class="topline" aria-hidden="true"></div>
+
+        <nav class="nav-shell">
+            <div class="container-shell">
+                
+                <div class="flex items-center justify-between gap-2 py-3 sm:gap-4 sm:py-4">
+                    <div class="flex shrink-0 items-center gap-1 sm:gap-5">
+                        <a href="/" class="group flex shrink-0 items-center gap-3">
+                            <span class="relative">
+                                <span class="absolute inset-0 animate-halo-pulse rounded-full bg-honey-400/30 blur-lg" aria-hidden="true"></span>
+                                <svg viewBox="0 0 40 40" class="relative h-10 w-10 transition-transform duration-500 group-hover:-rotate-6" role="img" aria-label="BuzzDrop">
+                                    <defs>
+                                        <linearGradient id="bd-honey" x1="0" y1="0" x2="1" y2="1">
+                                            <stop offset="0%" stop-color="#FFE49B"/>
+                                            <stop offset="55%" stop-color="#FFB627"/>
+                                            <stop offset="100%" stop-color="#D97706"/>
+                                        </linearGradient>
+                                        <clipPath id="bd-drop">
+                                            <path d="M20 9s8 8.6 8 13.4a8 8 0 0 1-16 0C12 17.6 20 9 20 9Z"/>
+                                        </clipPath>
+                                    </defs>
+                                    <path d="M20 1.5 35.5 10.4v19.2L20 38.5 4.5 29.6V10.4z" fill="url(#bd-honey)" opacity=".15"/>
+                                    <path d="M20 1.5 35.5 10.4v19.2L20 38.5 4.5 29.6V10.4z" fill="none" stroke="url(#bd-honey)" stroke-width="1.5"/>
+                                    <path d="M20 9s8 8.6 8 13.4a8 8 0 0 1-16 0C12 17.6 20 9 20 9Z" fill="url(#bd-honey)"/>
+                                    <g clip-path="url(#bd-drop)" fill="#0B0D12" opacity=".85">
+                                        <rect x="10" y="19.4" width="20" height="2.3" rx="1.15"/>
+                                        <rect x="10" y="24.2" width="20" height="2.3" rx="1.15"/>
+                                    </g>
+                                </svg>
+                            </span>
+                            <span class="hidden sm:block">
+                                <span class="block text-lg font-semibold tracking-tight text-white">Buzz<span class="honey-text">drop</span></span>
+                                <span class="block text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-500">One-time buzz</span>
+                            </span>
+                        </a>
+                        
+                        
+                    </div>
+                    <div class="flex min-w-0 items-center gap-2 sm:gap-3">
+                        
+                            <a href="/login" class="btn-primary px-4 py-2">Login</a>
+                        
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="container-shell flex-1 py-10 sm:py-14">
+            
+            
+                
+            
+
+            
+<div class="hv mx-auto max-w-6xl space-y-20">
+    <header class="grid items-center gap-10 lg:grid-cols-[1.15fr_1fr]">
+        <div class="animate-fade-up space-y-6">
+            <span class="eyebrow">Under the hood</span>
+            <h1 class="hv-title">How Buzzdrop <span class="honey-text">works</span></h1>
+            <p class="max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg">What happens when you share a file or a note: what runs where, what crosses the wire, and what our server can and can&rsquo;t see at each moment.</p>
+            <div class="flex flex-wrap gap-3">
+                <a href="#hiw-flow" class="btn-primary"><span class="relative z-10">Walk through it</span></a>
+                <a href="#server-sees" class="btn-secondary">What the server sees</a>
+            </div>
+        </div>
+        <ul class="animate-zoom-in delay-2 space-y-3">
+            
+            <li class="hv-promise">
+                <span class="hv-promise-icon"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></span>
+                <div>
+                    <h2 class="text-sm font-semibold text-white">We can’t read your files or notes</h2>
+                    <p class="mt-1 text-sm leading-relaxed text-slate-400">They are encrypted before they leave your device. The server only holds ciphertext and never sees the password.</p>
+                </div>
+            </li>
+            
+            <li class="hv-promise">
+                <span class="hv-promise-icon"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8.5" cy="12" r="4"/><path d="M12.5 12H21M17.5 12v3M20.5 12v2"/></svg></span>
+                <div>
+                    <h2 class="text-sm font-semibold text-white">One time really means one time</h2>
+                    <p class="mt-1 text-sm leading-relaxed text-slate-400">The server holds half of the key and gives it out once, only to someone who proves the password. Then it destroys it.</p>
+                </div>
+            </li>
+            
+            <li class="hv-promise">
+                <span class="hv-promise-icon"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg></span>
+                <div>
+                    <h2 class="text-sm font-semibold text-white">We do keep some metadata</h2>
+                    <p class="mt-1 text-sm leading-relaxed text-slate-400">A file’s name, timestamps and the IP address it was opened from. <a href="#what-we-keep" class="footer-link">What we keep, and for how long</a>.</p>
+                </div>
+            </li>
+            
+        </ul>
+    </header>
+
+    <section id="hiw-flow" class="hv-flow" aria-labelledby="flow-heading">
+        <div class="hv-flow-head">
+            <div class="max-w-md space-y-1.5">
+                <h2 id="flow-heading" class="section-title">The flow</h2>
+                <p class="section-lead">Web app or CLI, file or text: it is the same protocol and the same crypto. Pick a view and the steps change to match.</p>
+            </div>
+            <form class="flex flex-wrap gap-x-6 gap-y-3" action="/how-it-works/v2" method="get">
+                <fieldset>
+                    <legend class="hv-legend">Sender</legend>
+                    <div class="hiw-choice hv-choice">
+                        <label><input type="radio" name="sender" value="web" checked><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg><span>Web app</span></label>
+                        <label><input type="radio" name="sender" value="cli"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 10 3 2.5L7 15"/><path d="M12.5 15H17"/></svg><span>buzz CLI</span></label>
+                    </div>
+                </fieldset>
+                <fieldset>
+                    <legend class="hv-legend">What you send</legend>
+                    <div class="hiw-choice hv-choice">
+                        <label><input type="radio" name="content" value="file" checked><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg><span>File</span></label>
+                        <label><input type="radio" name="content" value="text"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-6l-4 3.5V17H6a2 2 0 0 1-2-2z"/><path d="M8 9h8M8 12.5h5"/></svg><span>Text</span></label>
+                    </div>
+                    <p id="content-cli-hint" class="mt-1.5 text-xs text-slate-500" hidden>Text is off: the CLI sends files only.</p>
+                </fieldset>
+                
+                <noscript><button type="submit" class="btn-secondary self-end px-4 py-2">Show</button></noscript>
+            </form>
+        </div>
+
+        <p id="hiw-choice-status" class="sr-only" role="status"></p>
+
+        <div class="hv-flow-body">
+            <nav aria-label="Steps" class="hv-rail">
+                <ol>
+                    
+                    <li><button type="button" class="hv-rail-btn" data-step-id="upload-begin" aria-controls="step-upload-begin" aria-current="step">
+                        <span class="hv-rail-num" aria-hidden="true"><span class="hv-rail-digit">1</span><svg class="hv-rail-check h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg></span>
+                        <span class="sr-only">Step 1: </span><span class="hv-rail-title">Upload, phase 1</span>
+                        <span class="hiw-stepper-progress" aria-hidden="true"></span>
+                    </button></li>
+                    
+                    <li><button type="button" class="hv-rail-btn" data-step-id="encrypt" aria-controls="step-encrypt">
+                        <span class="hv-rail-num" aria-hidden="true"><span class="hv-rail-digit">2</span><svg class="hv-rail-check h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg></span>
+                        <span class="sr-only">Step 2: </span><span class="hv-rail-title">Encrypt where you are</span>
+                        <span class="hiw-stepper-progress" aria-hidden="true"></span>
+                    </button></li>
+                    
+                    <li><button type="button" class="hv-rail-btn" data-step-id="upload-finish" aria-controls="step-upload-finish">
+                        <span class="hv-rail-num" aria-hidden="true"><span class="hv-rail-digit">3</span><svg class="hv-rail-check h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg></span>
+                        <span class="sr-only">Step 3: </span><span class="hv-rail-title">Upload, phase 2</span>
+                        <span class="hiw-stepper-progress" aria-hidden="true"></span>
+                    </button></li>
+                    
+                    <li><button type="button" class="hv-rail-btn" data-step-id="share" aria-controls="step-share">
+                        <span class="hv-rail-num" aria-hidden="true"><span class="hv-rail-digit">4</span><svg class="hv-rail-check h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg></span>
+                        <span class="sr-only">Step 4: </span><span class="hv-rail-title">Share</span>
+                        <span class="hiw-stepper-progress" aria-hidden="true"></span>
+                    </button></li>
+                    
+                    <li><button type="button" class="hv-rail-btn" data-step-id="release" aria-controls="step-release">
+                        <span class="hv-rail-num" aria-hidden="true"><span class="hv-rail-digit">5</span><svg class="hv-rail-check h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg></span>
+                        <span class="sr-only">Step 5: </span><span class="hv-rail-title">The recipient proves the password</span>
+                        <span class="hiw-stepper-progress" aria-hidden="true"></span>
+                    </button></li>
+                    
+                    <li><button type="button" class="hv-rail-btn" data-step-id="download" aria-controls="step-download">
+                        <span class="hv-rail-num" aria-hidden="true"><span class="hv-rail-digit">6</span><svg class="hv-rail-check h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg></span>
+                        <span class="sr-only">Step 6: </span><span class="hv-rail-title">Download once</span>
+                        <span class="hiw-stepper-progress" aria-hidden="true"></span>
+                    </button></li>
+                    
+                    <li><button type="button" class="hv-rail-btn" data-step-id="decrypt" aria-controls="step-decrypt">
+                        <span class="hv-rail-num" aria-hidden="true"><span class="hv-rail-digit">7</span><svg class="hv-rail-check h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg></span>
+                        <span class="sr-only">Step 7: </span><span class="hv-rail-title">Decrypt in the browser</span>
+                        <span class="hiw-stepper-progress" aria-hidden="true"></span>
+                    </button></li>
+                    
+                    <li><button type="button" class="hv-rail-btn" data-step-id="expiry" aria-controls="step-expiry">
+                        <span class="hv-rail-num" aria-hidden="true"><span class="hv-rail-digit">8</span><svg class="hv-rail-check h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0Z" clip-rule="evenodd"/></svg></span>
+                        <span class="sr-only">Step 8: </span><span class="hv-rail-title">Expiry and manual delete</span>
+                        <span class="hiw-stepper-progress" aria-hidden="true"></span>
+                    </button></li>
+                    
+                </ol>
+            </nav>
+
+            <div class="min-w-0">
+                <div id="hiw-steps" aria-live="polite">
+                    
+                    
+                    <article id="step-upload-begin" class="hiw-step hv-step is-active" aria-labelledby="step-upload-begin-title">
+                        <div class="hv-scene" aria-hidden="true">
+                            
+                            <span class="hv-actor is-lit" data-node="sender">
+    <span class="hv-actor-icon"><span data-show="sender:web"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span><span data-show="sender:cli" hidden><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 10 3 2.5L7 15"/><path d="M12.5 15H17"/></svg></span></span>
+    <span class="hv-actor-label"><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal</span></span>
+</span>
+                            <span class="hiw-wire"><span class="hiw-packet is-out">begin</span><span class="hiw-packet is-back">file_id + H</span></span>
+                            
+                            <span class="hv-actor is-lit" data-node="server">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="7" rx="2"/><rect x="4" y="13.5" width="16" height="7" rx="2"/><path d="M7.5 7h.01M7.5 17h.01M11 7h5.5M11 17h5.5"/></svg></span>
+    <span class="hv-actor-label">Buzzdrop server</span>
+</span>
+                            <span class="hiw-wire is-idle"></span>
+                            
+                            <span class="hv-actor is-idle" data-node="recipient">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span>
+    <span class="hv-actor-label">Recipient&rsquo;s browser</span>
+</span>
+                            
+                            
+                            
+                        </div>
+
+                        <div class="hv-step-head">
+                            <h3 id="step-upload-begin-title" class="hv-step-title"><span class="hv-step-kicker">Step 1</span> Upload, phase 1</h3>
+                            <p class="hv-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hv-lens-label">Server sees:</span> That an upload is starting</span></p>
+                        </div>
+                        <dl class="hv-facts">
+<dt>Who acts</dt>
+<dd><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal (<code>buzz</code>)</span>, then the server.</dd>
+<dt>What crosses the wire</dt>
+<dd>A request to <code>POST /upload/begin</code>, <span data-show="sender:web">signed in by your login session, with a CSRF token</span><span data-show="sender:cli" hidden>signed in by your API token in <code>Authorization: Bearer</code></span>. The server answers with a fresh <code>file_id</code> and a random 32-byte key share <code>H</code>.</dd>
+<dt>What the server sees</dt>
+<dd>That your account is starting an upload. Nothing about the file or note yet.</dd>
+<dt>Why</dt>
+<dd>The file key needs <code>H</code>, so <code>H</code> has to exist before anything is encrypted. The server keeps it: this is the half of the key it will hand out exactly once. An upload begun and never finished is swept once it is over an hour old, at the next upload or restart.</dd>
+</dl>
+                    </article>
+                    
+                    
+                    <article id="step-encrypt" class="hiw-step hv-step" aria-labelledby="step-encrypt-title">
+                        <div class="hv-scene" aria-hidden="true">
+                            
+                            <span class="hv-actor is-lit" data-node="sender">
+    <span class="hv-actor-icon"><span data-show="sender:web"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span><span data-show="sender:cli" hidden><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 10 3 2.5L7 15"/><path d="M12.5 15H17"/></svg></span></span>
+    <span class="hv-actor-label"><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal</span></span><span class="hv-actor-doing">encrypting here</span>
+</span>
+                            <span class="hiw-wire is-idle"></span>
+                            
+                            <span class="hv-actor is-idle" data-node="server">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="7" rx="2"/><rect x="4" y="13.5" width="16" height="7" rx="2"/><path d="M7.5 7h.01M7.5 17h.01M11 7h5.5M11 17h5.5"/></svg></span>
+    <span class="hv-actor-label">Buzzdrop server</span>
+</span>
+                            <span class="hiw-wire is-idle"></span>
+                            
+                            <span class="hv-actor is-idle" data-node="recipient">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span>
+    <span class="hv-actor-label">Recipient&rsquo;s browser</span>
+</span>
+                            
+                            
+                            
+                        </div>
+
+                        <div class="hv-step-head">
+                            <h3 id="step-encrypt-title" class="hv-step-title"><span class="hv-step-kicker">Step 2</span> Encrypt where you are</h3>
+                            <p class="hv-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hv-lens-label">Server sees:</span> Nothing</span></p>
+                        </div>
+                        <dl class="hv-facts">
+<dt>Who acts</dt>
+<dd><span data-show="sender:web">Your browser, in the page&rsquo;s JavaScript</span><span data-show="sender:cli" hidden>Your terminal, in the <code>buzz</code> CLI</span>, alone. Nothing crosses the wire.</dd>
+<dt>What happens</dt>
+<dd>
+    <span data-show="sender:web">You type a password, or have the page generate a 6-word passphrase.</span><span data-show="sender:cli" hidden><code>buzz</code> generates a 6-word passphrase unless you pass one with <code>-p</code>, and zips a folder (or, with <code>-z</code>, a file) first.</span>
+    The password goes through PBKDF2 with 600,000 iterations; from the result come two keys, <code>Kp</code> for encrypting and a verifier <code>V</code> for proving the password later. The file key is <code>HKDF(Kp&nbsp;&#8214;&nbsp;H)</code>, so it needs both the password and the server&rsquo;s share. A random receipt goes in front of the <span data-show="content:file">file</span><span data-show="content:text" hidden>note</span>, and AES-GCM encrypts the lot.
+</dd>
+<dt>What the server sees</dt>
+<dd>Nothing. The password and <code>Kp</code> never leave your device.</dd>
+<dt>Why</dt>
+<dd>Ciphertext and <code>H</code> without the password can&rsquo;t be decrypted, and neither can ciphertext and the password without <code>H</code>. The receipt is how the recipient will later prove they decrypted it.</dd>
+</dl>
+                    </article>
+                    
+                    
+                    <article id="step-upload-finish" class="hiw-step hv-step" aria-labelledby="step-upload-finish-title">
+                        <div class="hv-scene" aria-hidden="true">
+                            
+                            <span class="hv-actor is-lit" data-node="sender">
+    <span class="hv-actor-icon"><span data-show="sender:web"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span><span data-show="sender:cli" hidden><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 10 3 2.5L7 15"/><path d="M12.5 15H17"/></svg></span></span>
+    <span class="hv-actor-label"><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal</span></span>
+</span>
+                            <span class="hiw-wire"><span class="hiw-packet is-out"><span data-show="content:file">ciphertext + V</span><span data-show="content:text" hidden>note_text + V</span></span><span class="hiw-packet is-back">link</span></span>
+                            
+                            <span class="hv-actor is-lit" data-node="server">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="7" rx="2"/><rect x="4" y="13.5" width="16" height="7" rx="2"/><path d="M7.5 7h.01M7.5 17h.01M11 7h5.5M11 17h5.5"/></svg></span>
+    <span class="hv-actor-label">Buzzdrop server</span>
+</span>
+                            <span class="hiw-wire is-idle"></span>
+                            
+                            <span class="hv-actor is-idle" data-node="recipient">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span>
+    <span class="hv-actor-label">Recipient&rsquo;s browser</span>
+</span>
+                            
+                            
+                            
+                        </div>
+
+                        <div class="hv-step-head">
+                            <h3 id="step-upload-finish-title" class="hv-step-title"><span class="hv-step-kicker">Step 3</span> Upload, phase 2</h3>
+                            <p class="hv-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hv-lens-label">Server sees:</span> Ciphertext, <code>V</code><span data-show="content:file">, and the filename</span></span></p>
+                        </div>
+                        <dl class="hv-facts">
+<dt>Who acts</dt>
+<dd><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal</span>, then the server.</dd>
+<dt>What crosses the wire</dt>
+<dd><code>POST /upload</code> with <span data-show="content:file">the ciphertext as a multipart <code>file</code></span><span data-show="content:text" hidden>the ciphertext, base64-encoded, in a <code>note_text</code> field</span>, plus the <code>file_id</code>, <code>V</code> and <code>SHA-256(receipt)</code>. It is <span data-show="sender:web">signed in by your session and CSRF token</span><span data-show="sender:cli" hidden>signed in by your API token (<code>Authorization: Bearer</code>)</span>, and only the account that ran phase 1 may finish it.</dd>
+<dt>What the server sees</dt>
+<dd>The ciphertext and its approximate size, <code>V</code>, the receipt&rsquo;s hash, the expiry you chose, an optional private note to yourself, and <span data-show="content:file"><strong class="hiw-caveat">the file&rsquo;s original filename, in plain text</strong></span><span data-show="content:text" hidden>the label &ldquo;Secret Note&rdquo;</span>. It stores the ciphertext and binds <code>V</code> to <code>H</code>.</dd>
+<dt>Why</dt>
+<dd><code>V</code> lets the server check the password later without ever learning it, and it can&rsquo;t be turned back into <code>Kp</code>.</dd>
+</dl>
+                    </article>
+                    
+                    
+                    <article id="step-share" class="hiw-step hv-step" aria-labelledby="step-share-title">
+                        <div class="hv-scene" aria-hidden="true">
+                            
+                            <span class="hv-actor is-lit" data-node="sender">
+    <span class="hv-actor-icon"><span data-show="sender:web"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span><span data-show="sender:cli" hidden><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 10 3 2.5L7 15"/><path d="M12.5 15H17"/></svg></span></span>
+    <span class="hv-actor-label"><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal</span></span>
+</span>
+                            <span class="hiw-wire is-idle"></span>
+                            
+                            <span class="hv-actor is-idle" data-node="server">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="7" rx="2"/><rect x="4" y="13.5" width="16" height="7" rx="2"/><path d="M7.5 7h.01M7.5 17h.01M11 7h5.5M11 17h5.5"/></svg></span>
+    <span class="hv-actor-label">Buzzdrop server</span>
+</span>
+                            <span class="hiw-wire is-idle"></span>
+                            
+                            <span class="hv-actor is-lit" data-node="recipient">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span>
+    <span class="hv-actor-label">Recipient&rsquo;s browser</span>
+</span>
+                            
+                            
+                            
+                            <span class="hiw-bypass hv-bypass">
+                                <span class="hiw-packet is-out">link</span>
+                                <span class="hiw-packet is-out is-later">password, another way</span>
+                            </span>
+                            
+                        </div>
+
+                        <div class="hv-step-head">
+                            <h3 id="step-share-title" class="hv-step-title"><span class="hv-step-kicker">Step 4</span> Share</h3>
+                            <p class="hv-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hv-lens-label">Server sees:</span> Nothing</span></p>
+                        </div>
+                        <dl class="hv-facts">
+<dt>Who acts</dt>
+<dd>You.</dd>
+<dt>What crosses the wire</dt>
+<dd>Nothing to us. You send the link one way, and ideally the password another: a different app, a call.</dd>
+<dt>What the server sees</dt>
+<dd>Nothing. The link alone opens nothing: it names the drop, and the drop needs the password.</dd>
+<dt>The one-click link</dt>
+<dd><span data-show="sender:web">The success page</span><span data-show="sender:cli" hidden><code>buzz</code></span> also offers a link with the password after the <code>#</code>. Browsers never send that part to a server, so we still don&rsquo;t see the password. But <strong class="hiw-caveat">anyone who has that link can open the drop</strong>, and chat history, link previews and exports keep a copy. It&rsquo;s convenient; sending link and password separately is stronger.</dd>
+</dl>
+                    </article>
+                    
+                    
+                    <article id="step-release" class="hiw-step hv-step" aria-labelledby="step-release-title">
+                        <div class="hv-scene" aria-hidden="true">
+                            
+                            <span class="hv-actor is-idle" data-node="sender">
+    <span class="hv-actor-icon"><span data-show="sender:web"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span><span data-show="sender:cli" hidden><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 10 3 2.5L7 15"/><path d="M12.5 15H17"/></svg></span></span>
+    <span class="hv-actor-label"><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal</span></span>
+</span>
+                            <span class="hiw-wire is-idle"></span>
+                            
+                            <span class="hv-actor is-lit" data-node="server">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="7" rx="2"/><rect x="4" y="13.5" width="16" height="7" rx="2"/><path d="M7.5 7h.01M7.5 17h.01M11 7h5.5M11 17h5.5"/></svg></span>
+    <span class="hv-actor-label">Buzzdrop server</span>
+</span>
+                            <span class="hiw-wire"><span class="hiw-packet is-back">V</span><span class="hiw-packet is-out">H, once</span></span>
+                            
+                            <span class="hv-actor is-lit" data-node="recipient">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span>
+    <span class="hv-actor-label">Recipient&rsquo;s browser</span>
+</span>
+                            
+                            
+                            
+                        </div>
+
+                        <div class="hv-step-head">
+                            <h3 id="step-release-title" class="hv-step-title"><span class="hv-step-kicker">Step 5</span> The recipient proves the password</h3>
+                            <p class="hv-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hv-lens-label">Server sees:</span> <code>V</code> and an IP address</span></p>
+                        </div>
+                        <dl class="hv-facts">
+<dt>Who acts</dt>
+<dd>The recipient&rsquo;s browser, then the server.</dd>
+<dt>What crosses the wire</dt>
+<dd>The browser derives <code>V</code> from the typed password and posts it to <code>POST /release</code>. Never the password.</dd>
+<dt>What the server sees</dt>
+<dd><code>V</code>, and the recipient&rsquo;s IP address, which it logs with a successful or wrong attempt. It compares <code>V</code> with the stored one in a single database transaction.</dd>
+<dt>On a match</dt>
+<dd>The server hands over <code>H</code>, once, and wipes <code>H</code> and <code>V</code> from its database. It keeps only a fingerprint of a one-time download ticket, which the browser works out from <code>H</code>.</dd>
+<dt>On a wrong password</dt>
+<dd>One wrong password locks the drop and destroys <code>H</code>, so nobody can open it after that, the recipient included.</dd>
+<dt>Why</dt>
+<dd>This is what makes one time real. Without <code>H</code> the ciphertext is dead bytes, and <code>H</code> comes out exactly once, after the password has been proven, in a transaction only one requester can win.</dd>
+</dl>
+                    </article>
+                    
+                    
+                    <article id="step-download" class="hiw-step hv-step" aria-labelledby="step-download-title">
+                        <div class="hv-scene" aria-hidden="true">
+                            
+                            <span class="hv-actor is-idle" data-node="sender">
+    <span class="hv-actor-icon"><span data-show="sender:web"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span><span data-show="sender:cli" hidden><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 10 3 2.5L7 15"/><path d="M12.5 15H17"/></svg></span></span>
+    <span class="hv-actor-label"><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal</span></span>
+</span>
+                            <span class="hiw-wire is-idle"></span>
+                            
+                            <span class="hv-actor is-lit" data-node="server">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="7" rx="2"/><rect x="4" y="13.5" width="16" height="7" rx="2"/><path d="M7.5 7h.01M7.5 17h.01M11 7h5.5M11 17h5.5"/></svg></span>
+    <span class="hv-actor-label">Buzzdrop server</span>
+</span>
+                            <span class="hiw-wire"><span class="hiw-packet is-back">ticket</span><span class="hiw-packet is-out">ciphertext</span></span>
+                            
+                            <span class="hv-actor is-lit" data-node="recipient">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span>
+    <span class="hv-actor-label">Recipient&rsquo;s browser</span>
+</span>
+                            
+                            
+                            
+                        </div>
+
+                        <div class="hv-step-head">
+                            <h3 id="step-download-title" class="hv-step-title"><span class="hv-step-kicker">Step 6</span> Download once</h3>
+                            <p class="hv-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hv-lens-label">Server sees:</span> The ticket and an IP address</span></p>
+                        </div>
+                        <dl class="hv-facts">
+<dt>Who acts</dt>
+<dd>The recipient&rsquo;s browser, then the server.</dd>
+<dt>What crosses the wire</dt>
+<dd><code>GET /download</code> with the ticket. The server streams the ciphertext back.</dd>
+<dt>What the server sees</dt>
+<dd>The ticket, and the recipient&rsquo;s IP address, which it stores with the time of the download.</dd>
+<dt>Then</dt>
+<dd>The ticket is used up before the first byte goes out, and the ciphertext is deleted from storage once the stream ends, even if it broke off. A drop released but not downloaded within 10 minutes expires the same way.</dd>
+<dt>Why</dt>
+<dd>Only the browser that won the release can claim the ciphertext, and there is no second copy to come back for.</dd>
+</dl>
+                    </article>
+                    
+                    
+                    <article id="step-decrypt" class="hiw-step hv-step" aria-labelledby="step-decrypt-title">
+                        <div class="hv-scene" aria-hidden="true">
+                            
+                            <span class="hv-actor is-idle" data-node="sender">
+    <span class="hv-actor-icon"><span data-show="sender:web"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span><span data-show="sender:cli" hidden><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 10 3 2.5L7 15"/><path d="M12.5 15H17"/></svg></span></span>
+    <span class="hv-actor-label"><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal</span></span>
+</span>
+                            <span class="hiw-wire is-idle"></span>
+                            
+                            <span class="hv-actor is-lit" data-node="server">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="7" rx="2"/><rect x="4" y="13.5" width="16" height="7" rx="2"/><path d="M7.5 7h.01M7.5 17h.01M11 7h5.5M11 17h5.5"/></svg></span>
+    <span class="hv-actor-label">Buzzdrop server</span>
+</span>
+                            <span class="hiw-wire"><span class="hiw-packet is-back">receipt</span></span>
+                            
+                            <span class="hv-actor is-lit" data-node="recipient">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span>
+    <span class="hv-actor-label">Recipient&rsquo;s browser</span><span class="hv-actor-doing"><span data-show="content:file">saving file</span><span data-show="content:text" hidden>showing note</span></span>
+</span>
+                            
+                            
+                            
+                        </div>
+
+                        <div class="hv-step-head">
+                            <h3 id="step-decrypt-title" class="hv-step-title"><span class="hv-step-kicker">Step 7</span> Decrypt in the browser</h3>
+                            <p class="hv-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hv-lens-label">Server sees:</span> That decryption worked</span></p>
+                        </div>
+                        <dl class="hv-facts">
+<dt>Who acts</dt>
+<dd>The recipient&rsquo;s browser, then the server.</dd>
+<dt>What happens</dt>
+<dd>The browser builds the file key from <code>Kp</code> (from the password) and <code>H</code>, decrypts, and takes out the receipt. <span data-show="content:file">The file is saved as a download.</span><span data-show="content:text" hidden>The note is shown on the page, with a Copy button.</span></dd>
+<dt>What crosses the wire</dt>
+<dd>The receipt, to <code>POST /report_decryption</code>, so your list shows the drop as opened and, if you asked for it, you get an email.</dd>
+<dt>What the server sees</dt>
+<dd>The receipt, which only matches its stored hash if the drop was really decrypted. It learns that decryption worked, never the content.</dd>
+</dl>
+                    </article>
+                    
+                    
+                    <article id="step-expiry" class="hiw-step hv-step" aria-labelledby="step-expiry-title">
+                        <div class="hv-scene" aria-hidden="true">
+                            
+                            <span class="hv-actor is-idle" data-node="sender">
+    <span class="hv-actor-icon"><span data-show="sender:web"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span><span data-show="sender:cli" hidden><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 10 3 2.5L7 15"/><path d="M12.5 15H17"/></svg></span></span>
+    <span class="hv-actor-label"><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal</span></span>
+</span>
+                            <span class="hiw-wire is-idle"></span>
+                            
+                            <span class="hv-actor is-burning" data-node="server">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="7" rx="2"/><rect x="4" y="13.5" width="16" height="7" rx="2"/><path d="M7.5 7h.01M7.5 17h.01M11 7h5.5M11 17h5.5"/></svg></span>
+    <span class="hv-actor-label">Buzzdrop server</span>
+</span>
+                            <span class="hiw-wire is-idle"></span>
+                            
+                            <span class="hv-actor is-idle" data-node="recipient">
+    <span class="hv-actor-icon"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9h18"/><path d="M6 6.75h.01M8.5 6.75h.01M11 6.75h.01"/></svg></span>
+    <span class="hv-actor-label">Recipient&rsquo;s browser</span>
+</span>
+                            
+                            
+                            
+                        </div>
+
+                        <div class="hv-step-head">
+                            <h3 id="step-expiry-title" class="hv-step-title"><span class="hv-step-kicker">Step 8</span> Expiry and manual delete</h3>
+                            <p class="hv-lens is-burn"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hv-lens-label">Server sees:</span> <code>H</code> destroyed, ciphertext deleted</span></p>
+                        </div>
+                        <dl class="hv-facts">
+<dt>Who acts</dt>
+<dd>The server, or you.</dd>
+<dt>What happens</dt>
+<dd>When a drop&rsquo;s expiry passes, or you delete it from your list, <code>H</code> is destroyed and the ciphertext is deleted from storage. Expiry is checked whenever the link is opened and on a timer (every five minutes by default). The database overwrites what it deletes, which reduces, but doesn&rsquo;t rule out, traces of <code>H</code> left in its file.</dd>
+<dt>Why</dt>
+<dd><code>H</code> never outlives the drop. Even if deleting the ciphertext from storage failed, without <code>H</code> it can&rsquo;t be decrypted.</dd>
+</dl>
+                    </article>
+                    
+                </div>
+
+                
+                <div class="hv-controls">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <button id="hiw-play" type="button" class="hiw-play" aria-label="Play" title="Play the steps" hidden>
+                            <span class="hiw-play-ring" aria-hidden="true"><svg viewBox="0 0 48 48">
+                                <circle class="hiw-play-track" cx="24" cy="24" r="22"/>
+                                <circle class="hiw-play-fill" cx="24" cy="24" r="22" pathLength="100"/>
+                            </svg></span>
+                            <span data-icon="play" class="relative translate-x-px" aria-hidden="true"><svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M6 3.8v12.4a1 1 0 0 0 1.5.86l10.2-6.2a1 1 0 0 0 0-1.72L7.5 2.94A1 1 0 0 0 6 3.8Z"/></svg></span>
+                            <span data-icon="pause" class="relative" aria-hidden="true" hidden><svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><rect x="4.5" y="3" width="4" height="14" rx="1.2"/><rect x="11.5" y="3" width="4" height="14" rx="1.2"/></svg></span>
+                        </button>
+                        <p id="hiw-counter" class="text-sm text-slate-400">8 steps</p>
+                    </div>
+                    <div class="flex shrink-0 gap-2">
+                        <button id="hiw-prev" type="button" aria-label="Previous" class="btn-secondary px-3 py-2 sm:px-4" hidden>
+                            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.83 10l3.94 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clip-rule="evenodd"/></svg>
+                            <span class="hidden sm:inline">Previous</span>
+                        </button>
+                        <button id="hiw-next" type="button" aria-label="Next" class="btn-primary px-3 py-2 sm:px-4" hidden>
+                            <span class="relative z-10 hidden sm:inline">Next</span>
+                            <svg class="relative z-10 h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.17 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="server-sees" class="space-y-8" aria-labelledby="server-sees-heading">
+        <div class="max-w-2xl space-y-2">
+            <h2 id="server-sees-heading" class="section-title">What the server sees</h2>
+            <p class="section-lead">Everything that reaches us, set against what never does.</p>
+        </div>
+        <ul class="grid gap-4 md:grid-cols-2">
+            
+            <li class="hv-sees">
+                <h3 class="hv-sees-label">Content</h3>
+                <div class="hv-sees-row is-seen">
+                    <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg>
+                    <p><span class="hv-sees-kind">Sees</span> Ciphertext and its approximate size</p>
+                </div>
+                <div class="hv-sees-row is-unseen">
+                    <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg>
+                    <p><span class="hv-sees-kind">Never sees</span> The plaintext</p>
+                </div>
+            </li>
+            
+            <li class="hv-sees">
+                <h3 class="hv-sees-label">Password</h3>
+                <div class="hv-sees-row is-seen">
+                    <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg>
+                    <p><span class="hv-sees-kind">Sees</span> <code>V</code>, a one-way fingerprint of it</p>
+                </div>
+                <div class="hv-sees-row is-unseen">
+                    <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg>
+                    <p><span class="hv-sees-kind">Never sees</span> The password, <code>Kp</code>, the file key</p>
+                </div>
+            </li>
+            
+            <li class="hv-sees">
+                <h3 class="hv-sees-label">Name</h3>
+                <div class="hv-sees-row is-seen">
+                    <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg>
+                    <p><span class="hv-sees-kind">Sees</span> <span data-show="content:file">The <strong class="hiw-caveat">original filename, in plain text</strong>. It is stored, sent with the download and shown on the recipient&rsquo;s confirm page.</span><span data-show="content:text" hidden>The label &ldquo;Secret Note&rdquo;</span></p>
+                </div>
+                <div class="hv-sees-row is-unseen">
+                    <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg>
+                    <p><span class="hv-sees-kind">Never sees</span> <span data-show="content:file">&mdash;</span><span data-show="content:text" hidden>Anything in the note</span></p>
+                </div>
+            </li>
+            
+            <li class="hv-sees">
+                <h3 class="hv-sees-label">People</h3>
+                <div class="hv-sees-row is-seen">
+                    <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg>
+                    <p><span class="hv-sees-kind">Sees</span> The sender’s account; the recipient’s IP address</p>
+                </div>
+                <div class="hv-sees-row is-unseen">
+                    <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg>
+                    <p><span class="hv-sees-kind">Never sees</span> Who the recipient is</p>
+                </div>
+            </li>
+            
+        </ul>
+    </section>
+
+    <section id="what-we-keep" class="space-y-8" aria-labelledby="what-we-keep-heading">
+        <h2 id="what-we-keep-heading" class="section-title">What we keep, and for how long</h2>
+        <ul class="grid gap-4 md:grid-cols-2">
+            
+            <li class="hv-keep">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="text-base font-semibold text-white">The ciphertext</h3>
+                    <span class="hv-badge"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Until opened</span>
+                </div>
+                <p class="mt-3 text-sm leading-relaxed text-slate-400">Until it is downloaded, it expires, or the sender deletes it. Then it is deleted from storage.</p>
+            </li>
+            
+            <li class="hv-keep">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="text-base font-semibold text-white"><code>H</code> and <code>V</code></h3>
+                    <span class="hv-badge"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Until released</span>
+                </div>
+                <p class="mt-3 text-sm leading-relaxed text-slate-400">Until the release succeeds, the drop locks, it expires, or it is deleted, whichever comes first.</p>
+            </li>
+            
+            <li class="hv-keep">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="text-base font-semibold text-white">The drop’s record</h3>
+                    <span class="hv-badge"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Until you delete it</span>
+                </div>
+                <p class="mt-3 text-sm leading-relaxed text-slate-400">The filename (or “Secret Note”), the sender’s account, when it was created, its expiry, when it was opened and from which IP address, whether decryption worked, and the sender’s optional private note and notification address. It stays in the sender’s list until the sender deletes it; nothing purges it automatically.</p>
+            </li>
+            
+            <li class="hv-keep">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="text-base font-semibold text-white">Server logs</h3>
+                    <span class="hv-badge"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Operator’s choice</span>
+                </div>
+                <p class="mt-3 text-sm leading-relaxed text-slate-400">Every successful or wrong password attempt is logged with the requester’s IP address. How long logs are kept is up to whoever runs the server.</p>
+            </li>
+            
+        </ul>
+    </section>
+
+    <section id="limits" class="space-y-8" aria-labelledby="limits-heading">
+        <div class="max-w-2xl space-y-2">
+            <h2 id="limits-heading" class="section-title">Limits</h2>
+            <p class="section-lead">What Buzzdrop does not protect against. No design can fix these.</p>
+        </div>
+        <ul class="hv-limits">
+            
+            <li>
+                <span class="hv-limit-icon"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 4.3 2.6 17.6A2 2 0 0 0 4.3 20.6h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/></svg></span>
+                <p><strong class="text-white">The recipient can keep a copy.</strong> Once a file or note is decrypted, it can be saved, copied or photographed. One time means the key is handed out once, not that the content can’t be kept.</p>
+            </li>
+            
+            <li>
+                <span class="hv-limit-icon"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 4.3 2.6 17.6A2 2 0 0 0 4.3 20.6h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/></svg></span>
+                <p><strong class="text-white">Whoever runs the server controls the code.</strong> The web app’s encryption code comes from the server, so someone in control of it could serve code that leaks the password, or log <code>V</code> and <code>H</code>. The CLI’s code comes from GitHub Releases instead, but the recipient’s side always runs in a browser.</p>
+            </li>
+            
+            <li>
+                <span class="hv-limit-icon"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 4.3 2.6 17.6A2 2 0 0 0 4.3 20.6h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/></svg></span>
+                <p><strong class="text-white">Weak passwords.</strong> Someone who steals the database and the stored files together can try passwords offline. 600,000 PBKDF2 iterations make every guess slow; a long passphrase makes the search hopeless, a short password doesn’t.</p>
+            </li>
+            
+            <li>
+                <span class="hv-limit-icon"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 4.3 2.6 17.6A2 2 0 0 0 4.3 20.6h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/></svg></span>
+                <p><strong class="text-white">A one-click link is the key.</strong> Whoever has it can open the drop.</p>
+            </li>
+            
+            <li>
+                <span class="hv-limit-icon"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 4.3 2.6 17.6A2 2 0 0 0 4.3 20.6h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/></svg></span>
+                <p><strong class="text-white">A wrong guess can destroy a drop.</strong> Anyone with the link can spend the attempt and lock it, and then the real recipient can’t open it either.</p>
+            </li>
+            
+        </ul>
+    </section>
+</div>
+
+
+        </main>
+
+        <footer class="footer-shell">
+            <div class="container-shell flex flex-col gap-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                <p class="flex items-start gap-2 sm:items-center">
+                    <span class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-honey-400 sm:mt-0" aria-hidden="true"></span>
+                    
+                    <span>Each drop opens once, then it's gone.</span>
+                </p>
+                <p class="text-slate-600">
+                    
+                    
+                    <a href="/how-it-works" class="footer-link">How it works</a>
+                    
+                    &middot;
+                    Proudly developed with vibe coding.
+                    <a href="https://github.com/luprzybyl/buzzdrop" target="_blank" rel="noopener noreferrer" aria-label="Source code (opens in new tab)" class="footer-link">Source code</a>
+                    (<a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer" aria-label="AGPL-3.0 licence text (opens in new tab)" class="footer-link">AGPL-3.0</a>)
+                </p>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

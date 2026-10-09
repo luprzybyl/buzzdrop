@@ -2,18 +2,27 @@
 The public "How it works" page (#245): it renders without a login, loads its
 script under SRI, is linked from every footer and from the recipient's pages,
 and renders the view its address names (?sender=…&content=…), so a linked
-view reads right before the page script runs.
+view reads right before the page script runs. Its two layouts (/how-it-works
+and /how-it-works/v2, under comparison) are held to the same.
 """
 import re
+from pathlib import Path
 
 import pytest
 from flask import url_for
 
 FILE_ID = '00000000-0000-4000-8000-000000000245'
+DOC = Path(__file__).resolve().parents[2] / 'docs' / 'how-it-works.md'
 
 
-def _page(client, **query):
-    response = client.get(url_for('how_it_works', **query))
+@pytest.fixture(params=['how_it_works', 'how_it_works_v2'])
+def layout(request):
+    """Each layout of the page, by its endpoint."""
+    return request.param
+
+
+def _page(client, endpoint='how_it_works', **query):
+    response = client.get(url_for(endpoint, **query))
     assert response.status_code == 200
     return response.get_data(as_text=True)
 
@@ -41,14 +50,15 @@ def _hidden(html, switch, value):
     return all(' hidden' in tag for tag in _variants(html, switch, value))
 
 
-def test_renders_without_a_login(client):
-    html = _page(client)
+def test_renders_without_a_login(client, layout):
+    html = _page(client, layout)
+    heading = re.search(r'<h1\b[^>]*>(.*?)</h1>', html, re.S).group(1)
 
-    assert '<h1' in html and 'How Buzzdrop works' in html
+    assert re.sub(r'<[^>]+>', '', heading).strip() == 'How Buzzdrop works'
 
 
-def test_loads_its_script_under_sri(client):
-    html = _page(client)
+def test_loads_its_script_under_sri(client, layout):
+    html = _page(client, layout)
 
     assert re.search(
         r'<script[^>]*src="[^"]*js/pages/how-it-works/entry\.js"'
@@ -83,8 +93,8 @@ def test_password_page_links_to_it(client, open_drop, csrf_form_data):
     assert f'href="{url_for("how_it_works")}"' in main
 
 
-def test_defaults_to_the_web_app_sending_a_file(client):
-    html = _page(client)
+def test_defaults_to_the_web_app_sending_a_file(client, layout):
+    html = _page(client, layout)
 
     assert 'checked' in _radio(html, 'web')
     assert 'checked' in _radio(html, 'file')
@@ -92,8 +102,8 @@ def test_defaults_to_the_web_app_sending_a_file(client):
     assert _shown(html, 'content', 'file') and _hidden(html, 'content', 'text')
 
 
-def test_renders_the_view_its_address_names(client):
-    html = _page(client, sender='cli', content='file')
+def test_renders_the_view_its_address_names(client, layout):
+    html = _page(client, layout, sender='cli', content='file')
 
     assert 'checked' in _radio(html, 'cli')
     assert 'checked' not in _radio(html, 'web')
@@ -101,33 +111,33 @@ def test_renders_the_view_its_address_names(client):
     assert _hidden(html, 'sender', 'web')
 
 
-def test_text_is_disabled_when_the_cli_sends(client):
-    html = _page(client, sender='cli')
+def test_text_is_disabled_when_the_cli_sends(client, layout):
+    html = _page(client, layout, sender='cli')
 
     assert 'disabled' in _radio(html, 'text')
     assert 'the CLI sends files only' in html
 
 
-def test_cli_with_text_falls_back_to_a_file(client):
+def test_cli_with_text_falls_back_to_a_file(client, layout):
     # The combination doesn't exist yet (#247), so a link naming it shows
     # what the CLI really does.
-    html = _page(client, sender='cli', content='text')
+    html = _page(client, layout, sender='cli', content='text')
 
     assert 'checked' in _radio(html, 'file')
     assert 'checked' not in _radio(html, 'text')
 
 
-def test_unknown_values_fall_back_to_the_default(client):
-    html = _page(client, sender='fax', content='pigeon')
+def test_unknown_values_fall_back_to_the_default(client, layout):
+    html = _page(client, layout, sender='fax', content='pigeon')
 
     assert 'checked' in _radio(html, 'web')
     assert 'checked' in _radio(html, 'file')
 
 
-def test_says_plainly_that_the_filename_is_visible(client):
+def test_says_plainly_that_the_filename_is_visible(client, layout):
     # Until filenames are encrypted (#246) the page must not claim the
     # server knows nothing.
-    html = _page(client)
+    html = _page(client, layout)
 
     # Each part that names the filename, and whether the server hid it.
     caveats = re.findall(r'<span data-show="content:file"( hidden)?>(?:(?!</span>).)*?original filename',
@@ -146,3 +156,12 @@ def test_recipient_pages_open_it_in_a_new_tab(client, open_drop, csrf_form_data)
         links = re.findall(rf'<a\b[^>]*href="{url_for("how_it_works")}"[^>]*>', response.get_data(as_text=True))
         assert links
         assert all('target="_blank"' in link for link in links)
+
+
+def test_has_the_doc_steps_in_order(client, layout):
+    # The page mirrors docs/how-it-works.md step for step, under its ids.
+    doc_steps = re.findall(r'<a id="(step-[a-z-]+)"></a>', DOC.read_text(encoding='utf-8'))
+    page_steps = re.findall(r'<article id="(step-[a-z-]+)"', _page(client, layout))
+
+    assert doc_steps
+    assert page_steps == doc_steps
