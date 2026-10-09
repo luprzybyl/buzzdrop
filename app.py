@@ -606,8 +606,11 @@ def index():
     current_user = get_current_user()
     if current_user:
         username = current_user['username']
-        # Get files uploaded by the current user
-        user_files = file_repo.get_user_files(username)
+        # Get files uploaded by the current user, newest upload first: the
+        # list's default sort, so it reads right before the page script runs.
+        # created_at is a naive ISO timestamp, which sorts as text.
+        user_files = sorted(file_repo.get_user_files(username),
+                            key=lambda f: f.get('created_at') or '', reverse=True)
         
         # Check expiry and format for display
         for f in user_files:
@@ -650,8 +653,10 @@ def user_file_statuses():
         statuses.append({
             'id': file_info['id'],
             'status': file_info.get('status', 'active'),
-            'status_display': file_info.get('status_display', ''),
+            'status_key': file_info['status_key'],
+            'status_display': file_info['status_display'],
             'downloaded_at': file_info.get('downloaded_at'),
+            'downloaded_at_iso': file_info['downloaded_at_iso'],
             'downloaded_by_ip': file_info.get('downloaded_by_ip'),
         })
 

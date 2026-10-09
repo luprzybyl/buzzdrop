@@ -20,13 +20,18 @@ export { screen } from './page.js';
  * @typedef {import('./page.js').Page} Page
  */
 
-/** The rows of the with-shares fixture, by name. */
+/** The rows of the with-shares fixture, by name, newest upload first. */
 const SHARE_IDS = {
+    'Text note · 21:35': '00000000-0000-4000-8000-000000000006',
     'report.pdf': '00000000-0000-4000-8000-000000000001',
-    'Secret Note': '00000000-0000-4000-8000-000000000002',
+    'For the auditor': '00000000-0000-4000-8000-000000000002',
     'photo.png': '00000000-0000-4000-8000-000000000003',
     'old.txt': '00000000-0000-4000-8000-000000000004',
+    'locked.zip': '00000000-0000-4000-8000-000000000007',
 };
+
+/** When the page is looked at: the day after the fixture's newest upload. */
+const NOW = '2025-01-07T12:00:00+01:00';
 
 /** @typedef {keyof typeof SHARE_IDS} ShareName */
 
@@ -60,7 +65,8 @@ export const PASSWORDS = {
  * @property {string} [path] - the address, e.g. '/?shared_search=cet'
  * @property {number} [sharesPerPage] - the list's page size (5 as rendered)
  * @property {Array<{ name: ShareName, openedAt: string, openedFrom: string }>} [openedMeanwhile] -
- *   shares opened since the page was rendered: the status refresh reports them
+ *   shares opened since the page was rendered, at an ISO time with an offset
+ *   (Warsaw's, as the server sends): the status refresh reports them
  * @property {import('./page.js').ClipboardKind} [clipboard]
  * @property {import('./page.js').CryptoKind} [crypto] - real in the JS-integration layer
  * @property {Fake} [backend] - the server uploads go to, when a test needs one it made
@@ -79,6 +85,7 @@ export const PASSWORDS = {
  * @param {typeof XMLHttpRequest} xhr
  */
 function indexDeps(fetch, crypto, xhr) {
+    const now = Date.parse(NOW);
     /** @type {string[]} */
     const navigations = [];
     /** @type {string[]} */
@@ -92,6 +99,7 @@ function indexDeps(fetch, crypto, xhr) {
             navigate: (/** @type {string} */ url) => { navigations.push(url); },
             alert: (/** @type {string} */ message) => { alerts.push(message); },
             crypto,
+            now: () => now,
         },
     };
 }
@@ -156,8 +164,10 @@ export function openUploadPage({
             const files = openedMeanwhile.map(({ name, openedAt, openedFrom }) => ({
                 id: SHARE_IDS[name],
                 status: 'active',
+                status_key: 'downloaded',
                 status_display: 'Downloaded',
-                downloaded_at: openedAt,
+                downloaded_at: displayTime(openedAt),
+                downloaded_at_iso: openedAt,
                 downloaded_by_ip: openedFrom,
             }));
             return new window.Response(JSON.stringify({ files }));
@@ -332,7 +342,8 @@ export function openUploadPage({
         sharesShown: () => screen.queryAllByRole('article').map((/** @type {HTMLElement} */ row) => computeAccessibleName(row)),
         /** @param {ShareName} name */
         copyShareLink: (name) => user.click(
-            screen.getByRole('button', { name: `Copy the share link for ${name}` })),
+            within(shareRow(name)).getByRole('button', { name: `Copy link for ${name}` })),
+
         /**
          * Press Delete on a share and answer the confirmation.
          * @param {ShareName} name
@@ -371,4 +382,13 @@ export function openUploadPage({
 function shareName(id) {
     const entry = Object.entries(SHARE_IDS).find(([, shareId]) => shareId === id);
     return entry ? entry[0] : id;
+}
+
+/**
+ * An ISO time with Warsaw's offset as the server displays it, e.g.
+ * '2025-01-07T10:00:00+01:00' -> '2025-01-07 10:00:00 CET'.
+ * @param {string} iso
+ */
+function displayTime(iso) {
+    return `${iso.slice(0, 19).replace('T', ' ')} ${iso.endsWith('+02:00') ? 'CEST' : 'CET'}`;
 }

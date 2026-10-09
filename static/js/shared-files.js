@@ -5,10 +5,17 @@
  */
 
 /**
+ * utils.STATUS_LABELS' keys, which the badge's data-status styles by.
+ * @typedef {'active' | 'decrypted' | 'downloaded' | 'locked-out' | 'expired'} StatusKey
+ */
+
+/**
  * A file's status as the shared-files table shows it.
  * @typedef {object} FileStatus
  * @property {string} status - 'active' or 'expired'
- * @property {string | null} [downloaded_at]
+ * @property {StatusKey} status_key - only an active drop's link works
+ * @property {string | null} [downloaded_at] - for display
+ * @property {string | null} [downloaded_at_iso] - offset-aware ISO 8601
  * @property {string | null} [status_display]
  * @property {string | null} [downloaded_by_ip]
  */
@@ -62,20 +69,48 @@ export function buildSharedFilesUrl(currentUrl, page, searchTerm) {
     return url;
 }
 
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
 /**
- * Downloaded wins over expired, which wins over active.
- * @param {FileStatus} file
- * @returns {string}
+ * A timestamp as a short, scannable distance from now: "just now",
+ * "2 min ago", "yesterday", "in 3 days". Each unit is rounded to the nearest
+ * whole one (an expiry set three days out still reads "in 3 days" a few
+ * minutes later), a month is 30 days and a year 365: this is for scanning,
+ * the full timestamp stays in the element's title.
+ * @param {number} then - epoch milliseconds
+ * @param {number} now - epoch milliseconds
+ * @returns {string | null} null when `then` is not a valid time
  */
-export function statusBadgeClass(file) {
-    if (file.downloaded_at) return 'status-badge-green';
-    if (file.status === 'expired') return 'status-badge-red';
-    return 'status-badge-amber';
+export function relativeTime(then, now) {
+    if (!Number.isFinite(then)) return null;
+    const future = then > now;
+    const elapsed = Math.abs(then - now);
+    /** @param {number} count @param {string} unit */
+    const phrase = (count, unit) => {
+        const amount = `${count} ${unit}`;
+        return future ? `in ${amount}` : `${amount} ago`;
+    };
+    /** @param {number} count @param {string} unit */
+    const plural = (count, unit) => phrase(count, count === 1 ? unit : `${unit}s`);
+
+    if (elapsed < MINUTE) return future ? 'in under a minute' : 'just now';
+    const minutes = Math.round(elapsed / MINUTE);
+    if (minutes < 60) return phrase(minutes, 'min');
+    const hours = Math.round(elapsed / HOUR);
+    if (hours < 24) return phrase(hours, 'h');
+    const days = Math.round(elapsed / DAY);
+    if (days === 1) return future ? 'tomorrow' : 'yesterday';
+    if (days < 30) return plural(days, 'day');
+    const months = Math.round(days / 30);
+    if (months < 12) return plural(months, 'month');
+    return plural(Math.max(Math.round(days / 365), 1), 'year');
 }
 
 /**
  * @param {string} searchBase
- * @param {FileStatus} file
+ * @param {Pick<FileStatus, 'status' | 'status_display' | 'downloaded_by_ip'>} file
  * @returns {string}
  */
 export function rowSearchText(searchBase, file) {

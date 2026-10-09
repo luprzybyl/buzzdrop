@@ -135,24 +135,66 @@ def test_status_display_downloaded_without_decryption_report():
     }
     enhance_file_display(f)
     assert f['status_display'] == 'Downloaded'
+    assert f['status_key'] == 'downloaded'
 
 
-def test_status_display_decryption_outcomes():
-    for success, expected in ((True, 'Success'), (False, 'Failed')):
-        f = {
-            'status': 'active',
-            'downloaded_at': '2026-10-04T21:21:08',
-            'decryption_success': success,
-        }
+def test_status_display_decrypted():
+    f = {
+        'status': 'active',
+        'downloaded_at': '2026-10-04T21:21:08',
+        'decryption_success': True,
+    }
+    enhance_file_display(f)
+    assert (f['status_key'], f['status_display']) == ('decrypted', 'Decrypted')
+
+
+def test_status_display_lockout_with_or_without_download():
+    """Key-release lockout stamps decryption_success=False. The browser
+    downloads the blob before asking for the key, so the real flow has a
+    download; a direct /release call doesn't."""
+    for downloaded_at in ('2026-10-04T21:21:08', None):
+        f = {'status': 'active', 'downloaded_at': downloaded_at,
+             'decryption_success': False}
         enhance_file_display(f)
-        assert f['status_display'] == expected
+        assert (f['status_key'], f['status_display']) == ('locked-out', 'Locked out')
 
 
 def test_status_display_expired_and_active():
     expired = {'status': 'expired', 'downloaded_at': None, 'decryption_success': None}
     enhance_file_display(expired)
-    assert expired['status_display'] == 'Expired'
+    assert (expired['status_key'], expired['status_display']) == ('expired', 'Expired')
 
     active = {'status': 'active', 'downloaded_at': None, 'decryption_success': None}
     enhance_file_display(active)
-    assert active['status_display'] == ''
+    assert (active['status_key'], active['status_display']) == ('active', 'Active')
+
+
+def test_enhance_keeps_machine_readable_timestamps():
+    f = {'created_at': '2026-10-06T21:35:29', 'downloaded_at': None,
+         'expiry_at': '2026-01-15T10:30:00'}
+    enhance_file_display(f)
+    assert f['created_at'] == '2026-10-06 21:35:29 CEST'
+    assert f['created_at_iso'] == '2026-10-06T21:35:29+02:00'
+    assert f['expiry_at_iso'] == '2026-01-15T10:30:00+01:00'
+    assert f['downloaded_at_iso'] is None
+
+
+def test_display_name_of_a_file_is_its_name():
+    f = {'type': 'file', 'original_name': 'report.pdf', 'private_note': 'Q3',
+         'created_at': '2026-10-06T21:35:29'}
+    enhance_file_display(f)
+    assert f['display_name'] == 'report.pdf'
+
+
+def test_display_name_of_a_text_note_is_its_private_note():
+    f = {'type': 'text', 'original_name': 'Secret Note',
+         'private_note': '  For the auditor ', 'created_at': '2026-10-06T21:35:29'}
+    enhance_file_display(f)
+    assert f['display_name'] == 'For the auditor'
+
+
+def test_display_name_of_a_text_note_without_a_note_carries_its_time():
+    f = {'type': 'text', 'original_name': 'Secret Note', 'private_note': '',
+         'created_at': '2026-10-06T21:35:29'}
+    enhance_file_display(f)
+    assert f['display_name'] == 'Text note \u00b7 21:35'
