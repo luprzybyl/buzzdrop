@@ -322,7 +322,11 @@ For detailed security documentation, see `SECURITY_FIXES_SUMMARY.md` and `SECURI
 
 ## License
 
-MIT License
+Copyright (c) 2025 Łukasz Przybył
+
+Buzzdrop is free software: you can redistribute it and/or modify it under the terms of the [GNU Affero General Public License, version 3](LICENSE) as published by the Free Software Foundation.
+
+If you run a modified version of Buzzdrop as a network service, the AGPL requires you to offer its users the corresponding source code.
 
 ## Running Tests
 
