@@ -96,3 +96,20 @@ def test_landing_page_footer_does_not_address_an_uploader(client):
     footer = _footer(client, 'index')
     assert 'different channels' not in footer
     assert 'Each drop opens once' in footer
+
+
+@pytest.mark.parametrize('endpoint, values', [
+    ('index', {}),
+    ('login', {}),
+    ('view_file', {'file_id': 'missing'}),
+])
+def test_footer_links_to_the_source_code(client, endpoint, values):
+    footer = _footer(client, endpoint, **values)
+    assert 'href="https://github.com/luprzybyl/buzzdrop"' in _tag_with_text(footer, 'Source code')
+    assert 'agpl-3.0' in _tag_with_text(footer, 'AGPL-3.0')
+
+
+def test_footer_source_link_follows_the_configured_url(app, client, monkeypatch):
+    monkeypatch.setitem(app.config, 'SOURCE_CODE_URL', 'https://git.example.org/fork')
+    footer = _footer(client, 'index')
+    assert 'href="https://git.example.org/fork"' in _tag_with_text(footer, 'Source code')
