@@ -34,7 +34,7 @@ for (const width of [375, 320]) {
 
         await page.goto('/');
         await expectOneRow(page, [
-            header.getByRole('link', { name: /GitHub/ }),
+            header.getByRole('link', { name: /Source code/ }),
             header.getByRole('link', { name: 'Login' }),
         ]);
 
