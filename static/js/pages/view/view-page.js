@@ -154,6 +154,7 @@ export async function initView(root, deps) {
                 missing: 'This share no longer exists — it was deleted, has expired, '
                     + 'or was locked by wrong password attempts.',
                 refused: 'The server refused to release the key.',
+                corrupted: 'Incorrect password or corrupted file. Ask the author to upload the file again.',
             }[result.reason];
         }
     }
@@ -168,17 +169,10 @@ export async function initView(root, deps) {
 
         // The blob alone is mathematically dead: the password must be
         // proven to /release, which hands out the server share H once.
-        let result;
-        try {
-            result = await claimShare(sealed, password, {
-                fetch: deps.fetch,
-                urls: { release: releaseUrl, report: reportDecryptionUrl },
-            });
-        } catch {
-            status.textContent =
-                'Incorrect password or corrupted file. Ask the author to upload the file again.';
-            return;
-        }
+        const result = await claimShare(sealed, password, {
+            fetch: deps.fetch,
+            urls: { release: releaseUrl, report: reportDecryptionUrl },
+        });
         if (result.kind === 'opened') {
             showPlaintext(result.data);
             return;

@@ -16,7 +16,7 @@ The browser code is its own codebase with three layers. `tests/js/architecture.t
 | `features/<name>/`  | ✓ | ✓ | ✗ | ✗ |
 | `pages/<name>/`     | ✓ | – | ✓ (only `index.js`) | own folder only |
 
-Features are composed in a page: when one feature needs another's output, the page passes it in (the index page wires the password gate's field to `copyWithFeedback`). Every import is a relative specifier under `static/js`, which is what the import map's SRI covers (`tests/integration/test_module_integrity.py`).
+Features are composed in a page: when one feature needs another's output, the page passes it in (the index page wires the password gate's field to `copyWithFeedback`). The rules bind `static/js` only: a unit test may import a feature's internal pure module directly (`tests/js/shared-files.test.js`). Every import is a relative specifier under `static/js`, which is what the import map's SRI covers (`tests/integration/test_module_integrity.py`).
 
 ## Where a new module goes
 

@@ -15,6 +15,12 @@ import { buildOneClickLink, takeFragmentPassword } from '../../lib/one-click-lin
 import { required, requiredWindow } from '../../lib/required.js';
 
 /**
+ * @typedef {import('../../features/share-protocol/index.js').Payload} Payload
+ * @typedef {import('../../features/share-protocol/index.js').ShareOptions} ShareOptions
+ * @typedef {import('../../features/share-protocol/index.js').CreateResult} CreateResult
+ */
+
+/**
  * @typedef {object} IndexDeps
  * @property {typeof fetch} fetch
  * @property {typeof XMLHttpRequest} XMLHttpRequest - supplies upload.onprogress
@@ -223,7 +229,7 @@ export function initIndex(root, deps) {
 
     /**
      * The share options as the composer currently holds them.
-     * @returns {import('../../features/share-protocol/index.js').ShareOptions}
+     * @returns {ShareOptions}
      */
     function readShareOptions() {
         return {
@@ -240,7 +246,7 @@ export function initIndex(root, deps) {
      * Seal the payload and upload it, with the progress bar standing in for
      * the share button while the upload runs. On success the page leaves for
      * the success page; otherwise it alerts and the button comes back.
-     * @param {import('../../features/share-protocol/index.js').Payload} payload
+     * @param {Payload} payload
      * @param {string} password - carried to the success page in the URL fragment
      */
     async function share(payload, password) {
@@ -260,7 +266,7 @@ export function initIndex(root, deps) {
         };
 
         uploadInProgress = true;
-        /** @type {import('../../features/share-protocol/index.js').CreateResult} */
+        /** @type {CreateResult} */
         let result;
         try {
             result = await createShare(payload, password, readShareOptions(), {

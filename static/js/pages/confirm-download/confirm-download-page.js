@@ -29,7 +29,7 @@ export function initConfirmDownload(root, deps) {
 
     const fragmentPassword = takeFragmentPassword(window);
     if (fragmentPassword) {
-        var hint = root.getElementById('password-hint');
+        const hint = root.getElementById('password-hint');
         if (hint) {
             hint.textContent =
                 'This link already carries the key — continue and the drop goes BZZT.';

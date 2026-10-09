@@ -59,10 +59,11 @@ import { bytesToHex, hexToBytes } from '../../lib/hex.js';
  * with attempts left (`remaining` when the server said how many); `gone`
  * means the share can no longer be opened: claimed by someone already,
  * locked by this attempt, missing (deleted, expired or burned before this
- * attempt), or refused by a failing server.
+ * attempt), refused by a failing server, or corrupted (the server released
+ * its share, but the blob didn't decrypt with it).
  * @typedef {{ kind: 'opened', data: Bytes, receipt: Bytes }
  *   | { kind: 'retry', remaining: number | null }
- *   | { kind: 'gone', reason: 'claimed' | 'locked' | 'missing' | 'refused' }
+ *   | { kind: 'gone', reason: 'claimed' | 'locked' | 'missing' | 'refused' | 'corrupted' }
  *   | { kind: 'unreachable' }} ClaimResult
  */
 
@@ -108,11 +109,20 @@ export async function createShare(payload, password, options, deps) {
     } catch {
         return { kind: 'unreachable' };
     }
-    if (!begun.ok) return { kind: 'refused', message: 'The server refused the upload handshake.' };
-    /** @type {UploadBeginResponse} */
-    const { file_id: fileId, h } = await begun.json();
+    const handshakeRefused = /** @type {const} */ ({ kind: 'refused', message: 'The server refused the upload handshake.' });
+    if (!begun.ok) return handshakeRefused;
+    let fileId;
+    let h;
+    try {
+        /** @type {UploadBeginResponse} */
+        const body = await begun.json();
+        fileId = body.file_id;
+        h = hexToBytes(body.h);
+    } catch {
+        return handshakeRefused;
+    }
 
-    const { blob, verifier, receipt } = await deps.crypto.seal(payload.bytes, password, hexToBytes(h));
+    const { blob, verifier, receipt } = await deps.crypto.seal(payload.bytes, password, h);
     const form = new FormData();
     if (payload.kind === 'file') {
         form.append('file', new File([blob], payload.name));
@@ -134,18 +144,14 @@ export async function createShare(payload, password, options, deps) {
  * Prove `password` to /release, decrypt with the server share it releases,
  * and report the outcome to /report_decryption: the receipt when it opened,
  * a failure when the share is gone or out of reach. A wrong password with
- * attempts left reports nothing. Rejects when the released share fails to
- * decrypt, after reporting the failure.
+ * attempts left reports nothing.
  * @param {SealedShare} sealed
  * @param {string} password
  * @param {ClaimDeps} deps
  * @returns {Promise<ClaimResult>}
  */
 export async function claimShare(sealed, password, deps) {
-    const result = await release(sealed, password, deps).catch((err) => {
-        report(deps, null);
-        throw err;
-    });
+    const result = await release(sealed, password, deps);
     if (result.kind === 'opened') report(deps, result.receipt);
     else if (result.kind !== 'retry') report(deps, null);
     return result;
@@ -201,15 +207,20 @@ async function release(sealed, password, deps) {
     // this attempt's own lockout gets the 429 above.
     if (response.status === 404) return { kind: 'gone', reason: 'missing' };
 
+    if (!response.ok) return { kind: 'gone', reason: 'refused' };
     let h;
     try {
         h = hexToBytes(/** @type {string} */ (body.h));
     } catch {
         return { kind: 'gone', reason: 'refused' };
     }
-    if (!response.ok) return { kind: 'gone', reason: 'refused' };
-    const { data, receipt } = await attempt.finish(h);
-    return { kind: 'opened', data, receipt };
+    try {
+        const { data, receipt } = await attempt.finish(h);
+        return { kind: 'opened', data, receipt };
+    } catch {
+        // H is spent: the share can't be tried again.
+        return { kind: 'gone', reason: 'corrupted' };
+    }
 }
 
 /**
