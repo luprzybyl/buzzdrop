@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="static/logo.png" alt="Buzzdrop Logo" width="180" />
+  <img src="docs/brand/logo.svg" alt="Buzzdrop logo" width="140" />
 </p>
 
 <p align="center">
-  <a href="https://github.com/luprzybyl/buzzdrop/actions/workflows/ci.yml">
-    <img src="https://github.com/luprzybyl/buzzdrop/actions/workflows/ci.yml/badge.svg" alt="Build Status" />
+  <a href="https://github.com/buzzdrop/buzzdrop/actions/workflows/ci.yml">
+    <img src="https://github.com/buzzdrop/buzzdrop/actions/workflows/ci.yml/badge.svg" alt="Build Status" />
   </a>
 </p>
 
@@ -201,10 +201,10 @@ The `buzz` command-line tool lets you encrypt and upload files directly from you
 
 ### Installation
 
-Download the latest binary from [GitHub Releases](https://github.com/luprzybyl/buzzdrop/releases) and put it on your `$PATH`:
+Download the latest binary from [GitHub Releases](https://github.com/buzzdrop/buzzdrop/releases) and put it on your `$PATH`:
 
 ```bash
-curl -fsSL https://github.com/luprzybyl/buzzdrop/releases/latest/download/buzz -o ~/.local/bin/buzz
+curl -fsSL https://github.com/buzzdrop/buzzdrop/releases/latest/download/buzz -o ~/.local/bin/buzz
 chmod +x ~/.local/bin/buzz
 ```
 
