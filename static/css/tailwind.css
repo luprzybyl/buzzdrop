@@ -829,6 +829,229 @@
   .stat-chip {
     @apply inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-300;
   }
+  /* ------------------------------------------------ How it works (#245) */
+
+  /* A radio group as a segmented control. The input stays in the label, so
+     keyboard, screen readers and the label's click all work as usual. */
+  .hiw-choice {
+    @apply inline-flex gap-1 rounded-xl border border-white/[0.07] bg-hive-850/70 p-1;
+  }
+
+  .hiw-choice label {
+    @apply relative cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-slate-400 transition duration-200 hover:text-white;
+  }
+
+  .hiw-choice input {
+    @apply sr-only;
+  }
+
+  .hiw-choice label:has(input:checked) {
+    @apply bg-linear-to-br from-honey-300 to-honey-500 font-semibold text-hive-950 shadow-honey;
+  }
+
+  .hiw-choice label:has(input:focus-visible) {
+    @apply ring-2 ring-honey-300 ring-offset-2 ring-offset-hive-900;
+  }
+
+  .hiw-choice label:has(input:disabled) {
+    @apply cursor-not-allowed text-slate-600 hover:text-slate-600;
+  }
+
+  .hiw-stepper {
+    @apply grid grid-cols-4 gap-2 sm:grid-cols-8;
+  }
+
+  .hiw-stepper-btn {
+    @apply flex h-full w-full flex-col items-center gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-1 py-2 text-center text-slate-500 transition duration-200 hover:border-honey-400/30 hover:text-slate-200 focus-visible:outline-2 focus-visible:outline-honey-300;
+  }
+
+  .hiw-stepper-btn[aria-current='step'] {
+    @apply border-honey-400/50 bg-honey-400/10 text-honey-200;
+  }
+
+  .hiw-stepper-num {
+    @apply grid h-7 w-7 place-items-center rounded-full border border-current text-xs font-bold;
+  }
+
+  .hiw-stepper-title {
+    @apply sr-only text-[0.68rem] leading-tight md:not-sr-only;
+  }
+
+  .hiw-step.is-active {
+    animation: flow-rise 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* The diagram: sender, server and recipient, with what crosses the wire
+     between them. A column on phones, a row from sm up. */
+  .hiw-art {
+    @apply relative mb-6 grid grid-cols-1 items-center justify-items-center rounded-2xl border border-white/[0.06] bg-hive-850/60 p-4 sm:grid-cols-[auto_1fr_auto_1fr_auto] sm:justify-items-stretch sm:px-5 sm:py-6;
+  }
+
+  .hiw-node {
+    @apply z-10 rounded-xl border border-honey-400/40 bg-hive-900 px-3 py-2 text-center text-xs font-semibold whitespace-nowrap text-honey-100 shadow-honey transition duration-300;
+  }
+
+  .hiw-node.is-idle {
+    @apply border-white/10 text-slate-500 shadow-none;
+  }
+
+  .hiw-node.is-burning {
+    @apply border-rose-400/50 text-rose-200;
+  }
+
+  .is-active .hiw-node.is-burning {
+    animation: hiw-burn 1.6s ease-in-out 0.4s both;
+  }
+
+  .hiw-wire {
+    @apply relative my-2 h-24 w-full sm:my-0 sm:h-16;
+  }
+
+  .hiw-wire::before {
+    content: '';
+    @apply absolute inset-y-0 left-1/2 w-px bg-honey-400/40 sm:inset-x-0 sm:inset-y-auto sm:top-1/2 sm:h-px sm:w-auto;
+  }
+
+  .hiw-wire.is-idle::before {
+    @apply bg-white/10;
+  }
+
+  .hiw-packet {
+    @apply absolute rounded-md border border-honey-400/40 bg-hive-950 px-2 py-0.5 font-mono text-[0.68rem] whitespace-nowrap text-honey-200;
+  }
+
+  /* Each packet rests where it arrives, so a step reads the same with its
+     animation finished, skipped or off. Out goes sender → recipient
+     (down / right), back the other way. */
+  .hiw-packet.is-out {
+    left: calc(50% + 0.5rem);
+    top: 100%;
+    translate: 0 -100%;
+  }
+
+  .hiw-packet.is-back {
+    right: calc(50% + 0.5rem);
+    top: 0;
+  }
+
+  .is-active .hiw-packet.is-out {
+    animation: hiw-down 1.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  .is-active .hiw-packet.is-back {
+    animation: hiw-up 1.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  /* The answer follows the request. */
+  .is-active .hiw-packet + .hiw-packet,
+  .is-active .hiw-packet.is-later {
+    animation-delay: 1.3s;
+  }
+
+  @media (min-width: 40rem) {
+    .hiw-packet.is-out {
+      top: 0.15rem;
+      left: 100%;
+      translate: -100% 0;
+    }
+
+    .hiw-packet.is-back {
+      top: auto;
+      right: auto;
+      bottom: 0.15rem;
+      left: 0;
+    }
+
+    .is-active .hiw-packet.is-out {
+      animation-name: hiw-right;
+    }
+
+    .is-active .hiw-packet.is-back {
+      animation-name: hiw-left;
+    }
+  }
+
+  /* Step 4: link and password go from you to the recipient, past us. */
+  .hiw-bypass {
+    @apply relative mt-3 h-16 w-full border-t border-dashed border-white/15 sm:col-span-5;
+  }
+
+  .hiw-bypass .hiw-packet.is-out {
+    top: 0.6rem;
+    left: 100%;
+    translate: -100% 0;
+  }
+
+  .hiw-bypass .hiw-packet.is-later {
+    top: auto;
+    bottom: 0;
+  }
+
+  .is-active .hiw-bypass .hiw-packet.is-out {
+    animation-name: hiw-right;
+  }
+
+  .hiw-local {
+    @apply absolute top-1/2 left-1/2 -translate-1/2 rounded-md bg-hive-850 px-2 py-0.5 text-[0.68rem] whitespace-nowrap text-slate-500;
+  }
+
+  .hiw-step-title {
+    @apply flex items-center gap-3 text-lg font-semibold text-white;
+  }
+
+  .hiw-step-num {
+    @apply grid h-8 w-8 shrink-0 place-items-center rounded-full bg-linear-to-br from-honey-300 to-honey-600 text-sm font-bold text-hive-950;
+  }
+
+  .hiw-facts {
+    @apply mt-4 grid gap-x-6 gap-y-1 text-sm leading-relaxed sm:grid-cols-[10rem_1fr] sm:gap-y-3;
+  }
+
+  .hiw-facts dt {
+    @apply pt-2 text-xs font-semibold tracking-[0.12em] text-slate-500 uppercase sm:pt-0.5;
+  }
+
+  .hiw-facts dd {
+    @apply text-slate-300;
+  }
+
+  .hiw-table {
+    @apply w-full min-w-[32rem] border-collapse text-left text-sm;
+  }
+
+  .hiw-table th,
+  .hiw-table td {
+    @apply border-b border-white/[0.06] px-3 py-3 align-top;
+  }
+
+  .hiw-table thead th {
+    @apply text-xs font-semibold tracking-[0.12em] text-slate-500 uppercase;
+  }
+
+  .hiw-table tbody th {
+    @apply font-semibold text-white;
+  }
+
+  .hiw-table td {
+    @apply text-slate-300;
+  }
+
+  .hiw-list {
+    @apply space-y-3 text-sm leading-relaxed text-slate-300;
+  }
+
+  .hiw-list li {
+    @apply rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 shadow-hairline;
+  }
+
+  .hiw-list strong {
+    @apply text-white;
+  }
+
+  :is(.hiw-facts, .hiw-table, .hiw-list, .hiw-art) code {
+    @apply rounded bg-white/[0.06] px-1 font-mono text-[0.85em] text-honey-200;
+  }
+
 }
 
 @layer utilities {
@@ -863,6 +1086,13 @@
   .btn-primary:hover,
   .feature-card:hover {
     transform: none;
+  }
+
+  /* The how-it-works diagrams show each step's finished state. */
+  .hiw-step,
+  .hiw-art *,
+  .hiw-art *::before {
+    animation: none !important;
   }
 
   /* The hero walkthrough does not auto-advance here, so every stage is laid
@@ -927,6 +1157,35 @@
 
 /* Settles upward into place once; its end state matches the resting
    transform, so dropping .is-active causes no jump back. */
+@keyframes hiw-down {
+  from { top: 0; translate: 0 0; opacity: 0; }
+  20% { opacity: 1; }
+  to { top: 100%; translate: 0 -100%; opacity: 1; }
+}
+
+@keyframes hiw-up {
+  from { top: 100%; translate: 0 -100%; opacity: 0; }
+  20% { opacity: 1; }
+  to { top: 0; translate: 0 0; opacity: 1; }
+}
+
+@keyframes hiw-right {
+  from { left: 0; translate: 0 0; opacity: 0; }
+  20% { opacity: 1; }
+  to { left: 100%; translate: -100% 0; opacity: 1; }
+}
+
+@keyframes hiw-left {
+  from { left: 100%; translate: -100% 0; opacity: 0; }
+  20% { opacity: 1; }
+  to { left: 0; translate: 0 0; opacity: 1; }
+}
+
+@keyframes hiw-burn {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 113, 133, 0); }
+  50% { box-shadow: 0 0 24px 4px rgba(251, 113, 133, 0.35); }
+}
+
 @keyframes flow-rise {
   from { transform: translateY(8px); }
   to { transform: translateY(0); }

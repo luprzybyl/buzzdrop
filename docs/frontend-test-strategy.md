@@ -35,7 +35,7 @@ From [Choose the runner and DOM environment for DOM + JS-integration tests](http
 
 From [What shape should the testability refactor of page scripts take?](https://github.com/luprzybyl/buzzdrop/issues/158). Production JS may be refactored to make it testable, as long as behaviour doesn't change.
 
-- **Split:** each page gets a side-effect-free module (`pages/<page>/<page>-page.js` for `index`, `view`, `success`, `confirm-download`, `hero-flow` and `users`) exporting `init<Page>(root, deps)` and `browserDeps()`. Each page's `pages/<page>/entry.js` is only `init<Page>(document, browserDeps())`. Template `<script>` tags, SRI attributes and JSON config blocks stay as they are. **Tests import the page module, never the entry.**
+- **Split:** each page gets a side-effect-free module (`pages/<page>/<page>-page.js` for `index`, `view`, `success`, `confirm-download`, `hero-flow`, `users` and `how-it-works`) exporting `init<Page>(root, deps)` and `browserDeps()`. Each page's `pages/<page>/entry.js` is only `init<Page>(document, browserDeps())`. Template `<script>` tags, SRI attributes and JSON config blocks stay as they are. **Tests import the page module, never the entry.**
 - **State lives in the `init` closure** (e.g. `uploadInProgress`, `activeShareMode`, parsed config, CSRF token). Every `init()` is a fresh page, and no `vi.resetModules()` is needed.
 - **Dependencies (`deps`):**
 
@@ -78,6 +78,7 @@ From [How are DOM fixtures rendered from the real Jinja templates?](https://gith
   - `confirm_download`: file, text
   - `success`: file, text
   - `users`: admin, with one existing token (`admin`)
+  - `how_it_works`: anonymous, the default view (`default`); other views are opened by address, which the page script reads
 
   `login.html` is excluded (it has no JS). Flash-message variants are added only when a DOM test needs one.
 
@@ -170,6 +171,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 - **Success page (`pages/success/`):** copy link, password and one-click link (with "Failed" when the clipboard is blocked or missing, while Copy link, which copies by selection, still works without a Clipboard API), password visibility toggle, the fields filled from a well-formed fragment and the one-click link shown with its fragment masked.
 - **Confirm page (`pages/confirm-download/`):** the fragment password carried across the confirm POST (one well-formed case).
 - **Hero flow (`pages/hero-flow/`):** reduced motion means no autoplay; the toggle pauses it. The stage on screen is the list item with `aria-current="step"`.
+- **How it works (`pages/how-it-works/`, #245):** Next/Previous and the step list move the step on screen (the one visible `article`, its list button `aria-current="step"`), Previous and Next disabled at the ends; a `#step-…` address, on load or followed later, opens that step; Play advances on a timer, also under reduced motion (which only drops the animation), stops at the last step and starts over from it, and stepping by hand stops it; nothing moves until Play. Each switch changes the step on screen in place (actor, auth, upload field, end of decryption, the filename caveat) and writes `?sender=…&content=…` to the address, keeping its fragment; CLI disables Text with its reason as the radio's description and moves Text to File, also when the address asks for CLI + text; the choice is announced in a status line.
 - **Users page (`pages/users/`, admin):** Generate shows the token and its expiry and re-enables the button; a server error shows its message; the request carries the CSRF header; Copy shows "Copied!".
 
 ### JS integration (page modules + real `lib/crypto.js` + protocol fake)
@@ -237,6 +239,7 @@ From [Frontend tests: drive pages through user-behaviour helpers instead of setu
   | `confirm.js` | `openConfirmPage(options)` | `proceedToView` |
   | `view.js` | `openShare(options)` | `decryptWithPassword`, `decryptWithEnter`, `copyMessage`, `finishDownload` |
   | `users.js` | `openUsersPage(options)` | `generateToken`, `startGeneratingToken`, `finishTokenRequest`, `copyToken` |
+  | `how-it-works.js` | `openHowItWorks(options)` | `nextStep`, `previousStep`, `goToStep`, `followLinkTo`, `play`, `pause`, `sendFrom`, `send` |
 
 - **Naming rule:** verbs are what a user does, in the app's own words ("share", "decrypt", "proceed", "Copy one-click link"), not what the code does. Options describe the user's situation in app terms, and the driver turns them into fixtures, fixture edits, protocol-fake state and crypto stubs: `openShare({ type: 'message', link: 'one-click', maxAttempts: 3, server: 'claimed', download: 'in-progress', share: 'unsupported-format' })`, `openUploadPage({ account: 'with-email', sharesPerPage: 2, clipboard: 'blocked' })`, `enterPassword({ strength: 'weak' })`, `share({ server: 'too-large' })`. No test spells out an HTTP status or body.
 - **Server situations come from the protocol fake** (§5–§6). The view and upload drivers put the page in front of a fake in both layers; a situation is produced by the fake's own state where it can be (a wrong password, a share someone already claimed or burned, a lockout) and by `failNext` otherwise (500, network, 413, rate limits). Drivers add no hand-written responses for the five protocol routes. Routes outside the fake (the shared-files status poll, `/api/token`) are answered by their driver.

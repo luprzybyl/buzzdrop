@@ -668,6 +668,29 @@ def index():
         max_content_length=current_app.config.get('MAX_CONTENT_LENGTH'),
     )
 
+@app.route('/how-it-works')
+def how_it_works():
+    """
+    The public explainer of the share flow (docs/how-it-works.md is its
+    source of truth). ?sender=web|cli&content=file|text picks the view, so
+    a link opens on it even before the page script runs; the CLI sends
+    files only (#247), so CLI + text falls back to a file.
+    """
+    sender = request.args.get('sender')
+    if sender not in ('web', 'cli'):
+        sender = 'web'
+    content = request.args.get('content')
+    if content not in ('file', 'text') or sender == 'cli':
+        content = 'file'
+    return render_template(
+        'how_it_works.html',
+        sender=sender,
+        content=content,
+        max_attempts=current_app.config['KEY_RELEASE_MAX_ATTEMPTS'],
+        burn_on_lockout=current_app.config['KEY_RELEASE_BURN_ON_LOCKOUT'],
+    )
+
+
 @app.route('/api/user/files/status', methods=['GET'])
 @login_required
 def user_file_statuses():

@@ -139,6 +139,8 @@ def render_all():
     _reset(LISTED_FILES)
     fixtures.append(_render('index--files', _client('testuser'), 'GET', '/'))
 
+    fixtures.append(_render('how_it_works--default', _client(), 'GET', '/how-it-works'))
+
     _reset([], API_TOKENS)
     fixtures.append(_render('users--admin', _client('adminuser'), 'GET', '/users'))
 
