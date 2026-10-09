@@ -1,5 +1,5 @@
 import { within } from '@testing-library/dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { openHowItWorks, screen } from '../support/pages/how-it-works.js';
 
 // Longer than any step's hold time, so a playing flow must have advanced.
@@ -15,6 +15,10 @@ const inStep = (/** @type {RegExp} */ text) =>
     within(currentStep()).getByText(text, { ignore: '[aria-hidden="true"] *' });
 
 describe('how it works: stepping through', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
     it('starts on the first step, with nowhere to go back to', () => {
         openHowItWorks();
 
@@ -53,17 +57,16 @@ describe('how it works: stepping through', () => {
         expect(currentStep()).toHaveAccessibleName(/The recipient proves the password/);
     });
 
-    it('follows a link to a step on the page', async () => {
+    it('opens the step a changed address names', async () => {
         const page = openHowItWorks();
 
-        await page.followLinkTo('#step-download');
+        await page.changeAddressTo('#step-download');
 
         expect(currentStep()).toHaveAccessibleName(/Download once/);
     });
 
     it('Play walks through the steps until Pause', async () => {
         const page = openHowItWorks();
-        vi.useFakeTimers();
 
         await page.play();
         vi.advanceTimersByTime(LONGEST_HOLD_MS);
@@ -76,7 +79,6 @@ describe('how it works: stepping through', () => {
 
     it('does not move on its own until asked to', () => {
         openHowItWorks();
-        vi.useFakeTimers();
 
         vi.advanceTimersByTime(LONGEST_HOLD_MS * 3);
 
@@ -85,7 +87,6 @@ describe('how it works: stepping through', () => {
 
     it('playing stops at the last step, and plays again from the first', async () => {
         const page = openHowItWorks();
-        vi.useFakeTimers();
 
         await page.play();
         vi.advanceTimersByTime(LONGEST_HOLD_MS * (STEPS + 2));
@@ -100,7 +101,6 @@ describe('how it works: stepping through', () => {
     // when asked, and every step reads the same.
     it('still plays when reduced motion is preferred', async () => {
         const page = openHowItWorks({ reducedMotion: true });
-        vi.useFakeTimers();
 
         await page.play();
         vi.advanceTimersByTime(LONGEST_HOLD_MS);
@@ -110,7 +110,6 @@ describe('how it works: stepping through', () => {
 
     it('stepping by hand stops playing', async () => {
         const page = openHowItWorks();
-        vi.useFakeTimers();
 
         await page.play();
         await page.nextStep();
@@ -134,7 +133,7 @@ describe('how it works: the switches', () => {
         const page = openHowItWorks();
         await page.goToStep(/Upload, phase 2/);
 
-        await page.sendFrom('buzz CLI');
+        await page.chooseSender('buzz CLI');
 
         expect(currentStep()).toHaveAccessibleName(/Upload, phase 2/);
         expect(inStep(/Your terminal/)).toBeVisible();
@@ -148,7 +147,7 @@ describe('how it works: the switches', () => {
         const page = openHowItWorks();
         await page.goToStep(/Upload, phase 2/);
 
-        await page.send('Text');
+        await page.chooseContent('Text');
 
         expect(inStep(/base64-encoded/)).toHaveTextContent('base64-encoded, in a note_text field');
         expect(inStep(/as a multipart/)).not.toBeVisible();
@@ -166,15 +165,19 @@ describe('how it works: the switches', () => {
 
         expect(inStep(/original filename, in plain text/)).toBeVisible();
 
-        await page.send('Text');
+        await page.chooseContent('Text');
         expect(inStep(/original filename, in plain text/)).not.toBeVisible();
+        // The summary table below the flow follows the switch as well.
+        const nameRow = screen.getByRole('row', { name: /^Name/ });
+        expect(within(nameRow).getByText(/Secret Note/)).toBeVisible();
+        expect(within(nameRow).getByText(/original filename/)).not.toBeVisible();
     });
 
     it('the CLI sends files only: Text is disabled, and says why', async () => {
         const page = openHowItWorks();
-        await page.send('Text');
+        await page.chooseContent('Text');
 
-        await page.sendFrom('buzz CLI');
+        await page.chooseSender('buzz CLI');
 
         const text = screen.getByRole('radio', { name: 'Text' });
         expect(text).toBeDisabled();
@@ -182,7 +185,7 @@ describe('how it works: the switches', () => {
         expect(screen.getByRole('radio', { name: 'File' })).toBeChecked();
         expect(page.url()).toBe('http://localhost/how-it-works?sender=cli&content=file');
 
-        await page.sendFrom('Web app');
+        await page.chooseSender('Web app');
         expect(text).toBeEnabled();
         expect(text).not.toHaveAccessibleDescription(/the CLI sends files only/);
     });
@@ -205,7 +208,7 @@ describe('how it works: the switches', () => {
     it('announces the view it switched to', async () => {
         const page = openHowItWorks();
 
-        await page.sendFrom('buzz CLI');
+        await page.chooseSender('buzz CLI');
 
         expect(screen.getByRole('status')).toHaveTextContent('Showing the buzz CLI sending a file.');
     });
@@ -213,7 +216,7 @@ describe('how it works: the switches', () => {
     it('keeps the step in the address when switching', async () => {
         const page = openHowItWorks({ path: '/how-it-works#step-share' });
 
-        await page.sendFrom('buzz CLI');
+        await page.chooseSender('buzz CLI');
 
         expect(page.url()).toBe('http://localhost/how-it-works?sender=cli&content=file#step-share');
     });

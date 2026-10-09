@@ -37,18 +37,28 @@ const CONTENT_NAMES = { file: 'a file', text: 'a text note' };
  */
 
 /**
- * The view an address asks for, as the server reads it: unknown values fall
- * back to the web app sending a file, and the CLI sends files only (#247).
+ * A view that exists, by the same rules as app.py's how_it_works() (change
+ * them together): unknown values fall back to the web app sending a file,
+ * and the CLI sends files only (#247).
+ * @param {string | null | undefined} sender
+ * @param {string | null | undefined} content
+ * @returns {Choice}
+ */
+function normalizeChoice(sender, content) {
+    const validSender = /** @type {Choice['sender']} */ (SENDERS.includes(sender ?? '') ? sender : 'web');
+    const validContent = /** @type {Choice['content']} */ (
+        validSender !== 'cli' && CONTENTS.includes(content ?? '') ? content : 'file');
+    return { sender: validSender, content: validContent };
+}
+
+/**
+ * The view an address asks for.
  * @param {string} search - location.search
  * @returns {Choice}
  */
 function choiceFrom(search) {
     const params = new URLSearchParams(search);
-    const sender = /** @type {Choice['sender']} */ (
-        SENDERS.includes(params.get('sender') ?? '') ? params.get('sender') : 'web');
-    const content = /** @type {Choice['content']} */ (
-        sender !== 'cli' && CONTENTS.includes(params.get('content') ?? '') ? params.get('content') : 'file');
-    return { sender, content };
+    return normalizeChoice(params.get('sender'), params.get('content'));
 }
 
 /**
@@ -150,7 +160,7 @@ export function initHowItWorks(root, deps) {
     const onSwitch = () => {
         const sender = senderRadios.find((radio) => radio.checked)?.value;
         const content = contentRadios.find((radio) => radio.checked)?.value;
-        choice = choiceFrom(`?sender=${sender}&content=${content}`);
+        choice = normalizeChoice(sender, content);
         applyChoice();
         replay();
         status.textContent = `Showing ${SENDER_NAMES[choice.sender]} sending ${CONTENT_NAMES[choice.content]}.`;

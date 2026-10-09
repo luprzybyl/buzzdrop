@@ -39,16 +39,17 @@ export function openHowItWorks({ path = '/how-it-works', reducedMotion = false }
         goToStep: (title) => user.click(
             within(screen.getByRole('navigation', { name: 'Steps' })).getByRole('button', { name: title })),
         /**
-         * Follow an in-page link, e.g. '#step-release'.
+         * Change the address's fragment while on the page, as a link to a
+         * step from elsewhere does, e.g. '#step-release'.
          * @param {string} hash
          */
-        followLinkTo: async (hash) => {
+        changeAddressTo: async (hash) => {
             page.window.location.hash = hash;
             await new Promise((resolve) => page.window.setTimeout(resolve, 0));
         },
         /** @param {Sender} sender */
-        sendFrom: (sender) => user.click(screen.getByRole('radio', { name: sender })),
+        chooseSender: (sender) => user.click(screen.getByRole('radio', { name: sender })),
         /** @param {Content} content */
-        send: (content) => user.click(screen.getByRole('radio', { name: content })),
+        chooseContent: (content) => user.click(screen.getByRole('radio', { name: content })),
     };
 }

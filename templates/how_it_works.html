@@ -113,7 +113,7 @@ data-show="{{ switch }}:{{ value }}"{% if (sender if switch == 'sender' else con
                     <dt>What the server sees</dt>
                     <dd>That your account is starting an upload. Nothing about the file or note yet.</dd>
                     <dt>Why</dt>
-                    <dd>The file key needs <code>H</code>, so <code>H</code> has to exist before anything is encrypted. The server keeps it: this is the half of the key it will hand out exactly once. An upload begun and never finished is swept after an hour.</dd>
+                    <dd>The file key needs <code>H</code>, so <code>H</code> has to exist before anything is encrypted. The server keeps it: this is the half of the key it will hand out exactly once. An upload begun and never finished is swept once it is over an hour old, at the next upload or restart.</dd>
                 </dl>
             </article>
 
@@ -287,9 +287,9 @@ data-show="{{ switch }}:{{ value }}"{% if (sender if switch == 'sender' else con
                     <dt>Who acts</dt>
                     <dd>The server, or you.</dd>
                     <dt>What happens</dt>
-                    <dd>When a drop&rsquo;s expiry passes, or you delete it from your list, the ciphertext and <code>H</code> are destroyed together. Expiry is checked whenever the link is opened and on a timer (every five minutes by default). The database overwrites what it deletes, which reduces, but doesn&rsquo;t rule out, traces of <code>H</code> left in its file.</dd>
+                    <dd>When a drop&rsquo;s expiry passes, or you delete it from your list, <code>H</code> is destroyed and the ciphertext is deleted from storage. Expiry is checked whenever the link is opened and on a timer (every five minutes by default). The database overwrites what it deletes, which reduces, but doesn&rsquo;t rule out, traces of <code>H</code> left in its file.</dd>
                     <dt>Why</dt>
-                    <dd><code>H</code> never outlives the ciphertext, and neither outlives the drop.</dd>
+                    <dd><code>H</code> never outlives the drop. Even if deleting the ciphertext from storage failed, without <code>H</code> it can&rsquo;t be decrypted.</dd>
                 </dl>
             </article>
         </div>

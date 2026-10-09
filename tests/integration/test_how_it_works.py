@@ -25,6 +25,22 @@ def _radio(html, value):
     return match.group(0)
 
 
+def _variants(html, switch, value):
+    """The opening tags of every part shown only for this switch value."""
+    tags = re.findall(rf'<[a-z]+\b[^>]*data-show="{switch}:{value}"[^>]*>', html)
+    assert tags, f'no part for {switch}:{value}'
+    return tags
+
+
+def _shown(html, switch, value):
+    """Every part for this value is shown (the template renders them all)."""
+    return all(' hidden' not in tag for tag in _variants(html, switch, value))
+
+
+def _hidden(html, switch, value):
+    return all(' hidden' in tag for tag in _variants(html, switch, value))
+
+
 def test_renders_without_a_login(client):
     html = _page(client)
 
@@ -72,6 +88,8 @@ def test_defaults_to_the_web_app_sending_a_file(client):
 
     assert 'checked' in _radio(html, 'web')
     assert 'checked' in _radio(html, 'file')
+    assert _shown(html, 'sender', 'web') and _hidden(html, 'sender', 'cli')
+    assert _shown(html, 'content', 'file') and _hidden(html, 'content', 'text')
 
 
 def test_renders_the_view_its_address_names(client):
@@ -79,7 +97,8 @@ def test_renders_the_view_its_address_names(client):
 
     assert 'checked' in _radio(html, 'cli')
     assert 'checked' not in _radio(html, 'web')
-    assert 'Authorization: Bearer' in html
+    assert _shown(html, 'sender', 'cli')
+    assert _hidden(html, 'sender', 'web')
 
 
 def test_text_is_disabled_when_the_cli_sends(client):
@@ -110,7 +129,10 @@ def test_says_plainly_that_the_filename_is_visible(client):
     # server knows nothing.
     html = _page(client)
 
-    assert 'original filename' in html
+    # Each part that names the filename, and whether the server hid it.
+    caveats = re.findall(r'<span data-show="content:file"( hidden)?>(?:(?!</span>).)*?original filename',
+                         html, re.S)
+    assert caveats and not any(caveats)
     assert 'knows nothing' not in html
 
 

@@ -674,7 +674,8 @@ def how_it_works():
     The public explainer of the share flow (docs/how-it-works.md is its
     source of truth). ?sender=web|cli&content=file|text picks the view, so
     a link opens on it even before the page script runs; the CLI sends
-    files only (#247), so CLI + text falls back to a file.
+    files only (#247), so CLI + text falls back to a file. The page script
+    applies the same rules (normalizeChoice in pages/how-it-works/).
     """
     sender = request.args.get('sender')
     if sender not in ('web', 'cli'):

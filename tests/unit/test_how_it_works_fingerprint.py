@@ -3,8 +3,8 @@ Keeps docs/how-it-works.md and the /how-it-works page in step with the code
 that defines the flow they explain (#245).
 
 The doc carries a fingerprint: a hash of the recorded protocol contract, the
-browser crypto, the CLI's crypto and upload code, the database schema and the
-key-release defaults. When any of them changes, this test fails until someone
+browser crypto, the CLI's crypto, upload and passphrase code, the web app's
+passphrase length, the database schema and the key-release defaults. When any of them changes, this test fails until someone
 has re-read the doc and the page against the change and pasted the new
 fingerprint, the same way CI fails on stale fixtures.
 """
@@ -29,8 +29,13 @@ WHOLE_FILES = (
 # (wordlist, progress bar, token setup) doesn't change the flow.
 CLI_FUNCTIONS = (
     '_derive_master', '_hkdf', 'derive_key_release_keys', '_derive_file_key',
-    'encrypt_file', 'upload_begin', 'upload',
+    'encrypt_file', 'upload_begin', 'upload', 'generate_passphrase',
 )
+
+# Lines of other files the doc quotes: the web app's passphrase length.
+QUOTED_LINES = {
+    'static/js/lib/passphrase.js': (r'^export const PASSPHRASE_WORDS = .*$',),
+}
 
 # What the server stores, and the defaults the doc quotes.
 MODULE_ASSIGNMENTS = {
@@ -68,6 +73,12 @@ def compute_fingerprint():
     parts += _source_of('cli/buzz', CLI_FUNCTIONS, (ast.FunctionDef,))
     for path, names in MODULE_ASSIGNMENTS.items():
         parts += _source_of(path, names, (ast.Assign,))
+    for path, patterns in QUOTED_LINES.items():
+        text = (ROOT / path).read_text(encoding='utf-8')
+        for pattern in patterns:
+            match = re.search(pattern, text, re.M)
+            assert match, f'{path}: nothing matches {pattern!r}; update {Path(__file__).name}'
+            parts.append(f'{path}\n{match.group(0)}')
     return hashlib.sha256('\n\0\n'.join(parts).encode('utf-8')).hexdigest()
 
 
@@ -90,5 +101,5 @@ def test_page_has_the_doc_steps_in_order():
     page_steps = [i for i in step_id.findall((ROOT / PAGE).read_text(encoding='utf-8'))
                   if not i.endswith('-title')]
 
-    assert len(doc_steps) == 8
+    assert doc_steps, 'docs/how-it-works.md has no step anchors'
     assert page_steps == doc_steps

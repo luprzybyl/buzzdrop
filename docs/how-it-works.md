@@ -4,9 +4,9 @@ The user-facing account of what happens when you share a file or a note with Buz
 
 The design behind it, and the reasoning for each choice, is in [`true-one-time.md`](true-one-time.md) (§3 for what no design can fix, §6.3–6.7 for the key-release protocol). This doc doesn't argue the design; it describes it.
 
-<!-- how-it-works-fingerprint: sha256:0414b5ed1077b4c5b6eb7443d6bcaf61d8848e09d37f3c7eba6112ca84d12aa6 -->
+<!-- how-it-works-fingerprint: sha256:e4964f75668faaca79d52c59368c4d570ef51cd21afe2804a833917e45d47c12 -->
 
-> **Keeping this true.** The fingerprint above is a hash of the code that defines the flow: the recorded protocol contract, the browser crypto, the `buzz` CLI's crypto and upload code, the database schema and the key-release defaults. `tests/unit/test_how_it_works_fingerprint.py` recomputes it and fails when that code changes. When it fails, re-read this doc and the page against the change, fix whichever is now wrong, and only then paste the new fingerprint from the test's message. The `CLAUDE.md` note "Explainer page — keep in step" says the same for reviewers.
+> **Keeping this true.** The fingerprint above is a hash of the code that defines the flow: the recorded protocol contract, the browser crypto, the `buzz` CLI's crypto, upload and passphrase code, the web app's passphrase length, the database schema and the key-release defaults. `tests/unit/test_how_it_works_fingerprint.py` recomputes it and fails when that code changes. When it fails, re-read this doc and the page against the change, fix whichever is now wrong, and only then paste the new fingerprint from the test's message. The `CLAUDE.md` note "Explainer page — keep in step" says the same for reviewers.
 
 ## The three things to take away
 
@@ -47,7 +47,7 @@ The recipient's side (steps 5–7) always runs in a browser, whichever sender wa
 - **Who acts:** the sender's browser (web app) or terminal (CLI), then the server.
 - **What crosses the wire:** a request to `POST /upload/begin`, authenticated by the login session and its CSRF token (web app) or by the API token in `Authorization: Bearer` (CLI). The server answers with a fresh `file_id` and a random 32-byte key share `H`.
 - **What the server sees:** that this account is starting an upload. Nothing about the file or note yet.
-- **Why:** the file key needs `H`, so `H` has to exist before anything is encrypted. The server keeps `H`; this is the half of the key it will later hand out exactly once. A share begun and never finished is swept after an hour (`KEY_SHARE_PENDING_TTL_SECONDS`).
+- **Why:** the file key needs `H`, so `H` has to exist before anything is encrypted. The server keeps `H`; this is the half of the key it will later hand out exactly once. A share begun and never finished is swept once it is over an hour old (`KEY_SHARE_PENDING_TTL_SECONDS`), at the next `/upload/begin` or restart.
 
 <a id="step-encrypt"></a>
 
@@ -113,8 +113,8 @@ The recipient's side (steps 5–7) always runs in a browser, whichever sender wa
 ### 8. Expiry and manual delete
 
 - **Who acts:** the server, or the sender.
-- **What happens:** when a drop's expiry passes (checked when it is opened, at startup and every five minutes by default), or the sender deletes it from their list, the ciphertext and `H` are destroyed together. SQLite overwrites deleted pages, which reduces (but doesn't rule out) traces of `H` left in the database file.
-- **Why:** `H` never outlives the ciphertext, and neither outlives the drop.
+- **What happens:** when a drop's expiry passes (checked when it is opened, at startup and every five minutes by default), or the sender deletes it from their list, `H` is destroyed and the ciphertext is deleted from storage. SQLite overwrites deleted pages, which reduces (but doesn't rule out) traces of `H` left in the database file.
+- **Why:** `H` never outlives the drop. Deleting the ciphertext from storage is best effort (a failed delete is not retried), but without `H` a leftover ciphertext can't be decrypted.
 
 <a id="server-sees"></a>
 
