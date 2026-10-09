@@ -243,14 +243,21 @@ class FileRepository:
 
     def claim_download_with_ticket(self, file_id: str,
                                    ticket_hex: Optional[str],
-                                   ip_address: str) -> dict:
+                                   ip_address: str,
+                                   download_ttl_seconds: Optional[int] = None
+                                   ) -> dict:
         """
         Verify the release-minted download ticket and claim the blob —
         one atomic step. See FileStore.claim_download_with_ticket for the
         status vocabulary.
         """
         return self.store.claim_download_with_ticket(
-            file_id, ticket_hex, ip_address)
+            file_id, ticket_hex, ip_address, download_ttl_seconds)
+
+    def expire_unclaimed_releases(self, older_than_seconds: int) -> list:
+        """Expire released-but-never-downloaded drops past the TTL;
+        returns ``[{'id', 'path'}]`` for the caller to delete the blobs."""
+        return self.store.expire_unclaimed_releases(older_than_seconds)
 
     def purge_stale_key_shares(self, older_than_seconds: int) -> int:
         """Delete pending shares older than the TTL; returns the count."""

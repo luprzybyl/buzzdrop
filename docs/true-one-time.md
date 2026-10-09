@@ -290,6 +290,15 @@ gone" page as a never-existing share, and `/download` without the
 ticket reports "claimed" — the release already happened, and only the
 winner's ticket unlocks the blob until it's served.
 
+That window is bounded: the ticket is honoured for
+`KEY_RELEASE_DOWNLOAD_TTL_SECONDS` (default 600) after `released_at`.
+Past it the drop expires — inside the `/download` claim transaction for
+a late ticket, and in the expiry sweep (startup + periodic) for one
+nobody comes back for: the files row is marked expired, the share row
+(with the ticket digest) deleted and the blob removed from storage. An
+unbounded window would leave a released H usable as a download
+credential forever, and the blob on disk with it.
+
 Once H is released the recipient holds complete key material and can
 save `ciphertext + Kp + H` and decrypt offline as many times as they
 like. That cannot and need not be blocked — since they can save the
@@ -490,6 +499,11 @@ runtime toggle.
   startup and on each `/upload/begin` after
   `KEY_SHARE_PENDING_TTL_SECONDS` (default 3600); shares with malformed
   `created_at` are purged too (fail closed).
+- Unclaimed-release hygiene: a share released but not downloaded within
+  `KEY_RELEASE_DOWNLOAD_TTL_SECONDS` (default 600) expires — blob,
+  share row and ticket digest destroyed by the expiry sweep, and a late
+  ticket refused by `/download`; malformed `released_at` counts as
+  stale (fail closed).
 - No-store: `/upload/begin` and `/release` responses carry
   `Cache-Control: no-store` — H must not land in shared caches.
 - CLI parity: `cli/buzz` performs the same handshake, embeds the same

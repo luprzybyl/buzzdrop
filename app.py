@@ -447,7 +447,8 @@ def sweep_expired_files() -> int:
     Expire every active drop whose expiry_at has passed: delete the
     stored blob (local or S3 — check_and_handle_expiry goes through the
     storage abstraction), burn the key share, and mark the record
-    expired.
+    expired. Drops released but not downloaded within
+    KEY_RELEASE_DOWNLOAD_TTL_SECONDS of the release go the same way.
 
     Expiry must not depend on someone touching the link — this runs
     once at startup and, when EXPIRY_SWEEP_INTERVAL_SECONDS > 0, again
@@ -465,6 +466,17 @@ def sweep_expired_files() -> int:
             # One bad row must not stop the sweep — keep going.
             app.logger.exception(
                 'Expiry sweep failed for file %s', file_info.get('id'))
+    # Released but never downloaded within the window: the ticket is no
+    # longer honoured and H is gone, so the blob serves no one.
+    for stale in file_repo.expire_unclaimed_releases(
+            app.config['KEY_RELEASE_DOWNLOAD_TTL_SECONDS']):
+        try:
+            storage.delete(stale['path'])
+        except Exception:
+            app.logger.exception(
+                'Expiry sweep could not delete the blob of unclaimed '
+                'release %s', stale['id'])
+        expired_count += 1
     return expired_count
 
 
@@ -1193,7 +1205,8 @@ def download_file(file_id):
     # one concurrent requester wins, and the ticket is consumed with the
     # claim.
     result = file_repo.claim_download_with_ticket(
-        file_id, ticket, get_client_ip())
+        file_id, ticket, get_client_ip(),
+        current_app.config['KEY_RELEASE_DOWNLOAD_TTL_SECONDS'])
     status = result['status']
 
     if status == 'not_released':

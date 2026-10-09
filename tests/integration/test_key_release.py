@@ -481,6 +481,35 @@ def test_release_then_ticketed_download(client, files_store, app):
     assert again.status_code == 410
 
 
+def test_ticket_refused_after_download_window(client, files_store,
+                                              key_release_settings):
+    """Past KEY_RELEASE_DOWNLOAD_TTL_SECONDS the winner's own ticket no
+    longer opens the blob: the drop expires and the blob is deleted."""
+    login_user(client)
+    file_id, _h, _rcpt, finish = _key_release_upload(client)
+    assert finish.status_code == 200
+    path = files_store.get_by_id(file_id)['path']
+    assert os.path.exists(path)
+
+    release = client.post(
+        url_for('release_key', file_id=file_id), json={'v': 'cc' * 32})
+    assert release.status_code == 200
+
+    # A zero window: the release is stale the moment it lands.
+    key_release_settings['KEY_RELEASE_DOWNLOAD_TTL_SECONDS'] = 0
+    from conftest import download_ticket
+    download = client.get(
+        url_for('download_file', file_id=file_id),
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                 'X-Download-Ticket': download_ticket(release.get_json()['h'])})
+    assert download.status_code == 410
+    assert download.get_json() == {'error': 'File has expired'}
+    assert files_store.get_by_id(file_id)['status'] == 'expired'
+    assert files_store.get_by_id(file_id)['downloaded_at'] is None
+    assert files_store.get_key_share(file_id) is None
+    assert not os.path.exists(path)
+
+
 def test_delete_file_drops_key_share(client, files_store, csrf_form_data):
     login_user(client)
     file_id, _h, _rcpt, finish = _key_release_upload(client)

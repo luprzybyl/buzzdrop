@@ -144,6 +144,7 @@ describe('protocol fake replays the recorded contract', () => {
             const fake = makeProtocolFake({
                 maxAttempts: scenario.config.KEY_RELEASE_MAX_ATTEMPTS,
                 burnOnLockout: scenario.config.KEY_RELEASE_BURN_ON_LOCKOUT,
+                downloadTtlSeconds: scenario.config.KEY_RELEASE_DOWNLOAD_TTL_SECONDS,
                 owner: contract.defaultUser,
                 csrfToken: contract.csrfToken,
                 notificationsConfigured: scenario.config.NOTIFICATIONS_CONFIGURED,

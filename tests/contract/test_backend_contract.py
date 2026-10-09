@@ -321,6 +321,51 @@ def test_claim_download_with_ticket_concurrent_single_winner(backend):
     assert results.count('already_downloaded') == workers - 1
 
 
+def test_claim_download_with_ticket_honours_the_download_window(backend):
+    """Inside the window the ticket claims; once it has closed the drop
+    expires in the claim's transaction, share row and all."""
+    _bound_share(backend, 'fresh')
+    backend.files.attempt_key_release('fresh', _V, 3, False)
+    assert backend.files.claim_download_with_ticket(
+        'fresh', _download_ticket(_H), '1.2.3.4', 3600)['status'] == 'ok'
+
+    _bound_share(backend, 'stale')
+    backend.files.attempt_key_release('stale', _V, 3, False)
+    result = backend.files.claim_download_with_ticket(
+        'stale', _download_ticket(_H), '1.2.3.4', 0)
+    assert result == {'status': 'expired', 'path': 'uploads/stale'}
+    stored = backend.files.get_by_id('stale')
+    assert stored['status'] == 'expired'
+    assert stored['downloaded_at'] is None
+    assert backend.files.get_key_share('stale') is None
+
+
+def test_expire_unclaimed_releases(backend):
+    """Only released, never-downloaded drops past the window expire."""
+    _bound_share(backend, 'unclaimed')
+    backend.files.attempt_key_release('unclaimed', _V, 3, False)
+    _bound_share(backend, 'downloaded')
+    backend.files.attempt_key_release('downloaded', _V, 3, False)
+    backend.files.claim_download_with_ticket(
+        'downloaded', _download_ticket(_H), '1.2.3.4')
+    _bound_share(backend, 'unreleased')
+
+    # Inside the window nothing is touched.
+    assert backend.files.expire_unclaimed_releases(3600) == []
+    assert backend.files.get_key_share('unclaimed') is not None
+
+    expired = backend.files.expire_unclaimed_releases(0)
+    assert expired == [{'id': 'unclaimed', 'path': 'uploads/unclaimed'}]
+    assert backend.files.get_by_id('unclaimed')['status'] == 'expired'
+    assert backend.files.get_key_share('unclaimed') is None
+    assert backend.files.get_by_id('downloaded')['status'] == 'active'
+    assert backend.files.get_by_id('unreleased')['status'] == 'active'
+    assert backend.files.get_key_share('unreleased') is not None
+
+    # Idempotent: a second pass finds nothing left.
+    assert backend.files.expire_unclaimed_releases(0) == []
+
+
 def test_claim_download_with_ticket_missing(backend):
     assert backend.files.claim_download_with_ticket(
         'nope', 'ee' * 32, '1.2.3.4')['status'] == 'missing'

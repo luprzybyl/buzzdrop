@@ -10,6 +10,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -225,6 +226,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -378,6 +380,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -538,6 +541,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 3,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -702,6 +706,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 2,
         "KEY_RELEASE_BURN_ON_LOCKOUT": false,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -865,6 +870,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -997,6 +1003,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -1150,6 +1157,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -1242,6 +1250,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -1371,6 +1380,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -1462,6 +1472,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -1532,6 +1543,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -1636,6 +1648,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -1680,6 +1693,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -1853,6 +1867,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "SMTP_HOST": null,
         "NOTIFICATIONS_CONFIGURED": false
       },
@@ -1925,6 +1940,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -1995,6 +2011,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -2090,6 +2107,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -2338,10 +2356,200 @@
       ]
     },
     {
+      "name": "download-window-closed",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 0,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "release",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "download",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-Download-Ticket": {
+                "$ticket": "release"
+              }
+            }
+          },
+          "response": {
+            "status": 410,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "File has expired"
+            }
+          }
+        },
+        {
+          "name": "again",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-Download-Ticket": {
+                "$ticket": "release"
+              }
+            }
+          },
+          "response": {
+            "status": 410,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "File has expired"
+            }
+          }
+        },
+        {
+          "name": "release-after",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "error": "Not found"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "report-enforcement",
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "NOTIFICATIONS_CONFIGURED": true
       },
       "steps": [
@@ -2499,6 +2707,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "MAX_CONTENT_LENGTH": 64,
         "NOTIFICATIONS_CONFIGURED": true
       },
@@ -2571,6 +2780,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "UPLOAD_RATE_LIMIT": "1 per minute",
         "NOTIFICATIONS_CONFIGURED": true
       },
@@ -2630,6 +2840,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "UPLOAD_RATE_LIMIT": "1 per minute",
         "NOTIFICATIONS_CONFIGURED": true
       },
@@ -2740,6 +2951,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "PUBLIC_FILE_RATE_LIMIT": "1 per minute",
         "NOTIFICATIONS_CONFIGURED": true
       },
@@ -2856,6 +3068,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 3,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "KEY_RELEASE_RATE_LIMIT": "1 per minute",
         "NOTIFICATIONS_CONFIGURED": true
       },
@@ -2991,6 +3204,7 @@
       "config": {
         "KEY_RELEASE_MAX_ATTEMPTS": 1,
         "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "KEY_RELEASE_DOWNLOAD_TTL_SECONDS": 600,
         "REPORT_DECRYPTION_RATE_LIMIT": "1 per minute",
         "NOTIFICATIONS_CONFIGURED": true
       },

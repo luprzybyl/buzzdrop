@@ -182,7 +182,9 @@ class FileStore(ABC):
     @abstractmethod
     def claim_download_with_ticket(self, file_id: str,
                                    ticket_hex: Optional[str],
-                                   ip_address: str) -> Dict[str, Any]:
+                                   ip_address: str,
+                                   download_ttl_seconds: Optional[int] = None
+                                   ) -> Dict[str, Any]:
         """
         Verify the download ticket and claim the blob atomically.
 
@@ -195,16 +197,41 @@ class FileStore(ABC):
         ``downloaded_at IS NULL`` guard AND consumes the stored ticket
         digest in the same transaction.
 
+        A released share whose ``released_at`` is at least
+        ``download_ttl_seconds`` old (or unparseable — fail closed) is
+        expired in the same transaction, exactly like a file past
+        ``expiry_at``: files row marked expired, share row deleted.
+
         Args:
             file_id: Public file id.
             ticket_hex: The ticket presented by the client (hex), or None.
             ip_address: Downloader IP, recorded on the claim.
+            download_ttl_seconds: How long after release the ticket is
+                honoured; None disables the window.
 
         Returns:
             A dict with ``status`` one of: ``'missing'``,
-            ``'already_downloaded'``, ``'expired'`` (share row destroyed),
-            ``'not_released'`` (no share row or H never released — nobody
-            legitimately holds a ticket), ``'bad_ticket'``, or ``'ok'``.
+            ``'already_downloaded'``, ``'expired'`` (share row destroyed,
+            ``path`` included for blob cleanup), ``'not_released'`` (no
+            share row or H never released — nobody legitimately holds a
+            ticket), ``'bad_ticket'``, or ``'ok'``.
+        """
+
+    @abstractmethod
+    def expire_unclaimed_releases(self, older_than_seconds: int
+                                  ) -> List[Dict[str, Any]]:
+        """
+        Expire drops whose share was released but whose blob was never
+        downloaded within ``older_than_seconds`` of the release.
+
+        One transaction: every matching files row (``released_at`` at
+        least that old or unparseable — fail closed — ``downloaded_at``
+        NULL, status not yet expired) is marked expired and its share row
+        deleted. The caller deletes the blobs.
+
+        Returns:
+            ``[{'id': file_id, 'path': storage_path}, ...]`` for the drops
+            expired by this call.
         """
 
     @abstractmethod

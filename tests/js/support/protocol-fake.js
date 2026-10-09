@@ -62,6 +62,7 @@ import { bytesToHex, hexToBytes } from '../../../static/js/lib/hex.js';
  * @typedef {{
  *   maxAttempts?: number,
  *   burnOnLockout?: boolean,
+ *   downloadTtlSeconds?: number,
  *   owner?: string | null,
  *   csrfToken?: string,
  *   notificationsConfigured?: boolean,
@@ -94,6 +95,7 @@ import { bytesToHex, hexToBytes } from '../../../static/js/lib/hex.js';
  *   config: {
  *     KEY_RELEASE_MAX_ATTEMPTS: number,
  *     KEY_RELEASE_BURN_ON_LOCKOUT: boolean,
+ *     KEY_RELEASE_DOWNLOAD_TTL_SECONDS: number,
  *     NOTIFICATIONS_CONFIGURED: boolean,
  *   },
  *   steps: RecordedStep[],
@@ -272,6 +274,9 @@ function redirectHome() {
 export function makeProtocolFake(opts = {}) {
     const maxAttempts = opts.maxAttempts ?? 1;
     const burnOnLockout = opts.burnOnLockout ?? true;
+    // KEY_RELEASE_DOWNLOAD_TTL_SECONDS: how long after the release the
+    // ticket is honoured.
+    const downloadTtlSeconds = opts.downloadTtlSeconds ?? 600;
     const csrfToken = opts.csrfToken ?? 'fixture-csrf-token';
     // Defaults mirror the fixture environment: SMTP configured, and only
     // notifyuser has an account email.
@@ -542,6 +547,12 @@ export function makeProtocolFake(opts = {}) {
             return xhr ? json(410, { error: 'File has expired' }) : redirectHome();
         }
         const key = state.keys.get(fileId);
+        // A release nobody downloaded within the window expires the drop.
+        if (key && key.releasedAt !== null
+                && Date.now() >= Date.parse(key.releasedAt) + downloadTtlSeconds * 1000) {
+            expire(fileId, file);
+            return xhr ? json(410, { error: 'File has expired' }) : redirectHome();
+        }
         if (!key || key.releasedAt === null) {
             return json(403, { error: 'Forbidden' });
         }

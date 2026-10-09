@@ -179,6 +179,7 @@ def key_release_settings(app):
         'KEY_RELEASE_RATE_LIMIT',
         'KEY_RELEASE_MAX_ATTEMPTS',
         'KEY_RELEASE_BURN_ON_LOCKOUT',
+        'KEY_RELEASE_DOWNLOAD_TTL_SECONDS',
     )
     original = {key: app.config.get(key) for key in keys}
     yield app.config

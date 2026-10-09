@@ -12,7 +12,8 @@ A scenario is a dict:
 - ``name``: unique, kebab-case.
 - ``config``: optional ``app.config`` overrides for this scenario only
   (``KEY_RELEASE_MAX_ATTEMPTS``, ``KEY_RELEASE_BURN_ON_LOCKOUT``,
-  ``MAX_CONTENT_LENGTH``, the rate limits).
+  ``KEY_RELEASE_DOWNLOAD_TTL_SECONDS``, ``MAX_CONTENT_LENGTH``, the rate
+  limits).
 - ``steps``: the requests, in order. A step is a dict with ``name``,
   ``method`` and ``path``, and optionally ``headers``, ``json`` (a JSON
   body), ``form`` (multipart fields), ``files`` (multipart files, as
@@ -241,6 +242,17 @@ SCENARIOS = [
                   download(ticket=ticket_of('release'), xhr=True),
                   download('again', ticket=ticket_of('release'),
                            xhr=True)],
+    },
+    {
+        # The ticket is honoured only within KEY_RELEASE_DOWNLOAD_TTL_SECONDS
+        # of the release; a zero window closes it the moment it opens, so
+        # even the winner's ticket finds the drop expired.
+        'name': 'download-window-closed',
+        'config': {'KEY_RELEASE_DOWNLOAD_TTL_SECONDS': 0},
+        'steps': [begin(), upload_file(), release(),
+                  download(ticket=ticket_of('release'), xhr=True),
+                  download('again', ticket=ticket_of('release'), xhr=True),
+                  release('release-after')],
     },
     {
         'name': 'report-enforcement',

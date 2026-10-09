@@ -37,10 +37,11 @@ from protocol_scenarios import SCENARIOS
 OUT_FILE = ROOT / 'tests' / 'js' / 'fixtures' / 'protocol-contract.json'
 DEFAULT_USER = 'testuser'
 # Recorded with every scenario, overridden or not: the fake takes them as
-# its maxAttempts / burnOnLockout options, plus NOTIFICATIONS_CONFIGURED
-# (SMTP set up, as app.py's _notifications_configured decides) as
-# notificationsConfigured.
-FAKE_CONFIG = ('KEY_RELEASE_MAX_ATTEMPTS', 'KEY_RELEASE_BURN_ON_LOCKOUT')
+# its maxAttempts / burnOnLockout / downloadTtlSeconds options, plus
+# NOTIFICATIONS_CONFIGURED (SMTP set up, as app.py's
+# _notifications_configured decides) as notificationsConfigured.
+FAKE_CONFIG = ('KEY_RELEASE_MAX_ATTEMPTS', 'KEY_RELEASE_BURN_ON_LOCKOUT',
+               'KEY_RELEASE_DOWNLOAD_TTL_SECONDS')
 
 UUID = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
 HEX64 = re.compile(r'\b[0-9a-f]{64}\b')

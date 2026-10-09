@@ -116,6 +116,12 @@ class Config:
     # Older unbound shares are purged at startup and on each begin call.
     KEY_SHARE_PENDING_TTL_SECONDS = int(
         os.getenv('KEY_SHARE_PENDING_TTL_SECONDS', '3600'))
+    # How long a released share's download ticket stays valid, counted
+    # from the winning /release. Past it the drop expires: /download
+    # refuses the ticket, and the expiry sweep deletes the blob and the
+    # share row — a release nobody downloaded leaves nothing behind.
+    KEY_RELEASE_DOWNLOAD_TTL_SECONDS = int(
+        os.getenv('KEY_RELEASE_DOWNLOAD_TTL_SECONDS', '600'))
 
     # Expired drops are always swept once at startup. This interval
     # (seconds) additionally re-sweeps on a daemon thread, so a drop
@@ -205,6 +211,9 @@ class Config:
 
         if cls.KEY_RELEASE_MAX_ATTEMPTS < 1:
             raise ValueError("KEY_RELEASE_MAX_ATTEMPTS must be at least 1")
+
+        if cls.KEY_RELEASE_DOWNLOAD_TTL_SECONDS < 1:
+            raise ValueError("KEY_RELEASE_DOWNLOAD_TTL_SECONDS must be at least 1")
 
         if cls.EXPIRY_SWEEP_INTERVAL_SECONDS < 0:
             raise ValueError("EXPIRY_SWEEP_INTERVAL_SECONDS must be 0 or greater")

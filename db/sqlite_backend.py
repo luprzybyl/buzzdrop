@@ -20,7 +20,7 @@ import secrets
 import sqlite3
 import threading
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from db.base import Backend, FileStore, TokenStore
@@ -646,6 +646,20 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
             (file_id,))
 
     @staticmethod
+    def _release_stale(released_at: Optional[str],
+                       ttl_seconds: Optional[int]) -> bool:
+        """True when a released share's download window has closed —
+        released at least ttl_seconds ago, or an unparseable timestamp
+        (fail closed)."""
+        if released_at is None or ttl_seconds is None:
+            return False
+        try:
+            released = datetime.fromisoformat(released_at)
+        except (TypeError, ValueError):
+            return True
+        return datetime.now() >= released + timedelta(seconds=ttl_seconds)
+
+    @staticmethod
     def _share_file_expired(joined_row) -> bool:
         """True when the joined files row is expired/expiring now."""
         if joined_row['file_status'] == 'expired':
@@ -668,7 +682,9 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
 
     def claim_download_with_ticket(self, file_id: str,
                                    ticket_hex: Optional[str],
-                                   ip_address: str) -> Dict[str, Any]:
+                                   ip_address: str,
+                                   download_ttl_seconds: Optional[int] = None
+                                   ) -> Dict[str, Any]:
         """
         Verify the bearer ticket a release minted and claim the blob in one
         BEGIN IMMEDIATE transaction, so the read-check-claim cycle
@@ -677,7 +693,9 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
         Returns a dict with ``status``:
           'missing'            — no files row for file_id
           'already_downloaded' — downloaded_at already stamped
-          'expired'            — file past expiry_at (share row destroyed)
+          'expired'            — file past expiry_at, or released at least
+                                 download_ttl_seconds ago (share row
+                                 destroyed; ``path`` for blob cleanup)
           'not_released'       — no share row, or its H was never released:
                                  the blob cannot be legitimately fetched yet
           'bad_ticket'         — share released but the ticket doesn't match
@@ -700,7 +718,10 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
                 result: Dict[str, Any] = {'status': 'missing'}
             elif row['downloaded_at'] is not None:
                 result = {'status': 'already_downloaded'}
-            elif self._share_file_expired(row):
+            elif self._share_file_expired(row) or self._release_stale(
+                    row['released_at'], download_ttl_seconds):
+                # A release nobody downloaded in time is as dead as an
+                # expired file: same flip, same share destruction.
                 if row['file_status'] != 'expired':
                     conn.execute(
                         "UPDATE files SET status = 'expired' WHERE id = ?",
@@ -748,6 +769,41 @@ class SQLiteFileStore(_SQLiteStoreBase, FileStore):
         if destroyed:
             self._backend.checkpoint_wal()
         return result
+
+    def expire_unclaimed_releases(self, older_than_seconds: int
+                                  ) -> List[Dict[str, Any]]:
+        cutoff_iso = (
+            datetime.now() - timedelta(seconds=older_than_seconds)
+        ).isoformat()
+        conn = self._conn()
+        conn.execute('BEGIN IMMEDIATE')
+        try:
+            # Released, never downloaded, window closed: H is gone and the
+            # ticket is no longer honoured, so the blob serves no one.
+            # Malformed released_at counts as stale — fail closed.
+            rows = conn.execute(
+                'SELECT f.id, f.path FROM files f '
+                'JOIN file_keys k ON k.file_id = f.id '
+                'WHERE k.released_at IS NOT NULL '
+                'AND f.downloaded_at IS NULL '
+                "AND COALESCE(f.status, '') != 'expired' "
+                'AND (k.released_at <= ? '
+                '     OR NOT is_iso_timestamp(k.released_at))',
+                (cutoff_iso,),
+            ).fetchall()
+            for row in rows:
+                conn.execute(
+                    "UPDATE files SET status = 'expired' WHERE id = ?",
+                    (row['id'],))
+                conn.execute(
+                    'DELETE FROM file_keys WHERE file_id = ?', (row['id'],))
+            conn.execute('COMMIT')
+        except Exception:
+            conn.execute('ROLLBACK')
+            raise
+        if rows:
+            self._backend.checkpoint_wal()
+        return [{'id': row['id'], 'path': row['path']} for row in rows]
 
     def purge_stale_key_shares(self, older_than_seconds: int) -> int:
         cutoff = (
