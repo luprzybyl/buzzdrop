@@ -1,5 +1,5 @@
-// The shared-files list: the drops a user has shared, with search, paging and
-// relative times.
-export { buildSharedFilesUrl, getSharedFilesPage, relativeTime, rowSearchText } from './shared-files.js';
+// The shared-files list: the drops a user has shared, with sort, search,
+// paging, relative times and a status refresh.
+export { initSharedFilesList } from './list.js';
 
-/** @typedef {import('./shared-files.js').FileStatus} FileStatus */
+/** @typedef {import('./list.js').SharedFilesDeps} SharedFilesDeps */

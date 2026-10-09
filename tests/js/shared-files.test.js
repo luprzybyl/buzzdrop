@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSharedFilesUrl, getSharedFilesPage, relativeTime, rowSearchText } from '../../static/js/features/shared-files/shared-files.js';
+import { buildSharedFilesUrl, compareRows, getSharedFilesPage, relativeTime, rowSearchText } from '../../static/js/features/shared-files/shared-files.js';
 
 const rows = Array.from({ length: 12 }, (_, index) => ({
     dataset: { searchText: `file-${index}.txt` },
@@ -82,4 +82,51 @@ test('leaves a null IP and a missing status display out of the search text', () 
 
     assert.match(text, /^report\.pdf active\b/);
     assert.doesNotMatch(text, /null|undefined/);
+});
+
+/**
+ * Rows carrying the timestamps the template sets, named by `id`.
+ * @param {Array<{ id: string, uploadedAt?: string, expiryAt?: string, downloadedAt?: string }>} specs
+ */
+const timedRows = (specs) => specs.map(({ id, ...dataset }) => ({ id, dataset }));
+/** @param {Array<{ id: string }>} sorted */
+const ids = (sorted) => sorted.map((row) => row.id);
+
+test('sorts by the chosen timestamp in the chosen direction', () => {
+    const list = timedRows([
+        { id: 'b', uploadedAt: '2025-01-02T10:00:00+01:00' },
+        { id: 'a', uploadedAt: '2025-01-01T10:00:00+01:00' },
+        { id: 'c', uploadedAt: '2025-01-03T10:00:00+01:00' },
+    ]);
+    assert.deepEqual(ids([...list].sort(compareRows('uploaded:asc'))), ['a', 'b', 'c']);
+    assert.deepEqual(ids([...list].sort(compareRows('uploaded:desc'))), ['c', 'b', 'a']);
+});
+
+test('compares times as instants, across offsets', () => {
+    // 10:30 CEST is 09:30 CET: later as a string, earlier as an instant.
+    const list = timedRows([
+        { id: 'cest', expiryAt: '2025-03-30T10:30:00+02:00' },
+        { id: 'cet', expiryAt: '2025-03-30T10:00:00+01:00' },
+    ]);
+    assert.deepEqual(ids([...list].sort(compareRows('expiry:asc'))), ['cest', 'cet']);
+});
+
+test('puts rows without the timestamp last, in either direction', () => {
+    const list = timedRows([
+        { id: 'never', downloadedAt: '' },
+        { id: 'early', downloadedAt: '2025-01-01T10:00:00+01:00' },
+        { id: 'late', downloadedAt: '2025-01-02T10:00:00+01:00' },
+    ]);
+    assert.deepEqual(ids([...list].sort(compareRows('downloaded:asc'))), ['early', 'late', 'never']);
+    assert.deepEqual(ids([...list].sort(compareRows('downloaded:desc'))), ['late', 'early', 'never']);
+});
+
+test('keeps the order of rows it cannot tell apart', () => {
+    const list = timedRows([
+        { id: 'x', uploadedAt: '2025-01-01T10:00:00+01:00' },
+        { id: 'y', uploadedAt: '2025-01-01T10:00:00+01:00' },
+        { id: 'z' },
+    ]);
+    assert.deepEqual(ids([...list].sort(compareRows('uploaded:desc'))), ['x', 'y', 'z']);
+    assert.deepEqual(ids([...list].sort(compareRows('unknown:asc'))), ['x', 'y', 'z']);
 });

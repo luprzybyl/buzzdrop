@@ -1,15 +1,17 @@
 // --- Index page logic ---
-// The composer (file/note tabs, password gate, dropzone, upload) and the
-// shared-files list. The page loads for anonymous visitors too, who get
-// neither, so lookups into those parts keep their null checks.
+// The composer (file/note tabs, dropzone, upload) and the shared-files list.
+// The password gate, the upload protocol, the Copy buttons and the list come
+// from their features; this page composes them. The page loads for anonymous
+// visitors too, who get neither part, so lookups into those parts keep their
+// null checks.
 
 import { copyWithFeedback } from '../../features/clipboard-feedback/index.js';
+import { initPasswordGate } from '../../features/password-gate/index.js';
 import { createShare } from '../../features/share-protocol/index.js';
-import { buildSharedFilesUrl, getSharedFilesPage, relativeTime, rowSearchText } from '../../features/shared-files/index.js';
+import { initSharedFilesList } from '../../features/shared-files/index.js';
 import { isAllowedFile } from '../../lib/file-extensions.js';
 import * as shareCrypto from '../../lib/crypto.js';
 import { buildOneClickLink, takeFragmentPassword } from '../../lib/one-click-link.js';
-import { assessPassword, generatePassphrase } from '../../lib/passphrase.js';
 import { required, requiredWindow } from '../../lib/required.js';
 
 /**
@@ -36,16 +38,6 @@ import { required, requiredWindow } from '../../lib/required.js';
  */
 
 /**
- * What the shared-files status endpoint answers.
- * @typedef {{files: Array<import('../../features/shared-files/index.js').FileStatus & {id: string}>}} FileStatusesResponse
- */
-
-/**
- * A shared-files row; the template sets all of these data attributes.
- * @typedef {HTMLElement & {dataset: DOMStringMap & {fileId: string, searchBase: string, searchText: string}}} SharedFileRow
- */
-
-/**
  * `fetch` is bound to the window: called unbound, as deps.fetch(...), the
  * browser's fetch throws "Illegal invocation".
  * @returns {IndexDeps}
@@ -67,7 +59,6 @@ export function browserDeps() {
  */
 export function initIndex(root, deps) {
     const window = requiredWindow(root);
-    const cryptoService = deps.crypto;
     /** @type {'file' | 'text'} */
     let activeShareMode = 'file';
     let uploadInProgress = false;
@@ -185,10 +176,10 @@ export function initIndex(root, deps) {
 
     /**
      * Show (or with '', clear) a refusal in one of the always-present error
-     * regions (#file-error, #note-error, #password-error). The region stays
-     * and only its text changes, so assistive tech announces every refusal
-     * rather than a one-time reveal.
-     * @param {'file-error' | 'note-error' | 'password-error'} regionId
+     * regions (#file-error, #note-error). The region stays and only its text
+     * changes, so assistive tech announces every refusal rather than a
+     * one-time reveal.
+     * @param {'file-error' | 'note-error'} regionId
      * @param {string} message
      */
     function showRefusal(regionId, message) {
@@ -197,125 +188,20 @@ export function initIndex(root, deps) {
     }
 
     // --- Password Generation & Strength Gate ---
-    // The server never sees the password (encryption is client-side), so this
-    // check is the only place a weak key can be refused — and it must refuse.
-    const passwordInput = /** @type {HTMLInputElement | null} */ (root.getElementById('shared-password'));
-    const generatePasswordBtn = root.getElementById('generate-password-btn');
-    const togglePasswordBtn = /** @type {HTMLButtonElement | null} */ (root.getElementById('toggle-password-btn'));
-    const copyPasswordBtn = /** @type {HTMLButtonElement | null} */ (root.getElementById('copy-password-btn'));
-    const strengthRegion = root.getElementById('password-strength');
-    const strengthMeter = root.getElementById('password-strength-meter');
-    const strengthBar = root.getElementById('password-strength-bar');
-    const strengthText = root.getElementById('password-strength-text');
-
-    // Per level: the bar's and the message's colour, and the word the meter
-    // reports to assistive tech (the colour carries it on screen).
-    const STRENGTH = {
-        weak: { fill: 'pw-fill-weak', text: 'pw-text-weak', label: 'Weak' },
-        fair: { fill: 'pw-fill-fair', text: 'pw-text-fair', label: 'Fair' },
-        strong: { fill: 'pw-fill-strong', text: 'pw-text-strong', label: 'Strong' },
-    };
-
-    function updatePasswordStrength() {
-        if (!passwordInput || !strengthRegion || !strengthMeter || !strengthBar || !strengthText) {
-            return;
-        }
-        const result = assessPassword(passwordInput.value);
-        if (result.level === 'empty') {
-            strengthRegion.hidden = true;
-            return;
-        }
-        strengthRegion.hidden = false;
-        const level = STRENGTH[result.level];
-        strengthBar.className = `pw-fill ${level.fill}`;
-        // Scale ~90 bits to a full bar so "fair" doesn't read as nearly done.
-        // The meter holds the fill once, for the bar's width and for
-        // assistive tech alike.
-        const fill = Math.min(100, Math.round((result.bits / 90) * 100));
-        strengthMeter.style.setProperty('--strength-fill', `${fill}%`);
-        strengthMeter.setAttribute('aria-valuenow', String(fill));
-        strengthMeter.setAttribute('aria-valuetext', level.label);
-        strengthText.className = `field-help ${level.text}`;
-        strengthText.textContent = result.message;
-    }
-
-    /**
-     * Mask or reveal the password, keeping the toggle's name in step: it
-     * names what pressing it will do.
-     * @param {boolean} visible
-     */
-    function setPasswordVisible(visible) {
-        if (!passwordInput || !togglePasswordBtn) return;
-        passwordInput.type = visible ? 'text' : 'password';
-        required(togglePasswordBtn, '#toggle-password-label', 'span').textContent = visible ? 'Hide' : 'Show';
-        togglePasswordBtn.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
-    }
-
-    /** Show/Hide and Copy have nothing to act on until there is a password. */
-    function syncPasswordButtons() {
-        if (!passwordInput) return;
-        for (const button of [togglePasswordBtn, copyPasswordBtn]) {
-            if (button) button.disabled = !passwordInput.value;
-        }
-    }
-
-    if (passwordInput) {
-        passwordInput.addEventListener('input', () => {
-            updatePasswordStrength();
-            syncPasswordButtons();
-            // Re-typing clears a stale refusal so the user sees progress.
-            showRefusal('password-error', '');
-        });
-    }
-
-    if (togglePasswordBtn && passwordInput) {
-        togglePasswordBtn.addEventListener('click', () => {
-            setPasswordVisible(passwordInput.type === 'password');
-        });
-    }
-
-    if (generatePasswordBtn && passwordInput) {
-        generatePasswordBtn.addEventListener('click', () => {
-            passwordInput.value = generatePassphrase();
-            // Show the phrase so the sender can read it back on another channel;
-            // the success page reveals it again via the URL fragment.
-            setPasswordVisible(true);
-            showRefusal('password-error', '');
-            updatePasswordStrength();
-            syncPasswordButtons();
-            passwordInput.focus();
-        });
-    }
-
-    if (copyPasswordBtn && passwordInput) {
+    const passwordGate = initPasswordGate(root);
+    if (passwordGate) {
+        const copyBtn = required(root, '#copy-password-btn', 'button');
         const status = required(root, '#password-copy-status', 'p');
-        const label = required(copyPasswordBtn, '#copy-password-label', 'span');
-        copyPasswordBtn.addEventListener('click', () =>
-            copyWithFeedback(copyPasswordBtn, passwordInput.value, { status, label, what: 'Password' }));
+        const label = required(copyBtn, '#copy-password-label', 'span');
+        copyBtn.addEventListener('click', () =>
+            copyWithFeedback(copyBtn, passwordGate.input.value, { status, label, what: 'Password' }));
     }
 
     /**
-     * The actual gate: refuse to encrypt/upload a missing or weak password,
-     * inline in #password-error. Called from both upload paths (file form
-     * submit and text note) so every drop shares the same floor.
+     * The gate every upload passes: a missing or weak password is refused.
      * @param {string} password
-     * @returns {boolean} whether the password may be used
      */
-    function acceptPassword(password) {
-        if (!password) {
-            showRefusal('password-error', 'Enter a password, or press Generate.');
-            if (passwordInput) passwordInput.focus();
-            return false;
-        }
-        const result = assessPassword(password);
-        if (result.blocked) {
-            updatePasswordStrength();
-            showRefusal('password-error', `Password rejected: ${result.message}`);
-            if (passwordInput) passwordInput.focus();
-            return false;
-        }
-        return true;
-    }
+    const acceptPassword = (password) => passwordGate !== null && passwordGate.accept(password);
 
     // --- Open notifications ---
     // The account email (rendered only when there is one) shows while the
@@ -564,201 +450,5 @@ export function initIndex(root, deps) {
     });
 
     // --- Shared Files Search & Pagination ---
-    function initializeSharedFilesList() {
-        const list = root.getElementById('shared-files-list');
-        const searchInput = /** @type {HTMLInputElement | null} */ (root.getElementById('shared-files-search'));
-        const sortInput = /** @type {HTMLSelectElement | null} */ (root.getElementById('shared-files-sort'));
-        const emptyState = root.getElementById('shared-files-empty-state');
-        const summary = root.getElementById('shared-files-summary');
-        const pageLabel = root.getElementById('shared-files-page');
-        const pagination = root.getElementById('shared-files-pagination');
-        const prevButton = /** @type {HTMLButtonElement | null} */ (root.getElementById('shared-files-prev'));
-        const nextButton = /** @type {HTMLButtonElement | null} */ (root.getElementById('shared-files-next'));
-
-        if (!list || !searchInput || !sortInput || !emptyState || !summary || !pagination || !pageLabel || !prevButton || !nextButton) {
-            return;
-        }
-
-        const rows = Array.from(/** @type {NodeListOf<SharedFileRow>} */ (list.querySelectorAll('.shared-file-row')));
-        if (rows.length === 0) {
-            return;
-        }
-
-        /**
-         * Swap each full timestamp for one relative to now; the full one stays
-         * in the element's title (the template sets it).
-         * @param {ParentNode} container
-         */
-        const showRelativeTimes = (container) => {
-            const now = deps.now();
-            /** @type {NodeListOf<HTMLTimeElement>} */ (container.querySelectorAll('time[datetime]')).forEach((time) => {
-                const relative = relativeTime(Date.parse(time.dateTime), now);
-                if (relative) time.textContent = relative;
-            });
-        };
-        showRelativeTimes(list);
-
-        const pageSize = Math.max(parseInt(list.dataset.pageSize || '5', 10), 1);
-        const params = new URLSearchParams(window.location.search);
-        searchInput.value = params.get('shared_search') || '';
-        let currentPage = Math.max(parseInt(params.get('shared_page') || '', 10) || 1, 1);
-
-        const render = () => {
-            const [sortField, sortDirection] = sortInput.value.split(':');
-            const timestampField = /** @type {Record<string, string>} */ ({
-                uploaded: 'uploadedAt',
-                expiry: 'expiryAt',
-                downloaded: 'downloadedAt'
-            })[sortField];
-            const sortMultiplier = sortDirection === 'desc' ? -1 : 1;
-            // ISO times with offsets: compared as instants, since CET and CEST
-            // strings don't sort lexically.
-            /** @param {SharedFileRow} row */
-            const instant = (row) => Date.parse(row.dataset[timestampField] || '');
-            const sortedRows = [...rows].sort((a, b) => {
-                const aTimestamp = instant(a);
-                const bTimestamp = instant(b);
-                if (Number.isNaN(aTimestamp) || Number.isNaN(bTimestamp)) {
-                    return !Number.isNaN(aTimestamp) ? -1 : !Number.isNaN(bTimestamp) ? 1 : 0;
-                }
-                if (aTimestamp === bTimestamp) {
-                    return 0;
-                }
-                return (aTimestamp < bTimestamp ? -1 : 1) * sortMultiplier;
-            });
-            sortedRows.forEach((row) => list.appendChild(row));
-            const page = getSharedFilesPage(sortedRows, searchInput.value, pageSize, currentPage);
-            const totalResults = page.filteredRows.length;
-            currentPage = page.currentPage;
-
-            rows.forEach((row) => {
-                row.style.display = 'none';
-            });
-
-            page.visibleRows.forEach((row) => {
-                row.style.display = '';
-            });
-
-            if (totalResults === 0) {
-                emptyState.style.display = 'block';
-                pageLabel.textContent = 'Page 0 of 0';
-                summary.textContent = 'No matching drops';
-            } else {
-                emptyState.style.display = 'none';
-                pageLabel.textContent = `Page ${currentPage} of ${page.totalPages}`;
-                summary.textContent = `Showing ${page.startIndex + 1}-${Math.min(page.startIndex + pageSize, totalResults)} of ${totalResults} drops`;
-            }
-
-            pagination.hidden = page.totalPages <= 1;
-            prevButton.disabled = currentPage <= 1 || totalResults === 0;
-            nextButton.disabled = currentPage >= page.totalPages || totalResults === 0;
-            return page;
-        };
-
-        /** @param {SharedFileRow[]} pageRows */
-        const refreshStatuses = async (pageRows) => {
-            const statusUrl = list.dataset.statusUrl;
-            if (!statusUrl || pageRows.length === 0) {
-                return;
-            }
-
-            const params = new URLSearchParams();
-            pageRows.forEach((row) => params.append('id', row.dataset.fileId));
-
-            try {
-                const response = await deps.fetch(`${statusUrl}?${params}`, {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                });
-                if (!response.ok) {
-                    return;
-                }
-                /** @type {FileStatusesResponse} */
-                const { files } = await response.json();
-                let updated = false;
-                files.forEach((file) => {
-                    const row = rows.find((item) => item.dataset.fileId === file.id);
-                    if (!row) {
-                        return;
-                    }
-                    const downloadedAt = required(row, '[data-file-downloaded-at]', 'dd');
-                    const downloadedBy = required(row, '[data-file-downloaded-by]', 'dd');
-                    const statusBadge = required(row, '[data-file-status]', 'span');
-                    const copyButton = required(row, '.copy-url', 'button');
-                    if (file.downloaded_at) {
-                        const time = root.createElement('time');
-                        time.dateTime = file.downloaded_at_iso || '';
-                        time.title = file.downloaded_at;
-                        time.textContent = file.downloaded_at;
-                        downloadedAt.replaceChildren(time);
-                        showRelativeTimes(downloadedAt);
-                    } else {
-                        downloadedAt.textContent = 'Not yet';
-                    }
-                    downloadedBy.textContent = file.downloaded_by_ip || '—';
-                    row.dataset.downloadedAt = file.downloaded_at_iso || '';
-                    statusBadge.textContent = file.status_display || '';
-                    statusBadge.dataset.status = file.status_key;
-                    copyButton.hidden = file.status_key !== 'active';
-                    row.dataset.searchText = rowSearchText(row.dataset.searchBase, file);
-                    updated = true;
-                });
-                if (updated) {
-                    render();
-                    window.history.replaceState(
-                        window.history.state,
-                        '',
-                        buildSharedFilesUrl(window.location.href, currentPage, searchInput.value),
-                    );
-                }
-            } catch {
-                return;
-            }
-        };
-
-        searchInput.addEventListener('input', () => {
-            currentPage = 1;
-            render();
-            window.history.replaceState(
-                window.history.state,
-                '',
-                buildSharedFilesUrl(window.location.href, currentPage, searchInput.value),
-            );
-        });
-
-        sortInput.addEventListener('change', () => {
-            currentPage = 1;
-            render();
-        });
-
-        prevButton.addEventListener('click', () => {
-            if (currentPage > 1) {
-                currentPage -= 1;
-                const page = render();
-                window.history.replaceState(
-                    window.history.state,
-                    '',
-                    buildSharedFilesUrl(window.location.href, currentPage, searchInput.value),
-                );
-                refreshStatuses(page.visibleRows);
-            }
-        });
-
-        nextButton.addEventListener('click', () => {
-            const page = render();
-            if (currentPage < page.totalPages) {
-                currentPage += 1;
-                const nextPage = render();
-                window.history.replaceState(
-                    window.history.state,
-                    '',
-                    buildSharedFilesUrl(window.location.href, currentPage, searchInput.value),
-                );
-                refreshStatuses(nextPage.visibleRows);
-            }
-        });
-
-        render();
-    }
-
-    initializeSharedFilesList();
+    initSharedFilesList(root, deps);
 }
