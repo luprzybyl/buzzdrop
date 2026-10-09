@@ -2,7 +2,9 @@
 // "Generate token" buttons on /users POST /api/token and render the raw token
 // inline. The token is returned exactly once and is never stored server-side,
 // so the result panel stays visible until the page is reloaded.
-import { required, requiredClosest } from './required.js';
+import { copyWithFeedback } from '../../features/clipboard-feedback/index.js';
+import { csrfToken } from '../../features/csrf/index.js';
+import { required, requiredClosest } from '../../lib/required.js';
 
 /**
  * @typedef {object} UsersDeps
@@ -32,26 +34,7 @@ export function browserDeps() {
  * @param {UsersDeps} deps
  */
 export function initUsers(root, deps) {
-    const csrfToken = /** @type {HTMLMetaElement | null} */ (root.querySelector('meta[name="csrf-token"]'))?.content || '';
-
-    /**
-     * The button's name stays "Copy token", so the flash on its label is
-     * visual; the status region announces the copy.
-     * @param {HTMLButtonElement} button
-     */
-    function flashCopied(button) {
-        const label = button.querySelector('.copy-label');
-        const status = root.getElementById('copy-status');
-        if (!label) return;
-        label.textContent = 'Copied!';
-        if (status) status.textContent = 'Token copied to clipboard.';
-        setTimeout(() => {
-            label.textContent = 'Copy';
-            // Emptying it means the next copy writes fresh text, which is
-            // what makes assistive tech announce it again.
-            if (status) status.textContent = '';
-        }, 2000);
-    }
+    const csrf = csrfToken(root);
 
     /** @param {HTMLButtonElement} button */
     async function generateToken(button) {
@@ -68,7 +51,7 @@ export function initUsers(root, deps) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-Token': csrfToken,
+                    'X-CSRF-Token': csrf,
                 },
                 body: JSON.stringify({ username: button.dataset.username }),
             });
@@ -94,9 +77,7 @@ export function initUsers(root, deps) {
     /** @type {NodeListOf<HTMLButtonElement>} */ (root.querySelectorAll('.copy-token-btn')).forEach((button) => {
         button.addEventListener('click', () => {
             const input = required(requiredClosest(button, '.copy-field', 'div'), 'input', 'input');
-            input.select();
-            root.execCommand('copy');
-            flashCopied(button);
+            copyWithFeedback(button, input, { status: required(root, '#copy-status', 'p'), what: 'Token' });
         });
     });
 }

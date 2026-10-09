@@ -7,11 +7,9 @@
 import { within } from '@testing-library/dom';
 import { userEvent } from '@testing-library/user-event';
 import { vi } from 'vitest';
-import { CryptoService } from '../../../../static/js/crypto.js';
+import * as shareCrypto from '../../../../static/js/lib/crypto.js';
 import { browserView, loadFixture } from '../dom-fixture.js';
 import { makeStubCrypto } from '../stub-crypto.js';
-
-/** @typedef {import('../stub-crypto.js').StubCrypto} StubCrypto */
 
 /** The origin every fixture is served from. */
 export const ORIGIN = 'http://localhost';
@@ -20,13 +18,13 @@ export const ORIGIN = 'http://localhost';
 export const DEFAULT_PASSWORD = 'correct horse';
 
 /**
- * How long a driver waits for a step that runs the real crypto.js, whose
- * 600k-iteration PBKDF2 runs on every encryption, verifier and decryption.
+ * How long a driver waits for a step that runs the real lib/crypto.js, whose
+ * 600k-iteration PBKDF2 runs on every seal and every password attempt.
  */
 export const REAL_CRYPTO_TIMEOUT = 15_000;
 
 /**
- * Which crypto a page runs: the stub in the DOM layer, the real crypto.js in
+ * Which crypto a page runs: the stub in the DOM layer, the real lib/crypto.js in
  * the JS-integration layer.
  * @typedef {'stub' | 'real'} CryptoKind
  */
@@ -36,11 +34,11 @@ export const REAL_CRYPTO_TIMEOUT = 15_000;
  * runs it.
  * @param {CryptoKind} kind
  * @param {import('../stub-crypto.js').StubCryptoOptions} [stubOptions]
- * @returns {{ service: CryptoService | StubCrypto, timeout: number }}
+ * @returns {{ service: import('../../../../static/js/lib/crypto.js').ShareCrypto, timeout: number }}
  */
 export function cryptoFor(kind, stubOptions) {
     return kind === 'real'
-        ? { service: new CryptoService(), timeout: REAL_CRYPTO_TIMEOUT }
+        ? { service: shareCrypto, timeout: REAL_CRYPTO_TIMEOUT }
         : { service: makeStubCrypto(stubOptions), timeout: 1000 };
 }
 

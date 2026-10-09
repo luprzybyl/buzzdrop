@@ -4,16 +4,15 @@
 // produced by the fake's own state. The DOM layer runs it with the stub
 // crypto, the JS-integration layer with the real crypto.js.
 import { expect, vi } from 'vitest';
-import { bytesToHex } from '../../../../static/js/crypto.js';
-import { initView } from '../../../../static/js/view-page.js';
+import { bytesToHex } from '../../../../static/js/lib/hex.js';
+import { initView } from '../../../../static/js/pages/view/view-page.js';
 import { makeProtocolFake } from '../protocol-fake.js';
 import { DEFAULT_PASSWORD, addressOf, cryptoFor, openPage, replaceInFixture, typeable, waitUntil } from './page.js';
 
 export { DEFAULT_PASSWORD, screen } from './page.js';
 
 /**
- * @typedef {import('../../../../static/js/crypto.js').Bytes} Bytes
- * @typedef {import('../../../../static/js/crypto.js').CryptoService} CryptoService
+ * @typedef {import('../../../../static/js/lib/crypto.js').Bytes} Bytes
  * @typedef {ReturnType<typeof makeProtocolFake>} Fake
  * @typedef {Fake['log'][number]} LoggedRequest
  * @typedef {import('./page.js').Page} Page
@@ -48,6 +47,7 @@ const WRONG_VERIFIER = 'f'.repeat(64);
  * @property {number} [maxAttempts] - wrong passwords allowed before the share
  *   locks (KEY_RELEASE_MAX_ATTEMPTS, 1 like the server's default)
  * @property {import('./page.js').CryptoKind} [crypto] - real in the JS-integration layer
+ * @property {import('./page.js').ClipboardKind} [clipboard]
  * @property {{ backend: Fake, fileId: string }} [uploaded] - open a share
  *   already uploaded to this server, instead of a new one
  */
@@ -95,6 +95,7 @@ export async function openShare({
     server = 'ok',
     maxAttempts = 1,
     crypto = 'stub',
+    clipboard = 'ok',
     uploaded,
 } = {}) {
     const { service: cryptoService, timeout } = cryptoFor(crypto,
@@ -108,6 +109,7 @@ export async function openShare({
     const { fixture, fileId: fixtureId } = FIXTURES[type];
     const page = openPage(fixture, {
         path: addressOf(`/view/${fileId}/confirm`, { link, password, query }),
+        clipboard,
         // As the server renders it for this share.
         edit: (html) => replaceInFixture(replaceInFixture(html, fixtureId, fileId),
             'You have one attempt', maxAttempts === 1 ? 'You have one attempt' : `You have ${maxAttempts} attempts`),
@@ -209,7 +211,7 @@ export async function openShare({
  * @param {Fake} backend
  * @param {string} fileId
  * @param {NonNullable<ShareOptions['server']>} server
- * @param {Pick<CryptoService, 'parseBlob' | 'deriveVerifier'>} cryptoService
+ * @param {Pick<import('../../../../static/js/lib/crypto.js').ShareCrypto, 'open'>} cryptoService
  * @param {string} password
  * @param {number} maxAttempts
  */
@@ -223,8 +225,8 @@ async function arrange(backend, fileId, server, cryptoService, password, maxAtte
     });
     if (server === 'claimed') {
         const blob = /** @type {Bytes} */ (backend.state.files.get(fileId)?.blob);
-        const v = await cryptoService.deriveVerifier(password, cryptoService.parseBlob(blob).salt);
-        await release(bytesToHex(v));
+        const { verifier } = await cryptoService.open(blob).unlock(password);
+        await release(bytesToHex(verifier));
     } else if (server === 'burned') {
         for (let i = 0; i < maxAttempts; i += 1) await release(WRONG_VERIFIER);
     } else if (server === 'error') {

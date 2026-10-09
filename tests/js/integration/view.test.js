@@ -1,5 +1,5 @@
 // The view page's protocol flow against the protocol fake, with the real
-// crypto.js and real PBKDF2 (docs/frontend-test-strategy.md §7, JS integration
+// lib/crypto.js and real PBKDF2 (docs/frontend-test-strategy.md §7, JS integration
 // and the view-side security invariants).
 import { describe, expect, it } from 'vitest';
 import { openUploadPage } from '../support/pages/upload.js';

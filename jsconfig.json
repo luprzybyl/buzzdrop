@@ -16,5 +16,5 @@
     "include": ["static/js/**/*.js", "tests/js/**/*.js", "tests/e2e/**/*.js", "playwright.config.js"],
     // `exclude` only filters `include`: eff-wordlist.js (data) is still checked
     // through passphrase.js's import, which a plain string array passes as is.
-    "exclude": ["static/js/eff-wordlist.js", "tests/js/fixtures"]
+    "exclude": ["static/js/lib/eff-wordlist.js", "tests/js/fixtures"]
 }

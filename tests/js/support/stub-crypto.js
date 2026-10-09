@@ -1,13 +1,12 @@
-// A stand-in for crypto.js in the DOM layer (docs/frontend-test-strategy.md
-// §7a). The real CryptoService runs 600k-iteration PBKDF2 on every call, and
+// A stand-in for lib/crypto.js in the DOM layer (docs/frontend-test-strategy.md
+// §7a). The real one runs 600k-iteration PBKDF2 on every attempt, and
 // what the page shows for each outcome doesn't depend on it. This one is cheap
 // but still honest enough for the protocol fake to check: the verifier is a
 // hash of the password, so a wrong password is wrong to the server too, and
 // the receipt in a share hashes to the receipt_hash it was uploaded with.
-import { bytesToHex } from '../../../static/js/crypto.js';
+import { bytesToHex } from '../../../static/js/lib/hex.js';
 
-/** @typedef {import('../../../static/js/crypto.js').Bytes} Bytes */
-/** @typedef {Pick<import('../../../static/js/crypto.js').CryptoService, 'encrypt' | 'receiptHash' | 'parseBlob' | 'deriveVerifier' | 'decrypt'>} StubCrypto */
+/** @typedef {import('../../../static/js/lib/crypto.js').Bytes} Bytes */
 
 const MAGIC = new TextEncoder().encode('STUB');
 const RECEIPT = new Uint8Array(32).fill(7);
@@ -29,11 +28,11 @@ async function sha256(input) {
 
 /**
  * @param {StubCryptoOptions} [options]
- * @returns {StubCrypto}
+ * @returns {import('../../../static/js/lib/crypto.js').ShareCrypto}
  */
 export function makeStubCrypto({ unsupportedFormat = false, corrupted = false } = {}) {
     return {
-        async encrypt(data, password) {
+        async seal(data, password) {
             const blob = new Uint8Array(MAGIC.length + data.length);
             blob.set(MAGIC);
             blob.set(data, MAGIC.length);
@@ -42,15 +41,20 @@ export function makeStubCrypto({ unsupportedFormat = false, corrupted = false } 
         async receiptHash(receipt) {
             return bytesToHex(await sha256(receipt));
         },
-        parseBlob(blob) {
+        open(blob) {
             const magic = new TextDecoder().decode(blob.slice(0, MAGIC.length));
             if (unsupportedFormat || magic !== 'STUB') throw new Error('Unsupported share format');
-            return { version: 3, salt: new Uint8Array(16), iv: new Uint8Array(12), ciphertext: blob.slice(MAGIC.length) };
-        },
-        deriveVerifier: (password) => sha256(password),
-        async decrypt(blob) {
-            if (corrupted) throw new Error('');
-            return { data: blob.slice(MAGIC.length), receipt: RECEIPT };
+            return {
+                async unlock(password) {
+                    return {
+                        verifier: await sha256(password),
+                        async finish() {
+                            if (corrupted) throw new Error('');
+                            return { data: blob.slice(MAGIC.length), receipt: RECEIPT };
+                        },
+                    };
+                },
+            };
         },
     };
 }

@@ -294,7 +294,7 @@ def sri_hash_processor():
         Generate SHA-384 SRI hash for a static file.
         
         Args:
-            filename: Relative path to the static file (e.g., 'js/main.js')
+            filename: Relative path to the static file (e.g., 'js/pages/index/entry.js')
             
         Returns:
             str: SRI hash in format 'sha384-<base64-hash>' or empty string if file not found

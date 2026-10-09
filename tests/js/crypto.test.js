@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { open, receiptHash, seal } from '../../static/js/lib/crypto.js';
+import { bytesToHex, hexToBytes } from '../../static/js/lib/hex.js';
 
-// crypto.js uses `window.crypto`; Node exposes Web Crypto on globalThis.
-// Only `crypto` is ever read through it, so Node's globalThis stands in.
-globalThis.window = /** @type {Window & typeof globalThis} */ (globalThis);
-
-const { CryptoService, bytesToHex, hexToBytes } = await import('../../static/js/crypto.js');
-
-const service = new CryptoService();
 const encoder = new TextEncoder();
 
 // Deterministic fixtures, byte-identical to tests/unit/test_cli_crypto.py:
@@ -34,89 +29,85 @@ const V3_FIXTURE_V =
 const V3_FIXTURE_RECEIPT = hexToBytes(
     '404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f');
 
-test('encrypt produces a BKV3 envelope parsed as version 3', async () => {
-    const h = crypto.getRandomValues(new Uint8Array(32));
-    const { blob, verifier, receipt } = await service.encrypt(
-        encoder.encode('secret'), 'pw', h);
+const randomShare = () => crypto.getRandomValues(new Uint8Array(32));
+
+test('seal produces a BKV3 envelope with a verifier and a receipt', async () => {
+    const { blob, verifier, receipt } = await seal(encoder.encode('secret'), 'pw', randomShare());
     assert.deepEqual([...blob.slice(0, 4)], [...encoder.encode('BKV3')]);
-    assert.equal(service.parseBlob(blob).version, 3);
     assert.equal(verifier.length, 32);
     assert.equal(receipt.length, 32);
 });
 
-test('encrypt/decrypt round-trips through the server share', async () => {
-    const h = crypto.getRandomValues(new Uint8Array(32));
+test('a sealed share opens with its password and the server share', async () => {
+    const h = randomShare();
     const data = encoder.encode('key-release payload \x00\x01');
-    const { blob, receipt } = await service.encrypt(data, 'pw', h);
-    const { data: decrypted, receipt: decryptedReceipt } =
-        await service.decrypt(blob, 'pw', h);
-    assert.deepEqual(decrypted, data);
-    assert.deepEqual(decryptedReceipt, receipt);
+    const sealed = await seal(data, 'pw', h);
+
+    const attempt = await open(sealed.blob).unlock('pw');
+    assert.deepEqual(attempt.verifier, sealed.verifier);
+    const opened = await attempt.finish(h);
+    assert.deepEqual(opened.data, data);
+    assert.deepEqual(opened.receipt, sealed.receipt);
 });
 
-test('receiptHash matches the embedded receipt', async () => {
-    const h = crypto.getRandomValues(new Uint8Array(32));
-    const { blob, receipt } = await service.encrypt(
-        encoder.encode('x'), 'pw', h);
-    const expected = bytesToHex(new Uint8Array(
-        await crypto.subtle.digest('SHA-256', receipt)));
-    assert.equal(await service.receiptHash(receipt), expected);
-    // the hash the server stores is provable post-decrypt
-    const { receipt: proven } = await service.decrypt(blob, 'pw', h);
-    assert.equal(bytesToHex(proven), bytesToHex(receipt));
+test('unlocking derives the master key once per attempt', async () => {
+    const h = randomShare();
+    const { blob } = await seal(encoder.encode('x'), 'pw', h);
+    const deriveBits = crypto.subtle.deriveBits;
+    let pbkdf2 = 0;
+    crypto.subtle.deriveBits = function (algorithm, ...rest) {
+        if (/** @type {Algorithm} */ (algorithm).name === 'PBKDF2') pbkdf2 += 1;
+        return deriveBits.call(this, algorithm, ...rest);
+    };
+    try {
+        const attempt = await open(blob).unlock('pw');
+        await attempt.finish(h);
+    } finally {
+        crypto.subtle.deriveBits = deriveBits;
+    }
+    assert.equal(pbkdf2, 1);
 });
 
-test('encrypt/decrypt reject a malformed server share', async () => {
-    const h = crypto.getRandomValues(new Uint8Array(32));
-    const { blob } = await service.encrypt(encoder.encode('x'), 'pw', h);
-    await assert.rejects(service.encrypt(encoder.encode('x'), 'pw', h.slice(0, 8)));
-    await assert.rejects(service.decrypt(blob, 'pw', h.slice(0, 8)));
+test('receiptHash is the hex SHA-256 of the receipt', async () => {
+    const { receipt } = await seal(encoder.encode('x'), 'pw', randomShare());
+    const expected = bytesToHex(new Uint8Array(await crypto.subtle.digest('SHA-256', receipt)));
+    assert.equal(await receiptHash(receipt), expected);
+});
+
+test('seal and finish reject a malformed server share', async () => {
+    const h = randomShare();
+    const { blob } = await seal(encoder.encode('x'), 'pw', h);
+    await assert.rejects(seal(encoder.encode('x'), 'pw', h.slice(0, 8)));
+    const attempt = await open(blob).unlock('pw');
+    await assert.rejects(attempt.finish(h.slice(0, 8)));
     // @ts-expect-error -- a non-bytes H must be rejected by the runtime guard
-    await assert.rejects(service.decrypt(blob, 'pw', 'not-bytes'));
+    await assert.rejects(attempt.finish('not-bytes'));
 });
 
-test('python-generated v3 fixture decrypts in JS', async () => {
-    const { data, receipt } = await service.decrypt(
-        V3_FIXTURE, FIXTURE_PASSWORD, V3_FIXTURE_H);
+test('python-generated v3 fixture opens in JS', async () => {
+    const attempt = await open(V3_FIXTURE).unlock(FIXTURE_PASSWORD);
+    assert.equal(bytesToHex(attempt.verifier), V3_FIXTURE_V);
+    const { data, receipt } = await attempt.finish(V3_FIXTURE_H);
     assert.deepEqual(data, FIXTURE_DATA);
     assert.deepEqual(receipt, V3_FIXTURE_RECEIPT);
 });
 
-test('verifier derivation matches the python fixture', async () => {
-    const salt = V3_FIXTURE.slice(4, 20);
-    const v = await service.deriveVerifier(FIXTURE_PASSWORD, salt);
-    assert.equal(bytesToHex(v), V3_FIXTURE_V);
-});
-
-test('blob cannot decrypt without the server share', async () => {
-    const h = crypto.getRandomValues(new Uint8Array(32));
-    const { blob } = await service.encrypt(encoder.encode('x'), 'pw', h);
+test('a share cannot open without the server share or the password', async () => {
+    const h = randomShare();
+    const { blob } = await seal(encoder.encode('x'), 'pw', h);
     // Wrong H fails the GCM tag...
-    await assert.rejects(
-        service.decrypt(blob, 'pw', crypto.getRandomValues(new Uint8Array(32))));
+    await assert.rejects((await open(blob).unlock('pw')).finish(randomShare()));
     // ...and a wrong password fails even with the right H.
-    await assert.rejects(service.decrypt(blob, 'wrong', h));
+    await assert.rejects((await open(blob).unlock('wrong')).finish(h));
 });
 
 test('non-BKV3 payloads are rejected outright', async () => {
-    const h = crypto.getRandomValues(new Uint8Array(32));
-    const { blob } = await service.encrypt(encoder.encode('x'), 'pw', h);
+    const { blob } = await seal(encoder.encode('x'), 'pw', randomShare());
     const bkv2 = new Uint8Array(blob);
     bkv2[3] = '2'.charCodeAt(0); // 'BKV2'
-    assert.throws(() => service.parseBlob(bkv2), /Unsupported share format/);
-    assert.throws(
-        () => service.parseBlob(crypto.getRandomValues(new Uint8Array(64))),
-        /Unsupported share format/);
-    assert.throws(() => service.parseBlob(new Uint8Array(4)), /Unsupported/);
+    assert.throws(() => open(bkv2), /Unsupported share format/);
+    assert.throws(() => open(crypto.getRandomValues(new Uint8Array(64))), /Unsupported share format/);
+    assert.throws(() => open(new Uint8Array(4)), /Unsupported/);
     // below the BKV3 minimum (magic + salt + iv + GCM tag + header + receipt)
-    assert.throws(
-        () => service.parseBlob(new Uint8Array(87)), /Unsupported/);
-});
-
-test('hex helpers round-trip and reject malformed input', () => {
-    const bytes = hexToBytes('00ff10');
-    assert.deepEqual([...bytes], [0, 255, 16]);
-    assert.equal(bytesToHex(bytes), '00ff10');
-    assert.throws(() => hexToBytes('xyz'));
-    assert.throws(() => hexToBytes('abc'));
+    assert.throws(() => open(new Uint8Array(87)), /Unsupported/);
 });

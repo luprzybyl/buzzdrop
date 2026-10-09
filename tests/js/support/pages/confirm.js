@@ -1,6 +1,6 @@
 // Page driver for the confirm page: the one-time "Proceed" step before the
 // share is downloaded (docs/frontend-test-strategy.md §7a).
-import { initConfirmDownload } from '../../../../static/js/confirm-download-page.js';
+import { initConfirmDownload } from '../../../../static/js/pages/confirm-download/confirm-download-page.js';
 import { addressOf, openPage } from './page.js';
 
 export { screen } from './page.js';

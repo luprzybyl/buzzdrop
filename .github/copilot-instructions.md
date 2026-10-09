@@ -33,8 +33,7 @@ Buzzdrop is a one-time self-destructing file-sharing app where files are encrypt
 - `tokens.py` — `generate_api_token`, `validate_api_token`, `revoke_api_token`; token hashes stored via `TokenStore` (`api_tokens` table)
 - `utils.py` — shared helpers: `enhance_file_display()` (formats timestamps with `<field>_iso` twins, adds `status_key`/`status_display` from `STATUS_LABELS` and the list's `display_name`), `allowed_file()`, `get_client_ip()` (proxy-aware), `cleanup_orphaned_files()`. `DEFAULT_TIMEZONE = 'Europe/Warsaw'`.
 - `cli/buzz` — standalone CLI script (install to `$PATH`; deps in `requirements-cli.txt`)
-- `static/js/main.js` — client-side encryption on upload
-- `static/js/view.js` — client-side decryption on download
+- `static/js/` — browser code in `lib/` / `features/` / `pages/` with enforced import rules (see `static/js/CLAUDE.md`); `lib/crypto.js` is the BKV3 format, `features/share-protocol/` the upload and key-release handshake, `pages/<page>/entry.js` what each template loads
 
 **File lifecycle:**
 1. Browser calls `POST /upload/begin` → server mints `{file_id, h}` (random 32-byte share, hex); a pending row lands in the `file_keys` table

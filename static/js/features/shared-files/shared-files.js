@@ -46,6 +46,40 @@ export function getSharedFilesPage(rows, searchTerm, pageSize, requestedPage) {
 }
 
 /**
+ * A row as the Sort menu orders it: by the ISO timestamps (with offsets) the
+ * template sets in its data attributes, empty when there is none.
+ * @typedef {{ dataset: { uploadedAt?: string, expiryAt?: string, downloadedAt?: string } }} TimedRow
+ */
+
+/** The Sort menu's fields, by the data attribute each orders by. */
+const SORT_FIELDS = /** @type {const} */ ({ uploaded: 'uploadedAt', expiry: 'expiryAt', downloaded: 'downloadedAt' });
+
+/**
+ * The comparator for a Sort menu value such as 'uploaded:desc'. Times are
+ * compared as instants, since CET and CEST strings don't sort lexically;
+ * rows without the time go last in either direction, and rows it can't tell
+ * apart keep their order.
+ * @param {string} sort - '<field>:<asc|desc>'
+ * @returns {(a: TimedRow, b: TimedRow) => number}
+ */
+export function compareRows(sort) {
+    const [field, direction] = sort.split(':');
+    const key = /** @type {Record<string, keyof TimedRow['dataset']>} */ (SORT_FIELDS)[field];
+    const sign = direction === 'desc' ? -1 : 1;
+    /** @param {TimedRow} row */
+    const instant = (row) => (key ? Date.parse(row.dataset[key] || '') : NaN);
+    return (a, b) => {
+        const at = instant(a);
+        const bt = instant(b);
+        if (Number.isNaN(at) || Number.isNaN(bt)) {
+            return !Number.isNaN(at) ? -1 : !Number.isNaN(bt) ? 1 : 0;
+        }
+        if (at === bt) return 0;
+        return (at < bt ? -1 : 1) * sign;
+    };
+}
+
+/**
  * @param {string} currentUrl
  * @param {number} page
  * @param {string} searchTerm

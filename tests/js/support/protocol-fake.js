@@ -21,10 +21,11 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CryptoService, bytesToHex } from '../../../static/js/crypto.js';
+import * as shareCrypto from '../../../static/js/lib/crypto.js';
+import { bytesToHex } from '../../../static/js/lib/hex.js';
 
 /**
- * @typedef {import('../../../static/js/crypto.js').Bytes} Bytes
+ * @typedef {import('../../../static/js/lib/crypto.js').Bytes} Bytes
  * @typedef {'/upload/begin' | '/upload' | '/download' | '/release' | '/report_decryption'} Route
  * @typedef {{
  *   method: string,
@@ -743,14 +744,14 @@ export function makeProtocolFake(opts = {}) {
      * start where the index page left off. Returns its file_id. The DOM
      * layer passes its stub crypto, so the share matches what its page derives.
      * @param {{ password: string, plaintext: string | Bytes, name?: string, expiry?: string }} share
-     * @param {Pick<CryptoService, 'encrypt' | 'receiptHash'>} [cryptoService]
+     * @param {Pick<import('../../../static/js/lib/crypto.js').ShareCrypto, 'seal' | 'receiptHash'>} [cryptoService]
      * @returns {Promise<string>}
      */
-    async function seedShare({ password, plaintext, name = 'report.pdf', expiry }, cryptoService = new CryptoService()) {
+    async function seedShare({ password, plaintext, name = 'report.pdf', expiry }, cryptoService = shareCrypto) {
         /** @type {Bytes} */
         const h = crypto.getRandomValues(new Uint8Array(32));
         const data = typeof plaintext === 'string' ? new TextEncoder().encode(plaintext) : plaintext;
-        const { blob, verifier, receipt } = await cryptoService.encrypt(data, password, h);
+        const { blob, verifier, receipt } = await cryptoService.seal(data, password, h);
         const fileId = crypto.randomUUID();
         state.keys.set(fileId, {
             h: bytesToHex(h), v: bytesToHex(verifier),

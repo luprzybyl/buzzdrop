@@ -31,7 +31,7 @@
             <p id="attempts-warning" class="field-help">
                 You have {% if max_attempts == 1 %}one attempt{% else %}{{ max_attempts }} attempts{% endif %} — check the password before you continue.
             </p>
-            {# Disabled until view-page.js has the share and handles submit:
+            {# Disabled until pages/view/view-page.js has the share and handles submit:
                a native submit would GET this POST-only page and lose the
                share, whose /download is served once. With the default
                button disabled, Enter in the field does nothing either. #}
@@ -74,5 +74,5 @@
     'originalName': original_name,
     'fileType': file_type,
 } | tojson }}</script>
-<script type="module" src="{{ url_for('static', filename='js/view.js') }}" integrity="{{ sri_hash('js/view.js') }}" crossorigin="anonymous"></script>
+<script type="module" src="{{ url_for('static', filename='js/pages/view/entry.js') }}" integrity="{{ sri_hash('js/pages/view/entry.js') }}" crossorigin="anonymous"></script>
 {% endblock %}

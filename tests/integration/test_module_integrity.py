@@ -88,8 +88,8 @@ def test_csp_allows_the_import_map_by_hash(client):
 def test_import_map_tracks_module_changes(client, app, tmp_path, monkeypatch):
     """A changed module must change its pin, not keep a stale hash."""
     static = tmp_path / 'static'
-    (static / 'js').mkdir(parents=True)
-    module = static / 'js' / 'crypto.js'
+    module = static / 'js' / 'lib' / 'crypto.js'
+    module.parent.mkdir(parents=True)
     module.write_text('export const a = 1;\n')
     monkeypatch.setattr(app, 'static_folder', str(static))
 
@@ -97,13 +97,13 @@ def test_import_map_tracks_module_changes(client, app, tmp_path, monkeypatch):
     module.write_text('export const a = 2;\n')
     second = json.loads(_import_map(client.get('/login').data.decode('utf-8')))
 
-    assert first['integrity']['/static/js/crypto.js'] != second['integrity']['/static/js/crypto.js']
-    assert second['integrity']['/static/js/crypto.js'] == _sri(module)
+    assert first['integrity']['/static/js/lib/crypto.js'] != second['integrity']['/static/js/lib/crypto.js']
+    assert second['integrity']['/static/js/lib/crypto.js'] == _sri(module)
 
 
 def test_non_html_responses_keep_the_base_csp(client):
     """Only pages that render the import map need its hash."""
-    response = client.get('/static/js/crypto.js')
+    response = client.get('/static/js/lib/crypto.js')
     script_src = re.search(
         r"script-src ([^;]*)", response.headers['Content-Security-Policy']).group(1)
     assert script_src == "'self'"
