@@ -31,14 +31,17 @@
             <p id="attempts-warning" class="field-help">
                 You have {% if max_attempts == 1 %}one attempt{% else %}{{ max_attempts }} attempts{% endif %} — check the password before you continue.
             </p>
-            {# Disabled until pages/view/view-page.js has the share and handles submit:
-               a native submit would GET this POST-only page and lose the
-               share, whose /download is served once. With the default
+            {# Disabled until pages/view/view-page.js handles submit: a
+               native submit would GET this POST-only page. With the default
                button disabled, Enter in the field does nothing either. #}
             <button id="decrypt-btn" type="submit" class="btn-primary w-full" disabled>
                 <span class="relative z-10">{% if file_type == 'text' %}Decrypt and view{% else %}Decrypt and download{% endif %}</span>
             </button>
         </form>
+
+        {# Real download progress while the ticketed /download runs —
+           filled by view-page.js, hidden the rest of the time. #}
+        <progress id="download-progress" class="mt-4 w-full accent-honey-400" max="100" value="0" aria-label="Download progress" hidden></progress>
 
         {% if file_type != 'text' %}
         <p id="password-status" class="mt-4 flex items-center justify-center gap-2 text-sm font-medium text-emerald-300" style="display: none;">
@@ -73,6 +76,7 @@
     'reportDecryptionUrl': url_for('report_decryption', file_id=file_id),
     'originalName': original_name,
     'fileType': file_type,
+    'salt': salt,
 } | tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/pages/view/entry.js') }}" integrity="{{ sri_hash('js/pages/view/entry.js') }}" crossorigin="anonymous"></script>
 {% endblock %}

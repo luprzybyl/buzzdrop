@@ -76,26 +76,6 @@
           }
         },
         {
-          "name": "download",
-          "as": null,
-          "request": {
-            "method": "GET",
-            "path": [
-              "/download/",
-              {
-                "$ref": "begin.file_id"
-              }
-            ]
-          },
-          "response": {
-            "status": 200,
-            "headers": {
-              "Content-Type": "application/octet-stream"
-            },
-            "bodyBase64": "QktWMyBkdW1teSBjaXBoZXJ0ZXh0"
-          }
-        },
-        {
           "name": "release",
           "as": null,
           "request": {
@@ -123,6 +103,32 @@
             "json": {
               "h": "<hex64>"
             }
+          }
+        },
+        {
+          "name": "download",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-Download-Ticket": {
+                "$ticket": "release"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/octet-stream"
+            },
+            "bodyBase64": "QktWMyBkdW1teSBjaXBoZXJ0ZXh0"
           }
         },
         {
@@ -164,13 +170,21 @@
               {
                 "$ref": "begin.file_id"
               }
-            ]
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-Download-Ticket": {
+                "$ticket": "release"
+              }
+            }
           },
           "response": {
-            "status": 302,
+            "status": 410,
             "headers": {
-              "Content-Type": "text/html; charset=utf-8",
-              "Location": "/"
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "This file has already been downloaded"
             }
           }
         },
@@ -273,26 +287,6 @@
           }
         },
         {
-          "name": "download",
-          "as": null,
-          "request": {
-            "method": "GET",
-            "path": [
-              "/download/",
-              {
-                "$ref": "begin.file_id"
-              }
-            ]
-          },
-          "response": {
-            "status": 200,
-            "headers": {
-              "Content-Type": "application/octet-stream"
-            },
-            "bodyBase64": "QktWMyBkdW1teSBub3RlIGNpcGhlcnRleHQ="
-          }
-        },
-        {
           "name": "release",
           "as": null,
           "request": {
@@ -320,6 +314,32 @@
             "json": {
               "h": "<hex64>"
             }
+          }
+        },
+        {
+          "name": "download",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-Download-Ticket": {
+                "$ticket": "release"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/octet-stream"
+            },
+            "bodyBase64": "QktWMyBkdW1teSBub3RlIGNpcGhlcnRleHQ="
           }
         },
         {
@@ -1997,6 +2017,29 @@
           }
         },
         {
+          "name": "missing-file-xhr",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              "00000000-0000-4000-8000-00000000dead"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest"
+            }
+          },
+          "response": {
+            "status": 404,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "File not found"
+            }
+          }
+        },
+        {
           "name": "begin-unfinished",
           "as": "testuser",
           "request": {
@@ -2037,6 +2080,258 @@
             "headers": {
               "Content-Type": "text/html; charset=utf-8",
               "Location": "/"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "download-requires-ticket",
+      "config": {
+        "KEY_RELEASE_MAX_ATTEMPTS": 1,
+        "KEY_RELEASE_BURN_ON_LOCKOUT": true,
+        "NOTIFICATIONS_CONFIGURED": true
+      },
+      "steps": [
+        {
+          "name": "begin",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload/begin"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "upload",
+          "as": "testuser",
+          "request": {
+            "method": "POST",
+            "path": [
+              "/upload"
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-CSRF-Token": "fixture-csrf-token"
+            },
+            "form": {
+              "file_id": {
+                "$ref": "begin.file_id"
+              },
+              "key_verifier": "1111111111111111111111111111111111111111111111111111111111111111",
+              "receipt_hash": "deb0e38ced1e41de6f92e70e80c418d2d356afaaa99e26f5939dbc7d3ef4772a"
+            },
+            "files": {
+              "file": {
+                "filename": "report.pdf",
+                "content": "BKV3 dummy ciphertext"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "file_id": "<uuid>",
+              "share_link": "http://localhost/view/<uuid>",
+              "type": "file"
+            }
+          }
+        },
+        {
+          "name": "no-ticket",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ]
+          },
+          "response": {
+            "status": 403,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Forbidden"
+            }
+          }
+        },
+        {
+          "name": "no-ticket-xhr",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest"
+            }
+          },
+          "response": {
+            "status": 403,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "Forbidden"
+            }
+          }
+        },
+        {
+          "name": "release",
+          "as": null,
+          "request": {
+            "method": "POST",
+            "path": [
+              "/release/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "v": "1111111111111111111111111111111111111111111111111111111111111111"
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store"
+            },
+            "json": {
+              "h": "<hex64>"
+            }
+          }
+        },
+        {
+          "name": "bad-ticket",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-Download-Ticket": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          },
+          "response": {
+            "status": 410,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "This drop has already been claimed"
+            }
+          }
+        },
+        {
+          "name": "bad-ticket-browser",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Download-Ticket": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          },
+          "response": {
+            "status": 302,
+            "headers": {
+              "Content-Type": "text/html; charset=utf-8",
+              "Location": "/"
+            }
+          }
+        },
+        {
+          "name": "download",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-Download-Ticket": {
+                "$ticket": "release"
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "headers": {
+              "Content-Type": "application/octet-stream"
+            },
+            "bodyBase64": "QktWMyBkdW1teSBjaXBoZXJ0ZXh0"
+          }
+        },
+        {
+          "name": "again",
+          "as": null,
+          "request": {
+            "method": "GET",
+            "path": [
+              "/download/",
+              {
+                "$ref": "begin.file_id"
+              }
+            ],
+            "headers": {
+              "X-Requested-With": "XMLHttpRequest",
+              "X-Download-Ticket": {
+                "$ticket": "release"
+              }
+            }
+          },
+          "response": {
+            "status": 410,
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "json": {
+              "error": "This file has already been downloaded"
             }
           }
         }
@@ -2524,11 +2819,13 @@
             ]
           },
           "response": {
-            "status": 200,
+            "status": 403,
             "headers": {
-              "Content-Type": "application/octet-stream"
+              "Content-Type": "application/json"
             },
-            "bodyBase64": "QktWMyBkdW1teSBjaXBoZXJ0ZXh0"
+            "json": {
+              "error": "Forbidden"
+            }
           }
         },
         {

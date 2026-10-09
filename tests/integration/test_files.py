@@ -144,7 +144,7 @@ def test_upload_file_too_large(client, app):
 
     app.config['MAX_CONTENT_LENGTH'] = original_max_length # Reset
 
-def test_download_file_success(client, app, files_store, key_release_upload):
+def test_download_file_success(client, app, files_store, key_release_upload, claim_ticket):
     login_user(client, 'testuser', 'password')
 
     file_content = b"Downloadable content."
@@ -159,7 +159,10 @@ def test_download_file_success(client, app, files_store, key_release_upload):
     file_path_on_disk = file_info['path']
     assert os.path.exists(file_path_on_disk)
 
-    response = client.get(url_for('download_file', file_id=file_id))
+    # The ciphertext answers only the ticket the winning /release minted.
+    from conftest import ticket_headers
+    response = client.get(url_for('download_file', file_id=file_id),
+                          headers=ticket_headers(claim_ticket(file_id)))
     assert response.status_code == 200
     assert response.data == file_content
     assert response.headers['Content-Disposition'] == f'attachment; filename="{file_name}"'
@@ -176,14 +179,16 @@ def test_download_file_not_found(client):
     assert b'File not found' in response.data
     assert url_for('index') in response.request.path
 
-def test_download_file_already_downloaded(client, app, files_store, key_release_upload):
+def test_download_file_already_downloaded(client, app, files_store, key_release_upload, claim_ticket):
     login_user(client, 'testuser', 'password')
 
     file_content = b"Already downloaded."
     file_name = "download_once.txt"
     file_id, _h, _rcpt, _resp = key_release_upload(
         data={'file': (io.BytesIO(file_content), file_name)})
-    client.get(url_for('download_file', file_id=file_id))
+    from conftest import ticket_headers
+    client.get(url_for('download_file', file_id=file_id),
+               headers=ticket_headers(claim_ticket(file_id)))
 
     response = client.get(url_for('download_file', file_id=file_id), follow_redirects=True)
     assert b'This file has already been downloaded' in response.data
@@ -266,11 +271,13 @@ def test_delete_file_requires_csrf(client, app, files_store):
     assert files_store.get_by_id(file_id) is not None
 
 
-def test_delete_file_after_download(client, app, files_store, csrf_form_data):
+def test_delete_file_after_download(client, app, files_store, csrf_form_data, claim_ticket):
     login_user(client, 'testuser', 'password')
 
     file_id, _rc = upload_file_for_user(client, app, files_store, 'del_after.txt', 'content', 'testuser')
-    download_response = client.get(url_for('download_file', file_id=file_id))
+    from conftest import ticket_headers
+    download_response = client.get(url_for('download_file', file_id=file_id),
+                                   headers=ticket_headers(claim_ticket(file_id)))
     assert download_response.status_code == 200
     _ = download_response.data
 
@@ -303,7 +310,7 @@ def test_view_file_expired(client, app, files_store, key_release_upload):
     assert not os.path.exists(updated['path'])
 
 
-def test_view_file_shows_filename_to_recipient(client, app, files_store, key_release_upload):
+def test_view_file_shows_filename_to_recipient(client, app, files_store, key_release_upload, claim_ticket):
     """Recipients see the real filename on view/confirm and in the
     download's Content-Disposition."""
     login_user(client, 'testuser', 'password')
@@ -322,15 +329,19 @@ def test_view_file_shows_filename_to_recipient(client, app, files_store, key_rel
     assert confirm.status_code == 200
     assert b'"originalName": "medical-records.txt"' in confirm.data
 
-    download = client.get(url_for('download_file', file_id=file_id))
+    from conftest import ticket_headers
+    download = client.get(url_for('download_file', file_id=file_id),
+                          headers=ticket_headers(claim_ticket(file_id)))
     assert download.headers['Content-Disposition'] == 'attachment; filename="medical-records.txt"'
 
-def test_report_decryption_success(client, app, files_store):
+def test_report_decryption_success(client, app, files_store, claim_ticket):
     login_user(client, 'testuser', 'password')
 
     file_id, receipt = upload_file_for_user(client, app, files_store, 'dec.txt', 'content', 'testuser')
 
-    client.get(url_for('download_file', file_id=file_id))
+    from conftest import ticket_headers
+    client.get(url_for('download_file', file_id=file_id),
+               headers=ticket_headers(claim_ticket(file_id)))
 
     res = client.post(
         url_for('report_decryption', file_id=file_id),
@@ -366,7 +377,7 @@ def test_upload_file_uses_verified_account_notification_email(client, app, files
     assert info['notification_email'] == 'testuser@example.com'
 
 
-def test_report_decryption_sends_notification_once(client, app, files_store, monkeypatch, key_release_upload):
+def test_report_decryption_sends_notification_once(client, app, files_store, monkeypatch, key_release_upload, claim_ticket):
     monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     get_users.cache_clear()
     login_user(client, 'testuser', 'password')
@@ -384,7 +395,9 @@ def test_report_decryption_sends_notification_once(client, app, files_store, mon
         },
     )
 
-    client.get(url_for('download_file', file_id=file_id))
+    from conftest import ticket_headers
+    client.get(url_for('download_file', file_id=file_id),
+               headers=ticket_headers(claim_ticket(file_id)))
 
     res = client.post(
         url_for('report_decryption', file_id=file_id),

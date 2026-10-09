@@ -105,6 +105,9 @@
         </form>
 
         
+        <progress id="download-progress" class="mt-4 w-full accent-honey-400" max="100" value="0" aria-label="Download progress" hidden></progress>
+
+        
 
         <div id="text-display" class="mt-7" style="display: none;">
             <h2 id="text-display-heading" class="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Decrypted text</h2>
@@ -123,7 +126,7 @@
         Decryption happens entirely in your browser. Your password stays in your browser; only a derived check value is sent.
     </p>
 </div>
-<script id="view-config-json" type="application/json">{"downloadUrl": "/download/00000000-0000-4000-8000-0000000000f2", "fileType": "text", "originalName": "Secret Note", "releaseUrl": "/release/00000000-0000-4000-8000-0000000000f2", "reportDecryptionUrl": "/report_decryption/00000000-0000-4000-8000-0000000000f2"}</script>
+<script id="view-config-json" type="application/json">{"downloadUrl": "/download/00000000-0000-4000-8000-0000000000f2", "fileType": "text", "originalName": "Secret Note", "releaseUrl": "/release/00000000-0000-4000-8000-0000000000f2", "reportDecryptionUrl": "/report_decryption/00000000-0000-4000-8000-0000000000f2", "salt": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}</script>
 
         </main>
 

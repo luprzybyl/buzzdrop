@@ -224,9 +224,10 @@ class FileRepository:
         """Return the key-share record for a file_id, or None."""
         return self.store.get_key_share(file_id)
 
-    def bind_key_verifier(self, file_id: str, v_hex: str) -> bool:
-        """Bind the password verifier to a pending share."""
-        return self.store.bind_key_verifier(file_id, v_hex)
+    def bind_key_verifier(self, file_id: str, v_hex: str,
+                          salt_hex: Optional[str] = None) -> bool:
+        """Bind the password verifier (and the envelope salt) to a pending share."""
+        return self.store.bind_key_verifier(file_id, v_hex, salt_hex)
 
     def attempt_key_release(self, file_id: str, v_hex: str,
                             max_attempts: int,
@@ -239,6 +240,17 @@ class FileRepository:
         """
         return self.store.attempt_key_release(
             file_id, v_hex, max_attempts, burn_on_lockout)
+
+    def claim_download_with_ticket(self, file_id: str,
+                                   ticket_hex: Optional[str],
+                                   ip_address: str) -> dict:
+        """
+        Verify the release-minted download ticket and claim the blob —
+        one atomic step. See FileStore.claim_download_with_ticket for the
+        status vocabulary.
+        """
+        return self.store.claim_download_with_ticket(
+            file_id, ticket_hex, ip_address)
 
     def purge_stale_key_shares(self, older_than_seconds: int) -> int:
         """Delete pending shares older than the TTL; returns the count."""

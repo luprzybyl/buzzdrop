@@ -22,7 +22,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as shareCrypto from '../../../static/js/lib/crypto.js';
-import { bytesToHex } from '../../../static/js/lib/hex.js';
+import { bytesToHex, hexToBytes } from '../../../static/js/lib/hex.js';
 
 /**
  * @typedef {import('../../../static/js/lib/crypto.js').Bytes} Bytes
@@ -42,7 +42,9 @@ import { bytesToHex } from '../../../static/js/lib/hex.js';
  *   owner: string,
  *   attempts: number,
  *   releasedAt: string | null,
- * }} KeyRow - a file_keys row: the server share H and the bound verifier V
+ *   ticketHash: string | null,
+ * }} KeyRow - a file_keys row: the server share H and the bound verifier V,
+ *   plus the download-ticket digest minted at release
  * @typedef {{
  *   name: string,
  *   blob: Bytes | null,
@@ -121,7 +123,8 @@ export const EMITS = [
     ['/upload/begin', 429, 'injected'],
     ['/upload', 200, 'state'], ['/upload', 400, 'state'], ['/upload', 403, 'state'],
     ['/upload', 409, 'state'], ['/upload', 413, 'injected'], ['/upload', 429, 'injected'],
-    ['/download', 200, 'state'], ['/download', 302, 'state'], ['/download', 429, 'injected'],
+    ['/download', 200, 'state'], ['/download', 302, 'state'], ['/download', 403, 'state'],
+    ['/download', 404, 'state'], ['/download', 410, 'state'], ['/download', 429, 'injected'],
     ['/release', 200, 'state'], ['/release', 400, 'state'], ['/release', 403, 'state'],
     ['/release', 404, 'state'], ['/release', 410, 'state'], ['/release', 429, 'state'],
     ['/release', 429, 'injected'],
@@ -423,7 +426,7 @@ export function makeProtocolFake(opts = {}) {
         }
         const fileId = crypto.randomUUID();
         const h = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
-        state.keys.set(fileId, { h, v: null, owner, attempts: 0, releasedAt: null });
+        state.keys.set(fileId, { h, v: null, owner, attempts: 0, releasedAt: null, ticketHash: null });
         return json(200, { file_id: fileId, h });
     }
 
@@ -488,24 +491,76 @@ export function makeProtocolFake(opts = {}) {
         });
     }
 
-    /** @param {string} fileId */
-    function download(fileId) {
+    /**
+     * The bearer ticket /download requires, derived independently of the
+     * client's lib/crypto.js so a divergence shows: HKDF-SHA256(ikm=H,
+     * info='buzzdrop-download-ticket'), as _download_ticket does in
+     * db/sqlite_backend.py.
+     * @param {string} hHex
+     * @returns {Promise<string>}
+     */
+    async function downloadTicket(hHex) {
+        const ikm = await crypto.subtle.importKey(
+            'raw', hexToBytes(hHex), 'HKDF', false, ['deriveBits']);
+        const bits = await crypto.subtle.deriveBits(
+            {
+                name: 'HKDF', hash: 'SHA-256',
+                salt: new Uint8Array(32),
+                info: new TextEncoder().encode('buzzdrop-download-ticket'),
+            },
+            ikm, 256);
+        return bytesToHex(new Uint8Array(bits));
+    }
+
+    /**
+     * @param {string} value - hex
+     * @returns {Promise<string>}
+     */
+    async function sha256Hex(value) {
+        return bytesToHex(new Uint8Array(
+            await crypto.subtle.digest('SHA-256', hexToBytes(value))));
+    }
+
+    /**
+     * claim_download_with_ticket: the blob answers a released share's
+     * ticket once; a live unreleased share is a bare 403 to everyone, a
+     * released one 'claimed' to everyone without the winner's ticket.
+     * @param {string} fileId
+     * @param {Record<string, string>} headers
+     */
+    async function download(fileId, headers) {
+        const xhr = headers['x-requested-with'] === 'XMLHttpRequest';
         const file = state.files.get(fileId);
-        if (!file || file.downloaded) {
-            return redirectHome();
+        if (!file) {
+            return xhr ? json(404, { error: 'File not found' }) : redirectHome();
+        }
+        if (file.downloaded) {
+            return xhr ? json(410, { error: 'This file has already been downloaded' }) : redirectHome();
         }
         if (isExpired(file)) {
             expire(fileId, file);
-            return redirectHome();
+            return xhr ? json(410, { error: 'File has expired' }) : redirectHome();
+        }
+        const key = state.keys.get(fileId);
+        if (!key || key.releasedAt === null) {
+            return json(403, { error: 'Forbidden' });
+        }
+        const rawTicket = headers['x-download-ticket'];
+        const ticket = typeof rawTicket === 'string' ? rawTicket.trim().toLowerCase() : null;
+        const presented = isKeyMaterial(ticket) ? await sha256Hex(/** @type {string} */ (ticket)) : null;
+        if (key.ticketHash === null || presented !== key.ticketHash) {
+            return xhr ? json(410, { error: 'This drop has already been claimed' }) : redirectHome();
         }
         const blob = file.blob ?? new Uint8Array();
         file.downloaded = true;
         file.blob = null;
+        key.ticketHash = null;
         return {
             status: 200,
             headers: {
                 'Content-Type': 'application/octet-stream',
                 'Content-Disposition': `attachment; filename="${file.name}"`,
+                'Content-Length': String(blob.length),
             },
             body: blob,
         };
@@ -524,12 +579,14 @@ export function makeProtocolFake(opts = {}) {
     }
 
     /**
-     * attempt_key_release: the checks in the server's order.
+     * attempt_key_release: the checks in the server's order. On a match it
+     * keeps the download-ticket digest (HKDF of H, SHA-256); the ticket
+     * itself is never sent — the client recomputes it from H.
      * @param {string} fileId
      * @param {Record<string, string>} headers
      * @param {FakeRequest['body']} body
      */
-    function release(fileId, headers, body) {
+    async function release(fileId, headers, body) {
         const data = jsonObject(headers, body);
         if (!data) {
             return json(400, { error: 'Invalid request' });
@@ -562,6 +619,7 @@ export function makeProtocolFake(opts = {}) {
             key.releasedAt = new Date().toISOString();
             key.h = null;
             key.v = null;
+            key.ticketHash = await sha256Hex(await downloadTicket(h));
             return json(200, { h });
         }
         key.attempts += 1;
@@ -637,9 +695,9 @@ export function makeProtocolFake(opts = {}) {
         } else if (route === '/upload') {
             response = await upload(headers, body);
         } else if (route === '/download') {
-            response = download(fileId);
+            response = await download(fileId, headers);
         } else if (route === '/release') {
-            response = release(fileId, headers, body);
+            response = await release(fileId, headers, body);
         } else {
             response = await reportDecryption(fileId, headers, body);
         }
@@ -756,6 +814,7 @@ export function makeProtocolFake(opts = {}) {
         state.keys.set(fileId, {
             h: bytesToHex(h), v: bytesToHex(verifier),
             owner: state.user ?? 'testuser', attempts: 0, releasedAt: null,
+            ticketHash: null,
         });
         storeFile(fileId, {
             name, blob, expiry: expiry ?? null, receiptHash: await cryptoService.receiptHash(receipt),

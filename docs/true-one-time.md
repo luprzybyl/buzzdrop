@@ -185,6 +185,9 @@ H         = random 32 bytes                # server half — held by the
                                            # server, released ONCE
 
 file_key  = HKDF(Kp ‖ H)                   # requires BOTH halves
+ticket    = HKDF(H, 'buzzdrop-download-ticket')  # /download credential,
+                                           # derived — never stored
+                                           # raw nor sent in a response
 blob      = AES-GCM(file_key, file)
 ```
 
@@ -232,18 +235,39 @@ Notes:
 
 ### 6.4. Download flow
 
+The blob is fetched **after** the password is proven, not before: a
+ciphertext without H is dead, so downloading it early protects nothing —
+and would burn the share for everyone who merely opens the link or
+abandons the page.
+
 ```
-1. GET /download/<id>      → ciphertext + salt   (H is NOT released)
-2. client enters password → master → V'
-3. POST /release/<id> {V'}   (harder variant: HMAC(V', nonce) challenge)
+1. GET /view/<id>/confirm     → the page; the server renders the BKV3
+                                envelope salt (stored on the share row at
+                                upload, or read as the blob's 20-byte
+                                prefix for pre-salt shares) into the
+                                page config
+2. client enters password → master = PBKDF2(password, salt) → V'
+3. POST /release/<id> {V'}
 4. server, in a transaction:
      - compare_digest(V', V) — constant time
-     - MATCH → releases H, atomically burns the record
-               (UPDATE ... WHERE h_released IS NULL — exactly one winner)
-     - MISS  → attempts++, exponential backoff, per-file_id limit;
-               optionally burns the record after N failures
-5. client: Kp ‖ H → file_key → decrypts locally
+     - MATCH → releases H, and in the same transaction stores
+               ticket_hash = SHA-256(ticket),
+               ticket = HKDF-SHA256(ikm=H, info='buzzdrop-download-ticket')
+     - MISS  → attempts++, per-file_id limit;
+               burns the record after N failures
+5. client derives ticket = HKDF(H) (it is never sent) and calls
+   GET /download/<id> with X-Download-Ticket: ticket
+6. server, in a transaction: check the ticket digest, stamp
+   downloaded_at and consume the ticket — exactly one winner
+7. client: Kp ‖ H → file_key → decrypts locally
 ```
+
+The ticket closes the window a plain reorder would open: `/download`
+doesn't know the password, so without it any link holder could claim
+the blob between someone's `/release` and their download. Deriving it
+from H means the winner can recompute it (a lost response isn't fatal),
+the wire never carries it, and the DB stores only a digest — a stolen
+DB ticket_hash is not a usable ticket.
 
 **H leaves the server exactly once, at one moment:** in response to
 the winning `/release`, after a successful `V' == V` check. No match —
@@ -251,6 +275,12 @@ no H, and a stolen or legitimately downloaded ciphertext remains
 mathematically dead. This is the essence: a piece of the key reaches
 the client **only after proving knowledge of the password**, and the
 release itself is a one-time atomic database operation.
+
+A share that released but was never downloaded is terminal from the
+recipient's perspective: `/view` answers the same uniform "drop is
+gone" page as a never-existing share, and `/download` without the
+ticket reports "claimed" — the release already happened, and only the
+winner's ticket unlocks the blob until it's served.
 
 Once H is released the recipient holds complete key material and can
 save `ciphertext + Kp + H` and decrypt offline as many times as they

@@ -318,6 +318,9 @@ def test_release_returns_h_once(client, files_store, file_record):
     first = client.post(url_for('release_key', file_id=file_id), json={'v': v})
     assert first.status_code == 200
     assert first.get_json()['h'] == h
+    # The release mints the ticket's digest; the ticket itself derives
+    # from H and is never sent.
+    assert 'download_ticket' not in first.get_json()
 
     second = client.post(url_for('release_key', file_id=file_id), json={'v': v})
     assert second.status_code == 410
@@ -445,22 +448,37 @@ def test_release_expired_file_is_410(client, files_store, file_record):
     assert files_store.get_key_share('exp-1') is None
 
 
-def test_release_works_after_blob_download(client, files_store, app):
-    """The real order: blob first (claims download), then /release."""
+def test_release_then_ticketed_download(client, files_store, app):
+    """The real order: /release mints the ticket, /download answers it."""
     login_user(client)
     file_id, h, _rcpt, finish = _key_release_upload(client, content=b'real blob')
     assert finish.status_code == 200
     v = 'cc' * 32
 
-    # download claims + serves the blob; release must still work
-    download = client.get(url_for('download_file', file_id=file_id))
-    assert download.status_code == 200
-    assert download.data == b'real blob'
+    # Without a ticket the blob is refused — it is dead without H anyway.
+    refused = client.get(url_for('download_file', file_id=file_id))
+    assert refused.status_code == 403
 
     release = client.post(
         url_for('release_key', file_id=file_id), json={'v': v})
     assert release.status_code == 200
     assert release.get_json()['h'] == h
+
+    from conftest import download_ticket
+    ticket = download_ticket(release.get_json()['h'])
+    download = client.get(
+        url_for('download_file', file_id=file_id),
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                 'X-Download-Ticket': ticket})
+    assert download.status_code == 200
+    assert download.data == b'real blob'
+
+    # The claim consumed the ticket: the same request again is done.
+    again = client.get(
+        url_for('download_file', file_id=file_id),
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                 'X-Download-Ticket': ticket})
+    assert again.status_code == 410
 
 
 def test_delete_file_drops_key_share(client, files_store, csrf_form_data):
@@ -551,15 +569,19 @@ def test_key_release_end_to_end(client, files_store, key_release_settings):
     )
     assert miss.status_code == 403
 
-    download = client.get(url_for('download_file', file_id=file_id))
-    assert download.status_code == 200
-    served = download.data
-
     release = client.post(
         url_for('release_key', file_id=file_id), json={'v': v_hex})
     assert release.status_code == 200
     released_h = bytes.fromhex(release.get_json()['h'])
     assert released_h == h
+
+    from conftest import download_ticket
+    download = client.get(
+        url_for('download_file', file_id=file_id),
+        headers={'X-Requested-With': 'XMLHttpRequest',
+                 'X-Download-Ticket': download_ticket(release.get_json()['h'])})
+    assert download.status_code == 200
+    served = download.data
 
     data, receipt = buzz.decrypt_file(served, password, h=released_h)
     assert data == plaintext

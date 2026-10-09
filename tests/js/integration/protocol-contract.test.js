@@ -5,6 +5,8 @@
 // changes a response, `npm run fixtures` re-records the contract and this test
 // stays red until the fake matches.
 import { describe, it, expect } from 'vitest';
+import * as shareCrypto from '../../../static/js/lib/crypto.js';
+import { bytesToHex, hexToBytes } from '../../../static/js/lib/hex.js';
 import {
     EMITS, isJsonContentType, loadContract, makeProtocolFake, routeOf,
 } from '../support/protocol-fake.js';
@@ -43,14 +45,15 @@ function normalise(value) {
 
 /**
  * Replace `{"$ref": "<step>.<field>"}` with that step's response field, as the
- * fake answered it.
+ * fake answered it; `{"$ticket": "<step>"}` becomes the download ticket
+ * derived from the H the fake released in that step.
  * @param {unknown} value
  * @param {Record<string, Record<string, unknown>>} responses
- * @returns {unknown}
+ * @returns {Promise<unknown>}
  */
-function resolve(value, responses) {
+async function resolve(value, responses) {
     if (Array.isArray(value)) {
-        return value.map((item) => resolve(item, responses));
+        return Promise.all(value.map((item) => resolve(item, responses)));
     }
     if (value && typeof value === 'object') {
         if ('$ref' in value && typeof value.$ref === 'string') {
@@ -58,8 +61,13 @@ function resolve(value, responses) {
             const dot = value.$ref.indexOf('.');
             return responses[value.$ref.slice(0, dot)][value.$ref.slice(dot + 1)];
         }
+        if ('$ticket' in value && typeof value.$ticket === 'string') {
+            return shareCrypto.downloadTicket(
+                hexToBytes(/** @type {string} */ (responses[value.$ticket].h)));
+        }
         return Object.fromEntries(
-            Object.entries(value).map(([k, v]) => [k, resolve(v, responses)]));
+            await Promise.all(Object.entries(value).map(
+                async ([k, v]) => [k, await resolve(v, responses)])));
     }
     return value;
 }
@@ -144,7 +152,7 @@ describe('protocol fake replays the recorded contract', () => {
             /** @type {Record<string, Record<string, unknown>>} */
             const responses = {};
             for (const step of scenario.steps) {
-                const request = /** @type {RecordedRequest} */ (resolve(step.request, responses));
+                const request = /** @type {RecordedRequest} */ (await resolve(step.request, responses));
                 const path = request.path.join('');
                 fake.state.user = step.as;
                 if (step.injected) {
@@ -177,20 +185,42 @@ describe('the contract covers the fake', () => {
 });
 
 describe('fetch adapter', () => {
-    it('follows the 302 a consumed download answers', async () => {
+    it('follows the 302 a dead download answers, and the 403 a live one', async () => {
         const fake = makeProtocolFake();
+
+        const missing = await fake.fetch('/download/nope');
+        expect(missing.status).toBe(200);
+        expect(missing.redirected).toBe(true);
+        expect(missing.url).toBe('http://localhost/');
+
         const fileId = await fake.seedShare({ password: 'pw', plaintext: 'hello' });
 
-        const first = await fake.fetch(`/download/${fileId}`);
-        expect(first.status).toBe(200);
-        expect(first.redirected).toBe(false);
+        // A live but unreleased share is a bare 403 to everyone.
+        const unreleased = await fake.fetch(`/download/${fileId}`);
+        expect(unreleased.status).toBe(403);
 
-        const second = await fake.fetch(`/download/${fileId}`);
-        expect(second.status).toBe(200);
-        expect(second.redirected).toBe(true);
-        expect(second.url).toBe('http://localhost/');
-        expect(fake.log.map((r) => r.url)).toEqual([
-            `http://localhost/download/${fileId}`, `http://localhost/download/${fileId}`]);
+        // A released share without the winner's ticket redirects home.
+        const { verifier } = await shareCrypto.open(
+            /** @type {import('../../../static/js/lib/hex.js').Bytes} */ (
+                fake.state.files.get(fileId)?.blob)).unlock('pw');
+        const released = await fake.handle({
+            method: 'POST',
+            url: `/release/${fileId}`,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ v: bytesToHex(verifier) }),
+        });
+        const h = hexToBytes(/** @type {string} */ (JSON.parse(String(released.body)).h));
+        const ticket = await shareCrypto.downloadTicket(h);
+
+        const claimed = await fake.fetch(`/download/${fileId}`);
+        expect(claimed.redirected).toBe(true);
+        expect(claimed.url).toBe('http://localhost/');
+
+        const served = await fake.fetch(`/download/${fileId}`, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-Download-Ticket': ticket },
+        });
+        expect(served.status).toBe(200);
+        expect(new Uint8Array(await served.arrayBuffer()).length).toBeGreaterThan(0);
     });
 
     it('rejects like a dropped connection on an injected network failure', async () => {

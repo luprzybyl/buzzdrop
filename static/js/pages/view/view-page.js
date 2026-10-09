@@ -1,14 +1,17 @@
 // --- Secure File Download & Decryption Logic ---
 // This script handles the process of downloading, decrypting, and saving the file client-side
 // Steps:
-// 1. Download the encrypted file from the server
+// 1. Build the share from the salt the server rendered into the page —
+//    the ciphertext is NOT fetched up front (a blob without H is dead,
+//    so fetching it early protects nothing; docs/true-one-time.md §6.4)
 // 2. Wait for user to enter password and click 'Decrypt'
-// 3. Prove the password to /release, receive the server share H,
-//    then decrypt with Kp ‖ H (docs/true-one-time.md §6.4)
+// 3. Prove the password to /release, which hands out the server share H
+//    and the one-time download ticket, then fetch the ciphertext with it
 // 4. Save file to disk and notify server
 
 import { copyWithFeedback } from '../../features/clipboard-feedback/index.js';
-import { claimShare, downloadShare } from '../../features/share-protocol/index.js';
+import { claimShare } from '../../features/share-protocol/index.js';
+import { hexToBytes } from '../../lib/hex.js';
 import * as shareCrypto from '../../lib/crypto.js';
 import { takeFragmentPassword } from '../../lib/one-click-link.js';
 import { required, requiredWindow } from '../../lib/required.js';
@@ -18,7 +21,7 @@ import { required, requiredWindow } from '../../lib/required.js';
 /**
  * @typedef {object} ViewDeps
  * @property {typeof fetch} fetch
- * @property {Pick<import('../../lib/crypto.js').ShareCrypto, 'open'>} crypto
+ * @property {Pick<import('../../lib/crypto.js').ShareCrypto, 'openSalted'>} crypto
  */
 
 /**
@@ -29,6 +32,7 @@ import { required, requiredWindow } from '../../lib/required.js';
  * @property {string} reportDecryptionUrl
  * @property {string} originalName
  * @property {'file' | 'text'} fileType
+ * @property {string | null} salt - the BKV3 envelope salt, hex
  */
 
 /**
@@ -41,8 +45,8 @@ export function browserDeps() {
 }
 
 /**
- * Downloads the share, then wires up decryption. Resolves once the page is
- * ready for a password.
+ * Builds the share from the rendered salt, then wires up decryption.
+ * Resolves once the page is ready for a password.
  * @param {Document} root - the view.html document
  * @param {ViewDeps} deps
  * @returns {Promise<void>}
@@ -61,17 +65,18 @@ export async function initView(root, deps) {
         reportDecryptionUrl,
         originalName,
         fileType,
+        salt,
     } = JSON.parse(required(root, '#view-config-json', 'script').text);
 
     // One-click links carry the password in the URL fragment. Taken before
     // anything else, so it is scrubbed whatever happens to the share.
     const fragmentPassword = takeFragmentPassword(window);
 
-    const download = await downloadShare(downloadUrl, deps);
     const decryptForm = required(root, '#decrypt-form', 'form');
     const decryptBtn = required(root, '#decrypt-btn', 'button');
     const passInput = required(root, '#password-input', 'input');
     const status = required(root, '#status', 'p');
+    const progress = required(root, '#download-progress', 'progress');
     // Counts the attempts before the first one; after that the status line
     // says what is left, so the warning would only contradict it.
     const attemptsWarning = required(root, '#attempts-warning', 'p');
@@ -87,13 +92,16 @@ export async function initView(root, deps) {
         passInput.removeAttribute('aria-describedby');
     }
 
-    if (download.kind === 'unsupported') {
+    /** @type {import('../../lib/crypto.js').SealedShare} */
+    let sealed;
+    try {
+        sealed = deps.crypto.openSalted(hexToBytes(typeof salt === 'string' ? salt : ''));
+    } catch {
         lockForm();
         status.textContent =
             'This share uses an unsupported format. Ask the author to upload it again.';
         return;
     }
-    const { sealed } = download;
 
     if (fragmentPassword) {
         passInput.value = fragmentPassword;
@@ -146,7 +154,7 @@ export async function initView(root, deps) {
             return `Incorrect password.${suffix}`;
         }
         case 'unreachable':
-            return 'Could not reach the server to release the key.';
+            return 'Could not reach the server — check the connection and press Decrypt to retry.';
         case 'gone':
             return {
                 claimed: 'This share has already been claimed.',
@@ -168,26 +176,31 @@ export async function initView(root, deps) {
         const password = passInput.value;
         if (!password) return;
         lockForm();
+        progress.hidden = false;
+        progress.value = 0;
 
         // The blob alone is mathematically dead: the password must be
-        // proven to /release, which hands out the server share H once.
+        // proven to /release first, which hands out the server share H and
+        // the one-time ticket the ciphertext download requires.
         const result = await claimShare(sealed, password, {
             fetch: deps.fetch,
-            urls: { release: releaseUrl, report: reportDecryptionUrl },
+            urls: { release: releaseUrl, download: downloadUrl, report: reportDecryptionUrl },
+            onProgress: (percent) => { progress.value = percent; },
         });
+        progress.hidden = true;
         if (result.kind === 'opened') {
             showPlaintext(result.data);
             return;
         }
         status.textContent = failureMessage(result);
-        if (result.kind === 'retry') {
+        if (result.kind === 'retry' || result.kind === 'unreachable') {
             decryptBtn.disabled = false;
             passInput.disabled = false;
             passInput.select();
         }
     });
     // The template renders the button disabled so nothing submits natively
-    // while the share downloads; only now does submit stay on the page.
+    // before this listener exists; only now does submit stay on the page.
     decryptBtn.disabled = false;
     // Focus the decrypt button so user can easily press Enter to proceed
     if (fragmentPassword) decryptBtn.focus();

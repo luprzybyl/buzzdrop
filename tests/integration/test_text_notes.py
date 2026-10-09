@@ -130,7 +130,7 @@ def test_view_text_note_shows_correct_template(client, app, files_store):
     assert response.status_code == 200
     assert b'Secret Note' in response.data
     assert b'Ready to view?' in response.data
-    assert b'Continuing deletes this note from the server immediately.' in response.data
+    assert b'This note can be opened once.' in response.data
     assert b'If the sender shared the password separately' in response.data
     assert b'id="password-hint"' in response.data
 
@@ -203,7 +203,7 @@ def test_text_note_success_page(client, app, files_store):
     assert b'Note is in the hive' in response.data
     assert b'is destroyed as soon as the recipient continues' in response.data
 
-def test_text_note_deletion_after_view(client, app, files_store):
+def test_text_note_deletion_after_view(client, app, files_store, claim_ticket):
     """Test that text note is marked as downloaded after viewing."""
     login_user(client, 'testuser', 'password')
 
@@ -211,8 +211,10 @@ def test_text_note_deletion_after_view(client, app, files_store):
     response = upload_note(client, files_store)
     note_id = response.get_json()['file_id']
 
-    # Download the note
-    response = client.get(url_for('download_file', file_id=note_id))
+    # Download the note — with the ticket its /release minted
+    from conftest import ticket_headers
+    response = client.get(url_for('download_file', file_id=note_id),
+                          headers=ticket_headers(claim_ticket(note_id)))
     assert response.status_code == 200
 
     # Verify it's marked as downloaded
@@ -289,7 +291,7 @@ def test_report_decryption_for_text_note(client, app, files_store):
     assert note_info['decryption_success'] is True
 
 
-def test_report_decryption_for_text_note_sends_failed_notification(client, app, files_store, monkeypatch):
+def test_report_decryption_for_text_note_sends_failed_notification(client, app, files_store, monkeypatch, claim_ticket):
     """Test reporting a failed decryption sends one notification for text notes."""
     monkeypatch.setenv('FLASK_USER_1', 'testuser:password:false:testuser@example.com')
     from auth import get_users
@@ -306,7 +308,9 @@ def test_report_decryption_for_text_note_sends_failed_notification(client, app, 
     note_id = response.get_json()['file_id']
     receipt = response.receipt
 
-    client.get(url_for('download_file', file_id=note_id))
+    from conftest import ticket_headers
+    client.get(url_for('download_file', file_id=note_id),
+               headers=ticket_headers(claim_ticket(note_id)))
 
     response = client.post(
         url_for('report_decryption', file_id=note_id),
@@ -320,7 +324,7 @@ def test_report_decryption_for_text_note_sends_failed_notification(client, app, 
     assert 'Decryption status: failed' in sent_messages[0][2]
 
 
-def test_text_note_notifications_can_use_verified_account_email(client, app, files_store, monkeypatch):
+def test_text_note_notifications_can_use_verified_account_email(client, app, files_store, monkeypatch, claim_ticket):
     login_user(client, 'testuser', 'password')
     app.config.update({
         'SMTP_HOST': 'smtp.example.com',
@@ -336,7 +340,9 @@ def test_text_note_notifications_can_use_verified_account_email(client, app, fil
     response = upload_note(client, files_store, data={'notify_on_open': 'true'})
     note_id = response.get_json()['file_id']
 
-    client.get(url_for('download_file', file_id=note_id))
+    from conftest import ticket_headers
+    client.get(url_for('download_file', file_id=note_id),
+               headers=ticket_headers(claim_ticket(note_id)))
     response = client.post(
         url_for('report_decryption', file_id=note_id),
         json={'success': True, 'receipt': response.receipt}

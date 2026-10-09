@@ -11,6 +11,8 @@ against SQLite always; additional backends activate by exporting a DSN:
 To add a backend: implement FileStore + TokenStore (db/base.py), register
 the scheme in db.create_backend(), and make this suite pass.
 """
+import hashlib
+import hmac
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -237,6 +239,91 @@ def test_key_share_lifecycle(backend):
     # second bind is refused — the verifier is set at upload finish, once
     assert backend.files.bind_key_verifier('f1', 'cc' * 32) is False
     assert backend.files.get_key_share('f1')['v'] == _V
+
+
+def test_bind_key_verifier_stores_salt(backend):
+    """The envelope salt rides on the share so /view can hand it to the
+    client before it proves the password."""
+    backend.files.insert(_file_doc())
+    backend.files.create_key_share('file-1', _H, created_by='testuser')
+    assert backend.files.bind_key_verifier('file-1', _V, 'aa' * 16) is True
+    assert backend.files.get_key_share('file-1')['salt'] == 'aa' * 16
+
+
+def _download_ticket(h_hex):
+    """The ticket a client derives from H — HKDF-SHA256, zero salt,
+    info='buzzdrop-download-ticket'. Kept independent of the backend's
+    derivation so a divergence shows here."""
+    prk = hmac.new(b'\x00' * 32, bytes.fromhex(h_hex), hashlib.sha256).digest()
+    return hmac.new(prk, b'buzzdrop-download-ticket' + b'\x01',
+                    hashlib.sha256).hexdigest()
+
+
+def test_release_mints_download_ticket(backend):
+    """A winning release stores only the digest of the ticket the client
+    derives from H."""
+    _bound_share(backend)
+
+    result = backend.files.attempt_key_release('f1', _V, 3, False)
+    assert result['status'] == 'ok'
+    assert 'download_ticket' not in result
+
+    share = backend.files.get_key_share('f1')
+    assert share['ticket_hash'] == hashlib.sha256(
+        bytes.fromhex(_download_ticket(_H))).hexdigest()
+
+
+def test_claim_download_with_ticket(backend):
+    _bound_share(backend)
+
+    # Nothing to claim before a release — nobody holds a ticket.
+    result = backend.files.claim_download_with_ticket('f1', 'ee' * 32, '1.2.3.4')
+    assert result['status'] == 'not_released'
+    assert backend.files.get_by_id('f1')['downloaded_at'] is None
+
+    assert backend.files.attempt_key_release('f1', _V, 3, False)['status'] == 'ok'
+    ticket = _download_ticket(_H)
+
+    # A wrong ticket doesn't claim — and doesn't consume the real one.
+    result = backend.files.claim_download_with_ticket('f1', 'ee' * 32, '1.2.3.4')
+    assert result['status'] == 'bad_ticket'
+    assert backend.files.get_by_id('f1')['downloaded_at'] is None
+    result = backend.files.claim_download_with_ticket('f1', None, '1.2.3.4')
+    assert result['status'] == 'bad_ticket'
+
+    result = backend.files.claim_download_with_ticket('f1', ticket, '1.2.3.4')
+    assert result['status'] == 'ok'
+    stored = backend.files.get_by_id('f1')
+    assert stored['downloaded_at'] is not None
+    assert stored['downloaded_by_ip'] == '1.2.3.4'
+    # The claim consumed the ticket digest.
+    assert backend.files.get_key_share('f1')['ticket_hash'] is None
+
+    result = backend.files.claim_download_with_ticket('f1', ticket, '5.6.7.8')
+    assert result['status'] == 'already_downloaded'
+
+
+def test_claim_download_with_ticket_concurrent_single_winner(backend):
+    """≥8 racing ticketed claims must produce exactly one winner."""
+    _bound_share(backend)
+    backend.files.attempt_key_release('f1', _V, 3, False)
+    ticket = _download_ticket(_H)
+
+    workers = 8
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = list(pool.map(
+            lambda index: backend.files.claim_download_with_ticket(
+                'f1', ticket, f'10.0.0.{index}')['status'],
+            range(workers),
+        ))
+
+    assert results.count('ok') == 1
+    assert results.count('already_downloaded') == workers - 1
+
+
+def test_claim_download_with_ticket_missing(backend):
+    assert backend.files.claim_download_with_ticket(
+        'nope', 'ee' * 32, '1.2.3.4')['status'] == 'missing'
 
 
 def test_key_share_get_missing(backend):

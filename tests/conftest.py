@@ -233,6 +233,54 @@ def key_share(files_store):
 
 
 @pytest.fixture
+def bound_share(files_store):
+    """
+    A bound, unreleased key share — the state /upload leaves, created
+    directly in the store.
+
+    Returns a factory: _create(file_id, h=None, v='cc'*32, salt='aa'*16)
+    -> file_id. The salt is the envelope salt the view page needs.
+    """
+    def _create(file_id, h_hex=None, v_hex='cc' * 32, salt_hex='aa' * 16):
+        files_store.create_key_share(
+            file_id, h_hex or secrets.token_hex(32), created_by='testuser')
+        files_store.bind_key_verifier(file_id, v_hex, salt_hex)
+        return file_id
+    return _create
+
+
+def download_ticket(h_hex):
+    """The ticket /download requires, derived as the client derives it —
+    RFC 5869 HKDF-SHA256(ikm=H, salt=zero, info='buzzdrop-download-ticket')."""
+    import hashlib
+    import hmac
+    prk = hmac.new(b'\x00' * 32, bytes.fromhex(h_hex), hashlib.sha256).digest()
+    return hmac.new(prk, b'buzzdrop-download-ticket' + b'\x01',
+                    hashlib.sha256).hexdigest()
+
+
+@pytest.fixture
+def claim_ticket(client):
+    """
+    Win /release for a bound share and return its download ticket —
+    the bearer credential /download requires, derived from the released H.
+    """
+    from flask import url_for
+
+    def _claim(file_id, verifier='cc' * 32):
+        response = client.post(
+            url_for('release_key', file_id=file_id), json={'v': verifier})
+        assert response.status_code == 200, response.get_json()
+        return download_ticket(response.get_json()['h'])
+    return _claim
+
+
+def ticket_headers(ticket):
+    """The headers a page sends on the ticketed ciphertext fetch."""
+    return {'X-Requested-With': 'XMLHttpRequest', 'X-Download-Ticket': ticket}
+
+
+@pytest.fixture
 def key_release_upload(client, key_share):
     """
     POST a complete two-phase key-release upload and return

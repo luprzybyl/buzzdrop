@@ -109,30 +109,39 @@ export async function oneClickLink(page) {
 }
 
 /**
- * Presses Proceed on the confirm page, which consumes the share. Returns the
- * ciphertext the view page then fetches, for tests that go on to talk to
- * /release themselves.
+ * Presses Proceed on the confirm page and waits for the password step.
+ * The ciphertext isn't fetched here — only a proven password releases it,
+ * so the helper returns nothing.
  * @param {Page} page - the confirm page
- * @returns {Promise<Bytes>}
  */
 export async function proceedToView(page) {
-    const [download] = await Promise.all([
-        page.waitForResponse((response) => new URL(response.url()).pathname.startsWith('/download/')),
-        page.getByRole('button', { name: /^Proceed to / }).click(),
-    ]);
-    return new Uint8Array(await download.body());
+    await page.getByRole('button', { name: /^Proceed to / }).click();
+    await expect(decryptButton(page)).toBeEnabled();
 }
 
 /**
- * Opens a share link and proceeds, which consumes the share. Returns the
- * ciphertext, as proceedToView does.
+ * The ciphertext the view page fetched for a decrypt in flight — the
+ * /download response that follows a winning /release.
+ * @param {Page} page - the view page
+ * @param {Promise<unknown>} decrypt - the action that submits the password
+ * @returns {Promise<Bytes>}
+ */
+export async function captureCiphertext(page, decrypt) {
+    const [response] = await Promise.all([
+        page.waitForResponse((r) => new URL(r.url()).pathname.startsWith('/download/')),
+        decrypt,
+    ]);
+    return new Uint8Array(await response.body());
+}
+
+/**
+ * Opens a share link and proceeds to the password step.
  * @param {Page} page
  * @param {string} link
- * @returns {Promise<Bytes>}
  */
 export async function openShare(page, link) {
     await page.goto(link);
-    return proceedToView(page);
+    await proceedToView(page);
 }
 
 /**
@@ -227,7 +236,7 @@ export async function decryptShare(page, link, password) {
  * with the app's own lib/crypto.js, under Node's Web Crypto.
  * @param {Page} page - its request context carries the call
  * @param {string} link
- * @param {Bytes} blob - the ciphertext from openShare
+ * @param {Bytes} blob - the ciphertext from captureCiphertext
  * @param {string} password
  * @returns {Promise<number>} the response status
  */

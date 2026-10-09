@@ -49,6 +49,21 @@ def test_gone_page_does_not_reveal_why(client, file_record, csrf_form_data, step
     assert len(set(bodies.values())) == 1, sorted(bodies)
 
 
+@pytest.mark.parametrize('step', ['view', 'confirm'])
+def test_released_drop_renders_the_gone_page(
+        client, file_record, bound_share, files_store, csrf_form_data, step):
+    """A share that was released but never downloaded leads nowhere: its
+    H is spent, so the link is dead — the same uniform 404."""
+    file_record('released-drop')
+    bound_share('released-drop', v_hex='cc' * 32)
+    files_store.attempt_key_release('released-drop', 'cc' * 32, 1, True)
+
+    response = _open_link(client, csrf_form_data, 'released-drop', step)
+
+    assert response.status_code == 404
+    assert GONE_HEADING in response.get_data(as_text=True)
+
+
 def test_gone_page_is_the_same_logged_in(client, file_record):
     with client.session_transaction() as session:
         session['username'] = 'testuser'

@@ -69,12 +69,39 @@ class StorageBackend(ABC):
     def exists(self, path: str) -> bool:
         """
         Check if file exists in storage.
-        
+
         Args:
             path: Storage path/key for the file
-        
+
         Returns:
             True if file exists, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    def read_prefix(self, path: str, length: int) -> bytes:
+        """
+        Read the first bytes of a stored object without fetching it all.
+
+        Args:
+            path: Storage path/key for the file
+            length: Number of leading bytes to read
+
+        Returns:
+            Up to ``length`` bytes from the start of the object
+
+        Raises:
+            StorageError: If the object is missing or the read fails
+        """
+        pass
+
+    @abstractmethod
+    def size(self, path: str) -> int:
+        """
+        Byte length of a stored object.
+
+        Raises:
+            StorageError: If the object is missing
         """
         pass
 
@@ -141,7 +168,24 @@ class LocalStorage(StorageBackend):
     def exists(self, path: str) -> bool:
         """Check if file exists on local filesystem."""
         return os.path.exists(path)
-    
+
+    def read_prefix(self, path: str, length: int) -> bytes:
+        """Read the first `length` bytes of a local file."""
+        try:
+            with open(path, 'rb') as f:
+                return f.read(length)
+        except FileNotFoundError as e:
+            raise StorageError(f"File not found: {path}") from e
+        except Exception as e:
+            raise StorageError(f"Failed to read file {path}: {str(e)}") from e
+
+    def size(self, path: str) -> int:
+        """Return the local file's size in bytes."""
+        try:
+            return os.path.getsize(path)
+        except OSError as e:
+            raise StorageError(f"File not found: {path}") from e
+
     def list_files(self):
         """List all files in upload directory."""
         try:
@@ -230,6 +274,25 @@ class S3Storage(StorageBackend):
             return True
         except ClientError:
             return False
+
+    def read_prefix(self, s3_key: str, length: int) -> bytes:
+        """Read the first `length` bytes of an S3 object via a Range GET."""
+        try:
+            response = self.client.get_object(
+                Bucket=self.bucket, Key=s3_key, Range=f'bytes=0-{length - 1}')
+            return response['Body'].read()
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey':
+                raise StorageError(f"File not found in S3: {s3_key}") from e
+            raise StorageError(f"S3 range read failed for {s3_key}: {str(e)}") from e
+
+    def size(self, s3_key: str) -> int:
+        """Return the S3 object's size in bytes."""
+        try:
+            response = self.client.head_object(Bucket=self.bucket, Key=s3_key)
+            return int(response['ContentLength'])
+        except ClientError as e:
+            raise StorageError(f"File not found in S3: {s3_key}") from e
     
     def test_connection(self) -> bool:
         """

@@ -59,6 +59,13 @@ def ref(field):
     return {'$ref': field}
 
 
+def ticket_of(release_step):
+    """The download ticket a release minted — derived (HKDF of the
+    released H) by the recorder, exactly as the client derives it; it is
+    never part of a response body."""
+    return {'$ticket': release_step}
+
+
 def file_id(share):
     """The file_id a ``share`` step minted, or ``share`` itself if it is a literal ID."""
     return share if share == MISSING_ID else ref(f'{share}.file_id')
@@ -87,9 +94,15 @@ def upload_note(name='upload', share='begin'):
     }
 
 
-def download(name='download', share='begin'):
-    return {'name': name, 'method': 'GET', 'as': None,
+def download(name='download', share='begin', ticket=None, xhr=False):
+    headers = dict(XHR) if xhr else {}
+    if ticket is not None:
+        headers['X-Download-Ticket'] = ticket
+    step = {'name': name, 'method': 'GET', 'as': None,
             'path': ['/download/', file_id(share)]}
+    if headers:
+        step['headers'] = headers
+    return step
 
 
 def release(name='release', share='begin', v=V):
@@ -106,13 +119,21 @@ def report(name='report', share='begin', **body):
 SCENARIOS = [
     # --- Happy paths -------------------------------------------------------
     {
+        # Release first: the blob downloads only for the ticket the
+        # winning /release minted.
         'name': 'file-round-trip',
-        'steps': [begin(), upload_file(), download(), release(), report(),
-                  download('download-again'), release('release-again')],
+        'steps': [begin(), upload_file(), release(),
+                  download(ticket=ticket_of('release'), xhr=True),
+                  report(),
+                  download('download-again',
+                           ticket=ticket_of('release'), xhr=True),
+                  release('release-again')],
     },
     {
         'name': 'note-round-trip',
-        'steps': [begin(), upload_note(), download(), release(), report()],
+        'steps': [begin(), upload_note(), release(),
+                  download(ticket=ticket_of('release'), xhr=True),
+                  report()],
     },
     {
         'name': 'report-first-valid-wins',
@@ -201,8 +222,25 @@ SCENARIOS = [
     # --- Download / report edge cases --------------------------------------
     {
         'name': 'download-missing',
-        'steps': [download('missing-file', share=MISSING_ID), begin('begin-unfinished'),
+        'steps': [download('missing-file', share=MISSING_ID),
+                  download('missing-file-xhr', share=MISSING_ID, xhr=True),
+                  begin('begin-unfinished'),
                   download('pending', share='begin-unfinished')],
+    },
+    {
+        # The blob is gated by the ticket the release mints: a bare GET on
+        # a live share is a uniform 403, a released share without the
+        # winner's ticket is 'claimed', and the claim consumes the ticket.
+        'name': 'download-requires-ticket',
+        'steps': [begin(), upload_file(),
+                  download('no-ticket'),
+                  download('no-ticket-xhr', xhr=True),
+                  release(),
+                  download('bad-ticket', ticket=WRONG_V, xhr=True),
+                  download('bad-ticket-browser', ticket=WRONG_V),
+                  download(ticket=ticket_of('release'), xhr=True),
+                  download('again', ticket=ticket_of('release'),
+                           xhr=True)],
     },
     {
         'name': 'report-enforcement',

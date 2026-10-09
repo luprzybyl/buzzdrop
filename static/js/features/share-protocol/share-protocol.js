@@ -5,8 +5,11 @@
 // Creating a share is two-phase: POST /upload/begin mints file_id and the
 // server share H, the bytes are sealed under Kp ‖ H, and POST /upload binds
 // the verifier and stores the blob. Claiming one proves the password's
-// verifier to /release, which hands H out once, then reports the receipt.
+// verifier to /release, which hands H out once; the client derives the
+// download ticket /download requires from H (HKDF), fetches the ciphertext
+// with it — only after the password held — then reports the receipt.
 
+import { downloadTicket } from '../../lib/crypto.js';
 import { bytesToHex, hexToBytes } from '../../lib/hex.js';
 
 // The server share H that /upload/begin mints (docs/true-one-time.md §6).
@@ -54,7 +57,8 @@ const SERVER_SHARE_BYTES = 32;
 /**
  * @typedef {object} ClaimDeps
  * @property {typeof fetch} fetch
- * @property {{ release: string, report: string }} urls
+ * @property {{ release: string, download: string, report: string }} urls
+ * @property {(percent: number) => void} [onProgress] - download progress, when Content-Length is known
  */
 
 /**
@@ -88,6 +92,7 @@ const SERVER_SHARE_BYTES = 32;
 /**
  * What POST /release answers: `{h}` (the server share, hex) on a verifier
  * match; otherwise `{error}`, plus `attempts_remaining` on a 403 miss.
+ * The download ticket isn't in the response — it derives from H.
  * @typedef {object} ReleaseResponse
  * @property {string} [h]
  * @property {number} [attempts_remaining]
@@ -145,54 +150,69 @@ export async function createShare(payload, password, options, deps) {
 }
 
 /**
- * Prove `password` to /release, decrypt with the server share it releases,
- * and report the outcome to /report_decryption: the receipt when it opened,
- * a failure when the share is gone or out of reach. A wrong password with
- * attempts left reports nothing.
- * @param {SealedShare} sealed
+ * Prove `password` to /release, fetch the ciphertext with the ticket the
+ * release minted, decrypt with the server share, and report the outcome to
+ * /report_decryption: the receipt when it opened, a failure when the share
+ * is gone or out of reach. A wrong password with attempts left reports
+ * nothing. A share that already released — earlier attempt's download
+ * failed — reuses the released material instead of spending another
+ * release; the ticket recomputes from H.
+ * @param {SealedShare} sealed - from openSalted(); mutated with `claim`
  * @param {string} password
  * @param {ClaimDeps} deps
  * @returns {Promise<ClaimResult>}
  */
 export async function claimShare(sealed, password, deps) {
-    const result = await release(sealed, password, deps);
+    const result = await claim(sealed, password, deps);
     if (result.kind === 'opened') report(deps, result.receipt);
     else if (result.kind !== 'retry') report(deps, null);
     return result;
 }
 
 /**
- * Download a share's blob and open its envelope; `unsupported` when it isn't
- * a share this page can read.
- * @param {string} url
- * @param {{ fetch: typeof fetch, crypto: Pick<ShareCrypto, 'open'> }} deps
- * @returns {Promise<{ kind: 'sealed', sealed: SealedShare } | { kind: 'unsupported' }>}
- */
-export async function downloadShare(url, deps) {
-    const response = await deps.fetch(url);
-    const blob = new Uint8Array(await response.arrayBuffer());
-    try {
-        return { kind: 'sealed', sealed: deps.crypto.open(blob) };
-    } catch {
-        return { kind: 'unsupported' };
-    }
-}
-
-/**
  * @param {SealedShare} sealed
  * @param {string} password
  * @param {ClaimDeps} deps
  * @returns {Promise<ClaimResult>}
  */
-async function release(sealed, password, deps) {
-    const attempt = await sealed.unlock(password);
+async function claim(sealed, password, deps) {
+    let claim = sealed.claim;
+    if (!claim) {
+        const attempt = await sealed.unlock(password);
+        const released = await release(attempt.verifier, deps);
+        if (released.kind !== 'released') return released;
+        // The ticket is a pure function of H — keep only that.
+        claim = { h: released.h, finish: attempt.finish };
+        sealed.claim = claim;
+    }
+    const ticket = await downloadTicket(claim.h);
 
+    const download = await fetchBlob(deps.urls.download, ticket, deps);
+    if (download.kind !== 'blob') return download;
+
+    try {
+        const { data, receipt } = await claim.finish(claim.h, download.blob);
+        return { kind: 'opened', data, receipt };
+    } catch {
+        // H is spent: the share can't be tried again.
+        return { kind: 'gone', reason: 'corrupted' };
+    }
+}
+
+/**
+ * The verifier proof. `released` carries H; the download ticket derives
+ * from it.
+ * @param {Bytes} verifier
+ * @param {ClaimDeps} deps
+ * @returns {Promise<{ kind: 'released', h: Bytes } | Exclude<ClaimResult, { kind: 'opened' }>>}
+ */
+async function release(verifier, deps) {
     let response;
     try {
         response = await deps.fetch(deps.urls.release, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({ v: bytesToHex(attempt.verifier) }),
+            body: JSON.stringify({ v: bytesToHex(verifier) }),
         });
     } catch {
         return { kind: 'unreachable' };
@@ -212,19 +232,80 @@ async function release(sealed, password, deps) {
     if (response.status === 404) return { kind: 'gone', reason: 'missing' };
 
     if (!response.ok) return { kind: 'gone', reason: 'refused' };
-    let h;
     try {
-        h = hexToBytes(/** @type {string} */ (body.h));
+        return { kind: 'released', h: hexToBytes(/** @type {string} */ (body.h)) };
     } catch {
         return { kind: 'gone', reason: 'refused' };
     }
+}
+
+/**
+ * Fetch the ciphertext with the bearer ticket, reporting progress when the
+ * server sent Content-Length.
+ * @param {string} url
+ * @param {string} ticket
+ * @param {ClaimDeps} deps
+ * @returns {Promise<{ kind: 'blob', blob: Bytes } | Exclude<ClaimResult, { kind: 'opened' | 'retry' }>>}
+ */
+async function fetchBlob(url, ticket, deps) {
+    let response;
     try {
-        const { data, receipt } = await attempt.finish(h);
-        return { kind: 'opened', data, receipt };
+        response = await deps.fetch(url, {
+            headers: {
+                'X-Download-Ticket': ticket,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
     } catch {
-        // H is spent: the share can't be tried again.
-        return { kind: 'gone', reason: 'corrupted' };
+        return { kind: 'unreachable' };
     }
+
+    if (response.status === 403) return { kind: 'gone', reason: 'refused' };
+    if (response.status === 404) return { kind: 'gone', reason: 'missing' };
+    // Claimed covers 'already claimed' (someone else won the release) and
+    // 'already downloaded' (a retry after a complete download) alike.
+    if (response.status === 410) return { kind: 'gone', reason: 'claimed' };
+    if (!response.ok) return { kind: 'gone', reason: 'refused' };
+
+    try {
+        const blob = await readBody(response, deps.onProgress);
+        return { kind: 'blob', blob };
+    } catch {
+        return { kind: 'unreachable' };
+    }
+}
+
+/**
+ * Read a response body, reporting percent when Content-Length is known.
+ * @param {Response} response
+ * @param {((percent: number) => void) | undefined} onProgress
+ * @returns {Promise<Bytes>}
+ */
+async function readBody(response, onProgress) {
+    const total = Number(response.headers.get('Content-Length')) || 0;
+    const reader = response.body?.getReader?.();
+    if (!reader) {
+        const blob = new Uint8Array(await response.arrayBuffer());
+        onProgress?.(100);
+        return blob;
+    }
+    const chunks = [];
+    let loaded = 0;
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        if (total) onProgress?.(Math.round((loaded / total) * 100));
+    }
+    const blob = new Uint8Array(loaded);
+    let offset = 0;
+    for (const chunk of chunks) {
+        blob.set(chunk, offset);
+        offset += chunk.length;
+    }
+    if (!total) onProgress?.(100);
+    return blob;
 }
 
 /**
