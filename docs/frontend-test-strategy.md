@@ -184,6 +184,7 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
 5. A one-click `#password` link decrypts without typing, and the fragment is gone from the URL afterwards.
 6. The uploader deletes the file from the index list, and the link is dead.
 7. Login → upload → logout (session and CSRF over real HTTP).
+8. The header stays one row at 375px and 320px, logged out and logged in, with no sideways scroll (#232).
 
 Hard-to-produce failures (410 edge cases, 429) are mocked per test with `page.route()`. There is no separate mocked-server E2E mode.
 

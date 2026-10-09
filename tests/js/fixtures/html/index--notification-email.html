@@ -20,9 +20,10 @@
 
         <nav class="nav-shell">
             <div class="container-shell">
-                <div class="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex flex-wrap items-center gap-3 sm:gap-5">
-                        <a href="/" class="group flex items-center gap-3">
+                
+                <div class="flex items-center justify-between gap-2 py-3 sm:gap-4 sm:py-4">
+                    <div class="flex shrink-0 items-center gap-1 sm:gap-5">
+                        <a href="/" class="group flex shrink-0 items-center gap-3">
                             <span class="relative">
                                 <span class="absolute inset-0 animate-halo-pulse rounded-full bg-honey-400/30 blur-lg" aria-hidden="true"></span>
                                 <svg viewBox="0 0 40 40" class="relative h-10 w-10 transition-transform duration-500 group-hover:-rotate-6" role="img" aria-label="BuzzDrop">
@@ -45,7 +46,7 @@
                                     </g>
                                 </svg>
                             </span>
-                            <span>
+                            <span class="hidden sm:block">
                                 <span class="block text-lg font-semibold tracking-tight text-white">Buzz<span class="honey-text">drop</span></span>
                                 <span class="block text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-slate-500">One-time buzz</span>
                             </span>
@@ -53,15 +54,15 @@
                         
                         
                     </div>
-                    <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex min-w-0 items-center gap-2 sm:gap-3">
                         
-                            <span class="status-badge status-badge-amber">
-                                <span class="h-1.5 w-1.5 rounded-full bg-honey-400" aria-hidden="true"></span>
-                                notifyuser
+                            <span class="status-badge status-badge-amber min-w-0 max-w-32 sm:max-w-56" title="notifyuser">
+                                <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-honey-400" aria-hidden="true"></span>
+                                <span class="truncate">notifyuser</span>
                             </span>
                             <form method="post" action="/logout" class="inline">
                                 <input type="hidden" name="csrf_token" value="fixture-csrf-token">
-                                <button type="submit" class="btn-danger">Logout</button>
+                                <button type="submit" class="btn-secondary px-3 py-2 sm:px-4">Logout</button>
                             </form>
                         
                     </div>
@@ -283,7 +284,8 @@
             <div class="container-shell flex flex-col gap-4 py-8 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                 <p class="flex items-start gap-2 sm:items-center">
                     <span class="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-honey-400 sm:mt-0" aria-hidden="true"></span>
-                    <span>This drop self-destructs after opening. Share the key separately when trust matters most.</span>
+                    
+                    <span>Send the link and the password through different channels.</span>
                 </p>
                 <p class="text-slate-600">Proudly developed with vibe coding.</p>
             </div>
