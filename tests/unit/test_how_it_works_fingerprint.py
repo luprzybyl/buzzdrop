@@ -4,7 +4,9 @@ that defines the flow they explain (#245).
 
 The doc carries a fingerprint: a hash of the recorded protocol contract, the
 browser crypto, the CLI's crypto, upload and passphrase code, the web app's
-passphrase length, the database schema and the key-release defaults. When any of them changes, this test fails until someone
+passphrase length, the database schema, the key-release defaults, and the
+server code that releases, serves, expires and deletes a drop. When any of
+them changes, this test fails until someone
 has re-read the doc and the page against the change and pasted the new
 fingerprint, the same way CI fails on stale fixtures.
 """
@@ -25,12 +27,31 @@ WHOLE_FILES = (
     'static/js/lib/crypto.js',
 )
 
-# The CLI's crypto and its two upload requests; the rest of cli/buzz
-# (wordlist, progress bar, token setup) doesn't change the flow.
-CLI_FUNCTIONS = (
-    '_derive_master', '_hkdf', 'derive_key_release_keys', '_derive_file_key',
-    'encrypt_file', 'upload_begin', 'upload', 'generate_passphrase',
-)
+# Functions whose behaviour a claim rests on.
+FUNCTIONS = {
+    # The CLI's crypto and its two upload requests; the rest of cli/buzz
+    # (wordlist, progress bar, token setup) doesn't change the flow.
+    'cli/buzz': (
+        '_derive_master', '_hkdf', 'derive_key_release_keys', '_derive_file_key',
+        'encrypt_file', 'upload_begin', 'upload', 'generate_passphrase',
+    ),
+    # The routes behind each step: the pending sweep at begin, what upload
+    # stores, the IP logged on release, the blob deleted after streaming,
+    # the decryption report, manual delete and expiry.
+    'app.py': (
+        'upload_begin', 'upload_file', 'release_key', 'download_file',
+        'report_decryption', 'delete_file', 'check_and_handle_expiry',
+        'sweep_expired_files',
+    ),
+    # The transactions those routes run: what release wipes, what the
+    # ticket claim stamps, what expiry and delete destroy.
+    'db/sqlite_backend.py': (
+        '_download_ticket', 'bind_key_verifier', 'attempt_key_release',
+        'claim_download_with_ticket', 'record_decryption_result',
+        'expire_unclaimed_releases', 'purge_stale_key_shares',
+        'burn_key_share', 'delete',
+    ),
+}
 
 # Lines of other files the doc quotes: the web app's passphrase length.
 QUOTED_LINES = {
@@ -70,7 +91,8 @@ def _source_of(path, wanted, kinds):
 
 def compute_fingerprint():
     parts = [f'{path}\n{(ROOT / path).read_text(encoding="utf-8")}' for path in WHOLE_FILES]
-    parts += _source_of('cli/buzz', CLI_FUNCTIONS, (ast.FunctionDef,))
+    for path, names in FUNCTIONS.items():
+        parts += _source_of(path, names, (ast.FunctionDef,))
     for path, names in MODULE_ASSIGNMENTS.items():
         parts += _source_of(path, names, (ast.Assign,))
     for path, patterns in QUOTED_LINES.items():

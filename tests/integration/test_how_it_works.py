@@ -158,3 +158,25 @@ def test_has_the_doc_steps_in_order(client):
 
     assert doc_steps
     assert page_steps == doc_steps
+
+
+def test_describes_the_default_lockout(client):
+    html = _page(client)
+
+    assert 'One wrong password locks the drop and destroys <code>H</code>' in html
+    assert 'A wrong guess can destroy a drop.' in html
+    assert 'spend the attempt and lock it' in html
+
+
+def test_follows_the_configured_lockout(app, client, monkeypatch):
+    # The release step, what we keep and the limits all follow the
+    # key-release policy, not the defaults.
+    monkeypatch.setitem(app.config, 'KEY_RELEASE_MAX_ATTEMPTS', 3)
+    monkeypatch.setitem(app.config, 'KEY_RELEASE_BURN_ON_LOCKOUT', False)
+    html = _page(client)
+
+    assert 'After 3 wrong passwords the drop locks, and the server refuses every later attempt' in html
+    assert 'A locked drop keeps them, refusing every attempt' in html
+    assert 'A wrong guess can lock a drop.' in html
+    assert 'spend the 3 attempts and lock it' in html
+    assert 'destroy a drop' not in html

@@ -224,9 +224,12 @@
 
                         <div class="hiw-step-head">
                             <h3 id="step-upload-begin-title" class="hiw-step-title"><span class="hiw-step-kicker">Step 1</span> Upload, phase 1</h3>
-                            <p class="hiw-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> That an upload is starting</span></p>
+                            <div class="hiw-lenses">
+                                <p class="hiw-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> That an upload is starting</span></p>
+                                <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Never sees:</span> The file or note, and the password</span></p>
+                            </div>
                         </div>
-                        <dl class="hiw-facts">
+                        <div role="group" aria-label="What happens"><dl class="hiw-facts">
 <dt>Who acts</dt>
 <dd><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal (<code>buzz</code>)</span>, then the server.</dd>
 <dt>What crosses the wire</dt>
@@ -235,7 +238,7 @@
 <dd>That your account is starting an upload. Nothing about the file or note yet.</dd>
 <dt>Why</dt>
 <dd>The file key needs <code>H</code>, so <code>H</code> has to exist before anything is encrypted. The server keeps it: this is the half of the key it will hand out exactly once. An upload begun and never finished is swept once it is over an hour old, at the next upload or restart.</dd>
-</dl>
+</dl></div>
                     </article>
                     
                     
@@ -265,9 +268,12 @@
 
                         <div class="hiw-step-head">
                             <h3 id="step-encrypt-title" class="hiw-step-title"><span class="hiw-step-kicker">Step 2</span> Encrypt where you are</h3>
-                            <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Server sees:</span> Nothing</span></p>
+                            <div class="hiw-lenses">
+                                <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Server sees:</span> Nothing</span></p>
+                                <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Never sees:</span> The password, <code>Kp</code> and the content</span></p>
+                            </div>
                         </div>
-                        <dl class="hiw-facts">
+                        <div role="group" aria-label="What happens"><dl class="hiw-facts">
 <dt>Who acts</dt>
 <dd><span data-show="sender:web">Your browser, in the page&rsquo;s JavaScript</span><span data-show="sender:cli" hidden>Your terminal, in the <code>buzz</code> CLI</span>, alone. Nothing crosses the wire.</dd>
 <dt>What happens</dt>
@@ -275,11 +281,13 @@
     <span data-show="sender:web">You type a password, or have the page generate a 6-word passphrase.</span><span data-show="sender:cli" hidden><code>buzz</code> generates a 6-word passphrase unless you pass one with <code>-p</code>, and zips a folder (or, with <code>-z</code>, a file) first.</span>
     The password goes through PBKDF2 with 600,000 iterations; from the result come two keys, <code>Kp</code> for encrypting and a verifier <code>V</code> for proving the password later. The file key is <code>HKDF(Kp&nbsp;&#8214;&nbsp;H)</code>, so it needs both the password and the server&rsquo;s share. A random receipt goes in front of the <span data-show="content:file">file</span><span data-show="content:text" hidden>note</span>, and AES-GCM encrypts the lot.
 </dd>
+<dt>Where the code comes from</dt>
+<dd><span data-show="sender:web">Our server sends it with the page. Subresource Integrity protects it in transit and in caches, not against a compromised server.</span><span data-show="sender:cli" hidden>You installed <code>buzz</code> once from GitHub Releases, so a compromised server can&rsquo;t swap it during an upload.</span></dd>
 <dt>What the server sees</dt>
 <dd>Nothing. The password and <code>Kp</code> never leave your device.</dd>
 <dt>Why</dt>
 <dd>Ciphertext and <code>H</code> without the password can&rsquo;t be decrypted, and neither can ciphertext and the password without <code>H</code>. The receipt is how the recipient will later prove they decrypted it.</dd>
-</dl>
+</dl></div>
                     </article>
                     
                     
@@ -309,9 +317,12 @@
 
                         <div class="hiw-step-head">
                             <h3 id="step-upload-finish-title" class="hiw-step-title"><span class="hiw-step-kicker">Step 3</span> Upload, phase 2</h3>
-                            <p class="hiw-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> Ciphertext, <code>V</code><span data-show="content:file">, and the filename</span></span></p>
+                            <div class="hiw-lenses">
+                                <p class="hiw-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> Ciphertext, <code>V</code><span data-show="content:file">, and the filename</span></span></p>
+                                <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Never sees:</span> The password, <code>Kp</code> and the content</span></p>
+                            </div>
                         </div>
-                        <dl class="hiw-facts">
+                        <div role="group" aria-label="What happens"><dl class="hiw-facts">
 <dt>Who acts</dt>
 <dd><span data-show="sender:web">Your browser</span><span data-show="sender:cli" hidden>Your terminal</span>, then the server.</dd>
 <dt>What crosses the wire</dt>
@@ -320,7 +331,7 @@
 <dd>The ciphertext and its approximate size, <code>V</code>, the receipt&rsquo;s hash, the expiry you chose, an optional private note to yourself, and <span data-show="content:file"><strong class="hiw-caveat">the file&rsquo;s original filename, in plain text</strong></span><span data-show="content:text" hidden>the label &ldquo;Secret Note&rdquo;</span>. It stores the ciphertext and binds <code>V</code> to <code>H</code>.</dd>
 <dt>Why</dt>
 <dd><code>V</code> lets the server check the password later without ever learning it, and it can&rsquo;t be turned back into <code>Kp</code>.</dd>
-</dl>
+</dl></div>
                     </article>
                     
                     
@@ -355,9 +366,12 @@
 
                         <div class="hiw-step-head">
                             <h3 id="step-share-title" class="hiw-step-title"><span class="hiw-step-kicker">Step 4</span> Share</h3>
-                            <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Server sees:</span> Nothing</span></p>
+                            <div class="hiw-lenses">
+                                <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Server sees:</span> Nothing</span></p>
+                                <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Never sees:</span> The password, and who you send the link to</span></p>
+                            </div>
                         </div>
-                        <dl class="hiw-facts">
+                        <div role="group" aria-label="What happens"><dl class="hiw-facts">
 <dt>Who acts</dt>
 <dd>You.</dd>
 <dt>What crosses the wire</dt>
@@ -366,7 +380,7 @@
 <dd>Nothing. The link alone opens nothing: it names the drop, and the drop needs the password.</dd>
 <dt>The one-click link</dt>
 <dd><span data-show="sender:web">The success page</span><span data-show="sender:cli" hidden><code>buzz</code></span> also offers a link with the password after the <code>#</code>. Browsers never send that part to a server, so we still don&rsquo;t see the password. But <strong class="hiw-caveat">anyone who has that link can open the drop</strong>, and chat history, link previews and exports keep a copy. It&rsquo;s convenient; sending link and password separately is stronger.</dd>
-</dl>
+</dl></div>
                     </article>
                     
                     
@@ -396,9 +410,12 @@
 
                         <div class="hiw-step-head">
                             <h3 id="step-release-title" class="hiw-step-title"><span class="hiw-step-kicker">Step 5</span> The recipient proves the password</h3>
-                            <p class="hiw-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> <code>V</code> and an IP address</span></p>
+                            <div class="hiw-lenses">
+                                <p class="hiw-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> <code>V</code> and an IP address</span></p>
+                                <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Never sees:</span> The password</span></p>
+                            </div>
                         </div>
-                        <dl class="hiw-facts">
+                        <div role="group" aria-label="What happens"><dl class="hiw-facts">
 <dt>Who acts</dt>
 <dd>The recipient&rsquo;s browser, then the server.</dd>
 <dt>What crosses the wire</dt>
@@ -411,7 +428,7 @@
 <dd>One wrong password locks the drop and destroys <code>H</code>, so nobody can open it after that, the recipient included.</dd>
 <dt>Why</dt>
 <dd>This is what makes one time real. Without <code>H</code> the ciphertext is dead bytes, and <code>H</code> comes out exactly once, after the password has been proven, in a transaction only one requester can win.</dd>
-</dl>
+</dl></div>
                     </article>
                     
                     
@@ -441,9 +458,12 @@
 
                         <div class="hiw-step-head">
                             <h3 id="step-download-title" class="hiw-step-title"><span class="hiw-step-kicker">Step 6</span> Download once</h3>
-                            <p class="hiw-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> The ticket and an IP address</span></p>
+                            <div class="hiw-lenses">
+                                <p class="hiw-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> The ticket and an IP address</span></p>
+                                <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Never sees:</span> The content, and who the recipient is</span></p>
+                            </div>
                         </div>
-                        <dl class="hiw-facts">
+                        <div role="group" aria-label="What happens"><dl class="hiw-facts">
 <dt>Who acts</dt>
 <dd>The recipient&rsquo;s browser, then the server.</dd>
 <dt>What crosses the wire</dt>
@@ -454,7 +474,7 @@
 <dd>The ticket is used up before the first byte goes out, and the ciphertext is deleted from storage once the stream ends, even if it broke off. A drop released but not downloaded within 10 minutes expires the same way.</dd>
 <dt>Why</dt>
 <dd>Only the browser that won the release can claim the ciphertext, and there is no second copy to come back for.</dd>
-</dl>
+</dl></div>
                     </article>
                     
                     
@@ -484,9 +504,12 @@
 
                         <div class="hiw-step-head">
                             <h3 id="step-decrypt-title" class="hiw-step-title"><span class="hiw-step-kicker">Step 7</span> Decrypt in the browser</h3>
-                            <p class="hiw-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> That decryption worked</span></p>
+                            <div class="hiw-lenses">
+                                <p class="hiw-lens is-some"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> That decryption worked</span></p>
+                                <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Never sees:</span> The content and the file key</span></p>
+                            </div>
                         </div>
-                        <dl class="hiw-facts">
+                        <div role="group" aria-label="What happens"><dl class="hiw-facts">
 <dt>Who acts</dt>
 <dd>The recipient&rsquo;s browser, then the server.</dd>
 <dt>What happens</dt>
@@ -495,7 +518,7 @@
 <dd>The receipt, to <code>POST /report_decryption</code>, so your list shows the drop as opened and, if you asked for it, you get an email.</dd>
 <dt>What the server sees</dt>
 <dd>The receipt, which only matches its stored hash if the drop was really decrypted. It learns that decryption worked, never the content.</dd>
-</dl>
+</dl></div>
                     </article>
                     
                     
@@ -525,16 +548,19 @@
 
                         <div class="hiw-step-head">
                             <h3 id="step-expiry-title" class="hiw-step-title"><span class="hiw-step-kicker">Step 8</span> Expiry and manual delete</h3>
-                            <p class="hiw-lens is-burn"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> <code>H</code> destroyed, ciphertext deleted</span></p>
+                            <div class="hiw-lenses">
+                                <p class="hiw-lens is-burn"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.75"/></svg><span><span class="hiw-lens-label">Server sees:</span> <code>H</code> destroyed, ciphertext deleted</span></p>
+                                <p class="hiw-lens is-none"><svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.6A9.7 9.7 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.3 3.1M6.3 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"/><path d="m3 3 18 18"/></svg><span><span class="hiw-lens-label">Never sees:</span> The content, then or ever</span></p>
+                            </div>
                         </div>
-                        <dl class="hiw-facts">
+                        <div role="group" aria-label="What happens"><dl class="hiw-facts">
 <dt>Who acts</dt>
 <dd>The server, or you.</dd>
 <dt>What happens</dt>
 <dd>When a drop&rsquo;s expiry passes, or you delete it from your list, <code>H</code> is destroyed and the ciphertext is deleted from storage. Expiry is checked whenever the link is opened and on a timer (every five minutes by default). The database overwrites what it deletes, which reduces, but doesn&rsquo;t rule out, traces of <code>H</code> left in its file.</dd>
 <dt>Why</dt>
 <dd><code>H</code> never outlives the drop. Even if deleting the ciphertext from storage failed, without <code>H</code> it can&rsquo;t be decrypted.</dd>
-</dl>
+</dl></div>
                     </article>
                     
                 </div>
@@ -650,7 +676,7 @@
                     <h3 class="text-base font-semibold text-white">The drop’s record</h3>
                     <span class="hiw-badge"><svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Until you delete it</span>
                 </div>
-                <p class="mt-3 text-sm leading-relaxed text-slate-400">The filename (or “Secret Note”), the sender’s account, when it was created, its expiry, when it was opened and from which IP address, whether decryption worked, and the sender’s optional private note and notification address. It stays in the sender’s list until the sender deletes it; nothing purges it automatically.</p>
+                <p class="mt-3 text-sm leading-relaxed text-slate-400">The filename (or “Secret Note”), the sender’s account, when it was created, its expiry, when it was opened and from which IP address, whether decryption worked, the receipt’s hash, and the sender’s optional private note and notification address. Beside it, what is left of the key share once <code>H</code> and <code>V</code> are gone: the password’s salt, the count of wrong attempts and when it was released. All of it stays in the sender’s list until the sender deletes it; nothing purges it automatically.</p>
             </li>
             
             <li class="hiw-keep">
@@ -678,12 +704,12 @@
             
             <li>
                 <span class="hiw-limit-icon"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 4.3 2.6 17.6A2 2 0 0 0 4.3 20.6h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/></svg></span>
-                <p><strong class="text-white">Whoever runs the server controls the code.</strong> The web app’s encryption code comes from the server, so someone in control of it could serve code that leaks the password, or log <code>V</code> and <code>H</code>. The CLI’s code comes from GitHub Releases instead, but the recipient’s side always runs in a browser.</p>
+                <p><strong class="text-white">Whoever runs the server controls the code.</strong> The web app’s encryption code comes from the server, and Subresource Integrity can’t help against the server itself: someone in control of it could serve code that leaks the password, or log <code>V</code> and <code>H</code>. The CLI’s code comes from GitHub Releases instead, but the recipient’s side always runs in a browser.</p>
             </li>
             
             <li>
                 <span class="hiw-limit-icon"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 4.3 2.6 17.6A2 2 0 0 0 4.3 20.6h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/></svg></span>
-                <p><strong class="text-white">Weak passwords.</strong> Someone who steals the database and the stored files together can try passwords offline. 600,000 PBKDF2 iterations make every guess slow; a long passphrase makes the search hopeless, a short password doesn’t.</p>
+                <p><strong class="text-white">Weak passwords.</strong> Someone who steals the database while a drop is waiting to be opened can try passwords against its <code>V</code> offline; the stored files aren’t needed for that. 600,000 PBKDF2 iterations make every guess slow; a long passphrase makes the search hopeless, a short password doesn’t.</p>
             </li>
             
             <li>

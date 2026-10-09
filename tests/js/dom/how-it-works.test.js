@@ -11,9 +11,9 @@ const STEPS = 8;
 const currentStep = () => screen.getByRole('article');
 const stepButton = (/** @type {RegExp} */ title) =>
     within(screen.getByRole('navigation', { name: 'Steps' })).getByRole('button', { name: title });
-/** A part of the step on screen's text, shown or not; its diagram is left out. */
+/** A part of the step on screen's facts, shown or not; its diagram is left out. */
 const inStep = (/** @type {RegExp} */ text) =>
-    within(currentStep()).getByText(text, { ignore: '[aria-hidden="true"] *' });
+    within(within(currentStep()).getByRole('group', { name: 'What happens' })).getByText(text);
 
 describe('how it works: stepping through', () => {
     beforeEach(() => {

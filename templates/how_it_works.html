@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
-{# The public explainer of the share flow (#245). Its words are in
-   _how_it_works_content.html; this template lays them out and keeps the ids
+{# The public explainer of the share flow (#245). Its words, the diagrams'
+   included, are in _how_it_works_content.html; this template lays them out and keeps the ids
    and hooks pages/how-it-works/ drives. The scene above each step is
    aria-hidden: the text below it says it all. #}
 
@@ -45,33 +45,12 @@
         {%- elif role == 'server' -%}{{ icon('server', 'h-6 w-6') }}
         {%- else -%}{{ icon('browser', 'h-6 w-6') }}{%- endif -%}
     </span>
-    <span class="hiw-actor-label">
-        {%- if role == 'sender' -%}<span {{ show('sender', 'web') }}>Your browser</span><span {{ show('sender', 'cli') }}>Your terminal</span>
-        {%- elif role == 'server' -%}Buzzdrop server
-        {%- else -%}Recipient&rsquo;s browser{%- endif -%}
-    </span>
+    <span class="hiw-actor-label">{{ c.actor_label(role) }}</span>
     {%- if doing %}<span class="hiw-actor-doing">{{ doing|safe }}</span>{% endif %}
 </span>
 {%- endmacro %}
 
-{% set ciphertext_up %}<span {{ show('content', 'file') }}>ciphertext + V</span><span {{ show('content', 'text') }}>note_text + V</span>{% endset %}
-{% set lens_upload %}Ciphertext, <code>V</code><span {{ show('content', 'file') }}>, and the filename</span>{% endset %}
-{% set opened %}<span {{ show('content', 'file') }}>saving file</span><span {{ show('content', 'text') }}>showing note</span>{% endset %}
-
-{# Per step: who is lit up, what crosses which wire (left = you ↔ server,
-   right = server ↔ recipient; out goes rightward, back leftward, in order),
-   anything happening on the spot, and a one-line "server sees" lens:
-   none (green), some (amber) or burn (rose). #}
-{% set scenes = {
-    'upload-begin': {'lit': ['sender', 'server'], 'left': [('out', 'begin'), ('back', 'file_id + H')], 'lens': ('some', 'That an upload is starting')},
-    'encrypt': {'lit': ['sender'], 'local': ('sender', 'encrypting here'), 'lens': ('none', 'Nothing')},
-    'upload-finish': {'lit': ['sender', 'server'], 'left': [('out', ciphertext_up), ('back', 'link')], 'lens': ('some', lens_upload)},
-    'share': {'lit': ['sender', 'recipient'], 'bypass': True, 'lens': ('none', 'Nothing')},
-    'release': {'lit': ['server', 'recipient'], 'right': [('back', 'V'), ('out', 'H, once')], 'lens': ('some', '<code>V</code> and an IP address')},
-    'download': {'lit': ['server', 'recipient'], 'right': [('back', 'ticket'), ('out', 'ciphertext')], 'lens': ('some', 'The ticket and an IP address')},
-    'decrypt': {'lit': ['server', 'recipient'], 'right': [('back', 'receipt')], 'local': ('recipient', opened), 'lens': ('some', 'That decryption worked')},
-    'expiry': {'lit': ['server'], 'burn': True, 'lens': ('burn', '<code>H</code> destroyed, ciphertext deleted')},
-} %}
+{% set scenes = c.scenes %}
 
 {% macro wire(packets) -%}
 <span class="hiw-wire{% if not packets %} is-idle{% endif %}">
@@ -112,7 +91,7 @@
                 <h2 id="flow-heading" class="section-title">The flow</h2>
                 <p class="section-lead">{{ c.flow_lead }}</p>
             </div>
-            <form class="flex flex-wrap gap-x-6 gap-y-3" action="{{ url_for(request.endpoint) }}" method="get">
+            <form class="flex flex-wrap gap-x-6 gap-y-3" action="{{ url_for('how_it_works') }}" method="get">
                 <fieldset>
                     <legend class="hiw-legend">Sender</legend>
                     <div class="hiw-choice">
@@ -126,7 +105,7 @@
                         <label><input type="radio" name="content" value="file"{% if content == 'file' %} checked{% endif %}>{{ icon('file', 'h-4 w-4') }}<span>File</span></label>
                         <label><input type="radio" name="content" value="text"{% if content == 'text' %} checked{% endif %}{% if sender == 'cli' %} disabled aria-describedby="content-cli-hint"{% endif %}>{{ icon('note', 'h-4 w-4') }}<span>Text</span></label>
                     </div>
-                    <p id="content-cli-hint" class="mt-1.5 text-xs text-slate-500"{% if sender != 'cli' %} hidden{% endif %}>Text is off: the CLI sends files only.</p>
+                    <p id="content-cli-hint" class="mt-1.5 text-xs text-slate-500"{% if sender != 'cli' %} hidden{% endif %}>{{ c.content_cli_hint }}</p>
                 </fieldset>
                 {# Without the page script, the switches apply on submit. #}
                 <noscript><button type="submit" class="btn-secondary self-end px-4 py-2">Show</button></noscript>
@@ -161,17 +140,20 @@
                             {% endfor %}
                             {% if scene.bypass %}
                             <span class="hiw-bypass">
-                                <span class="hiw-packet is-out">link</span>
-                                <span class="hiw-packet is-out is-later">password, another way</span>
+                                <span class="hiw-packet is-out">{{ scene.bypass[0] }}</span>
+                                <span class="hiw-packet is-out is-later">{{ scene.bypass[1] }}</span>
                             </span>
                             {% endif %}
                         </div>
 
                         <div class="hiw-step-head">
                             <h3 id="step-{{ id }}-title" class="hiw-step-title"><span class="hiw-step-kicker">Step {{ loop.index }}</span> {{ title }}</h3>
-                            <p class="hiw-lens is-{{ scene.lens[0] }}">{{ icon('eye-off' if scene.lens[0] == 'none' else 'eye', 'h-4 w-4 shrink-0') }}<span><span class="hiw-lens-label">Server sees:</span> {{ scene.lens[1]|safe }}</span></p>
+                            <div class="hiw-lenses">
+                                <p class="hiw-lens is-{{ scene.lens[0] }}">{{ icon('eye-off' if scene.lens[0] == 'none' else 'eye', 'h-4 w-4 shrink-0') }}<span><span class="hiw-lens-label">Server sees:</span> {{ scene.lens[1]|safe }}</span></p>
+                                <p class="hiw-lens is-none">{{ icon('eye-off', 'h-4 w-4 shrink-0') }}<span><span class="hiw-lens-label">Never sees:</span> {{ scene.lens[2]|safe }}</span></p>
+                            </div>
                         </div>
-                        <dl class="hiw-facts">{{ c.facts(id) }}</dl>
+                        <div role="group" aria-label="{{ c.facts_label }}"><dl class="hiw-facts">{{ c.facts(id) }}</dl></div>
                     </article>
                     {% endfor %}
                 </div>
@@ -188,7 +170,7 @@
                             <span data-icon="play" class="relative translate-x-px" aria-hidden="true"><svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M6 3.8v12.4a1 1 0 0 0 1.5.86l10.2-6.2a1 1 0 0 0 0-1.72L7.5 2.94A1 1 0 0 0 6 3.8Z"/></svg></span>
                             <span data-icon="pause" class="relative" aria-hidden="true" hidden><svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><rect x="4.5" y="3" width="4" height="14" rx="1.2"/><rect x="11.5" y="3" width="4" height="14" rx="1.2"/></svg></span>
                         </button>
-                        <p id="hiw-counter" class="text-sm text-slate-400">8 steps</p>
+                        <p id="hiw-counter" class="text-sm text-slate-400">{{ c.steps|length }} steps</p>
                     </div>
                     <div class="flex shrink-0 gap-2">
                         <button id="hiw-prev" type="button" aria-label="Previous" class="btn-secondary px-3 py-2 sm:px-4" hidden>
@@ -207,8 +189,8 @@
 
     <section id="server-sees" class="space-y-8" aria-labelledby="server-sees-heading">
         <div class="max-w-2xl space-y-2">
-            <h2 id="server-sees-heading" class="section-title">What the server sees</h2>
-            <p class="section-lead">Everything that reaches us, set against what never does.</p>
+            <h2 id="server-sees-heading" class="section-title">{{ c.sees_heading }}</h2>
+            <p class="section-lead">{{ c.sees_lead }}</p>
         </div>
         <ul class="grid gap-4 md:grid-cols-2">
             {% for label, seen, unseen in c.sees_rows %}
@@ -228,7 +210,7 @@
     </section>
 
     <section id="what-we-keep" class="space-y-8" aria-labelledby="what-we-keep-heading">
-        <h2 id="what-we-keep-heading" class="section-title">What we keep, and for how long</h2>
+        <h2 id="what-we-keep-heading" class="section-title">{{ c.keep_heading }}</h2>
         <ul class="grid gap-4 md:grid-cols-2">
             {% for what, until, body in c.keep_items %}
             <li class="hiw-keep">
@@ -244,7 +226,7 @@
 
     <section id="limits" class="space-y-8" aria-labelledby="limits-heading">
         <div class="max-w-2xl space-y-2">
-            <h2 id="limits-heading" class="section-title">Limits</h2>
+            <h2 id="limits-heading" class="section-title">{{ c.limits_heading }}</h2>
             <p class="section-lead">{{ c.limits_lead }}</p>
         </div>
         <ul class="hiw-limits">

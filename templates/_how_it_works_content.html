@@ -25,11 +25,51 @@ data-show="{{ switch }}:{{ value }}"{% if (sender if switch == 'sender' else con
     ('expiry', 'Expiry and manual delete'),
 ] %}
 
+{# The diagram above each step: what each actor card says, and per step who
+   is lit up, what crosses which wire (left = you ↔ server, right = server ↔
+   recipient; out goes rightward, back leftward, in order), anything
+   happening on the spot, and the "server sees" lens: none (green), some
+   (amber) or burn (rose), with what it sees and what it never sees. #}
+{% macro actor_label(role) -%}
+{%- if role == 'sender' -%}<span {{ show('sender', 'web') }}>Your browser</span><span {{ show('sender', 'cli') }}>Your terminal</span>
+{%- elif role == 'server' -%}Buzzdrop server
+{%- else -%}Recipient&rsquo;s browser{%- endif -%}
+{%- endmacro %}
+{% set ciphertext_up %}<span {{ show('content', 'file') }}>ciphertext + V</span><span {{ show('content', 'text') }}>note_text + V</span>{% endset %}
+{% set lens_upload %}Ciphertext, <code>V</code><span {{ show('content', 'file') }}>, and the filename</span>{% endset %}
+{% set opened %}<span {{ show('content', 'file') }}>saving file</span><span {{ show('content', 'text') }}>showing note</span>{% endset %}
+{% set scenes = {
+    'upload-begin': {'lit': ['sender', 'server'], 'left': [('out', 'begin'), ('back', 'file_id + H')],
+                     'lens': ('some', 'That an upload is starting', 'The file or note, and the password')},
+    'encrypt': {'lit': ['sender'], 'local': ('sender', 'encrypting here'),
+                'lens': ('none', 'Nothing', 'The password, <code>Kp</code> and the content')},
+    'upload-finish': {'lit': ['sender', 'server'], 'left': [('out', ciphertext_up), ('back', 'link')],
+                      'lens': ('some', lens_upload, 'The password, <code>Kp</code> and the content')},
+    'share': {'lit': ['sender', 'recipient'], 'bypass': ('link', 'password, another way'),
+              'lens': ('none', 'Nothing', 'The password, and who you send the link to')},
+    'release': {'lit': ['server', 'recipient'], 'right': [('back', 'V'), ('out', 'H, once')],
+                'lens': ('some', '<code>V</code> and an IP address', 'The password')},
+    'download': {'lit': ['server', 'recipient'], 'right': [('back', 'ticket'), ('out', 'ciphertext')],
+                 'lens': ('some', 'The ticket and an IP address', 'The content, and who the recipient is')},
+    'decrypt': {'lit': ['server', 'recipient'], 'right': [('back', 'receipt')], 'local': ('recipient', opened),
+                'lens': ('some', 'That decryption worked', 'The content and the file key')},
+    'expiry': {'lit': ['server'], 'burn': True,
+               'lens': ('burn', '<code>H</code> destroyed, ciphertext deleted', 'The content, then or ever')},
+} %}
+
+{% set content_cli_hint = 'Text is off: the CLI sends files only.' %}
+{% set facts_label = 'What happens' %}
+
 {% set intro %}What happens when you share a file or a note: what runs where, what crosses the wire, and what our server can and can&rsquo;t see at each moment.{% endset %}
 
 {% set flow_lead %}Web app or CLI, file or text: it is the same protocol and the same crypto. Pick a view and the steps change to match.{% endset %}
 
-{% set keep_link %}<a href="#what-we-keep" class="footer-link">What we keep, and for how long</a>{% endset %}
+{% set sees_heading = 'What the server sees' %}
+{% set sees_lead = 'Everything that reaches us, set against what never does.' %}
+{% set keep_heading = 'What we keep, and for how long' %}
+{% set limits_heading = 'Limits' %}
+
+{% set keep_link %}<a href="#what-we-keep" class="footer-link">{{ keep_heading }}</a>{% endset %}
 
 {# key, title, body #}
 {% set takeaways = [
@@ -57,6 +97,8 @@ data-show="{{ switch }}:{{ value }}"{% if (sender if switch == 'sender' else con
     <span {{ show('sender', 'web') }}>You type a password, or have the page generate a 6-word passphrase.</span><span {{ show('sender', 'cli') }}><code>buzz</code> generates a 6-word passphrase unless you pass one with <code>-p</code>, and zips a folder (or, with <code>-z</code>, a file) first.</span>
     The password goes through PBKDF2 with 600,000 iterations; from the result come two keys, <code>Kp</code> for encrypting and a verifier <code>V</code> for proving the password later. The file key is <code>HKDF(Kp&nbsp;&#8214;&nbsp;H)</code>, so it needs both the password and the server&rsquo;s share. A random receipt goes in front of the <span {{ show('content', 'file') }}>file</span><span {{ show('content', 'text') }}>note</span>, and AES-GCM encrypts the lot.
 </dd>
+<dt>Where the code comes from</dt>
+<dd><span {{ show('sender', 'web') }}>Our server sends it with the page. Subresource Integrity protects it in transit and in caches, not against a compromised server.</span><span {{ show('sender', 'cli') }}>You installed <code>buzz</code> once from GitHub Releases, so a compromised server can&rsquo;t swap it during an upload.</span></dd>
 <dt>What the server sees</dt>
 <dd>Nothing. The password and <code>Kp</code> never leave your device.</dd>
 <dt>Why</dt>
@@ -135,16 +177,16 @@ data-show="{{ switch }}:{{ value }}"{% if (sender if switch == 'sender' else con
 {# What we keep: what, how long (in brief), and the whole of it. #}
 {% set keep_items = [
     ('The ciphertext', 'Until opened', 'Until it is downloaded, it expires, or the sender deletes it. Then it is deleted from storage.'),
-    ('<code>H</code> and <code>V</code>', 'Until released', 'Until the release succeeds, the drop locks, it expires, or it is deleted, whichever comes first.'),
-    ('The drop’s record', 'Until you delete it', 'The filename (or “Secret Note”), the sender’s account, when it was created, its expiry, when it was opened and from which IP address, whether decryption worked, and the sender’s optional private note and notification address. It stays in the sender’s list until the sender deletes it; nothing purges it automatically.'),
+    ('<code>H</code> and <code>V</code>', 'Until released', 'Until the release succeeds, ' ~ ('the drop locks, ' if burn_on_lockout else '') ~ 'it expires, or it is deleted, whichever comes first.' ~ ('' if burn_on_lockout else ' A locked drop keeps them, refusing every attempt, until it expires or is deleted.')),
+    ('The drop’s record', 'Until you delete it', 'The filename (or “Secret Note”), the sender’s account, when it was created, its expiry, when it was opened and from which IP address, whether decryption worked, the receipt’s hash, and the sender’s optional private note and notification address. Beside it, what is left of the key share once <code>H</code> and <code>V</code> are gone: the password’s salt, the count of wrong attempts and when it was released. All of it stays in the sender’s list until the sender deletes it; nothing purges it automatically.'),
     ('Server logs', 'Operator’s choice', 'Every successful or wrong password attempt is logged with the requester’s IP address. How long logs are kept is up to whoever runs the server.'),
 ] %}
 
 {% set limits_lead = 'What Buzzdrop does not protect against. No design can fix these.' %}
 {% set limits_items = [
     ('The recipient can keep a copy.', 'Once a file or note is decrypted, it can be saved, copied or photographed. One time means the key is handed out once, not that the content can’t be kept.'),
-    ('Whoever runs the server controls the code.', 'The web app’s encryption code comes from the server, so someone in control of it could serve code that leaks the password, or log <code>V</code> and <code>H</code>. The CLI’s code comes from GitHub Releases instead, but the recipient’s side always runs in a browser.'),
-    ('Weak passwords.', 'Someone who steals the database and the stored files together can try passwords offline. 600,000 PBKDF2 iterations make every guess slow; a long passphrase makes the search hopeless, a short password doesn’t.'),
+    ('Whoever runs the server controls the code.', 'The web app’s encryption code comes from the server, and Subresource Integrity can’t help against the server itself: someone in control of it could serve code that leaks the password, or log <code>V</code> and <code>H</code>. The CLI’s code comes from GitHub Releases instead, but the recipient’s side always runs in a browser.'),
+    ('Weak passwords.', 'Someone who steals the database while a drop is waiting to be opened can try passwords against its <code>V</code> offline; the stored files aren’t needed for that. 600,000 PBKDF2 iterations make every guess slow; a long passphrase makes the search hopeless, a short password doesn’t.'),
     ('A one-click link is the key.', 'Whoever has it can open the drop.'),
-    ('A wrong guess can destroy a drop.', 'Anyone with the link can spend the attempt and lock it, and then the real recipient can’t open it either.'),
+    ('A wrong guess can ' ~ ('destroy' if burn_on_lockout else 'lock') ~ ' a drop.', 'Anyone with the link can spend ' ~ ('the attempt' if max_attempts == 1 else 'the ' ~ max_attempts ~ ' attempts') ~ ' and lock it, and then the real recipient can’t open it either.'),
 ] %}

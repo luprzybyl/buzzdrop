@@ -1183,8 +1183,12 @@
   }
 
   /* How much the server sees at this step, at a glance. */
+  .hiw-lenses {
+    @apply flex shrink-0 flex-col items-start gap-1.5 self-start sm:items-end;
+  }
+
   .hiw-lens {
-    @apply inline-flex shrink-0 items-center gap-2 self-start rounded-full px-3 py-1.5 text-xs ring-1;
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs ring-1;
   }
 
   .hiw-lens.is-none {

@@ -76,7 +76,7 @@ export function initHowItWorks(root, deps) {
     const next = required(flow, '#hiw-next', 'button');
     const play = required(flow, '#hiw-play', 'button');
     const status = required(flow, '#hiw-choice-status', 'p');
-    const hint = required(flow, '#content-cli-hint', 'p');
+    const cliTextHint = required(flow, '#content-cli-hint', 'p');
     const senderRadios = /** @type {HTMLInputElement[]} */ (Array.from(flow.querySelectorAll('input[name="sender"]')));
     const contentRadios = /** @type {HTMLInputElement[]} */ (Array.from(flow.querySelectorAll('input[name="content"]')));
     const textRadio = required(flow, 'input[name="content"][value="text"]', 'input');
@@ -163,12 +163,17 @@ export function initHowItWorks(root, deps) {
         }, remaining);
     };
 
-    // Stepping by hand, or reaching the end: autoplay is over, and the
-    // countdown with it.
-    const stopPlaying = () => {
+    // No step change pending, and Play shown again.
+    const halt = () => {
         clearTimeout(timer);
         timer = undefined;
         setPlaying(false);
+    };
+
+    // Stepping by hand, or reaching the end: autoplay is over, and the
+    // countdown with it.
+    const stopPlaying = () => {
+        halt();
         remaining = HOLD_MS;
         flow.classList.remove('is-playing', 'is-paused');
         ring.classList.remove('is-counting');
@@ -176,10 +181,8 @@ export function initHowItWorks(root, deps) {
 
     // The countdown freezes where it is, for Play to pick up.
     const pausePlaying = () => {
-        clearTimeout(timer);
-        timer = undefined;
         remaining = Math.max(0, remaining - (Date.now() - countingSince));
-        setPlaying(false);
+        halt();
         flow.classList.add('is-paused');
     };
 
@@ -199,8 +202,8 @@ export function initHowItWorks(root, deps) {
         for (const radio of contentRadios) radio.checked = radio.value === choice.content;
         const cli = choice.sender === 'cli';
         textRadio.disabled = cli;
-        hint.toggleAttribute('hidden', !cli);
-        if (cli) textRadio.setAttribute('aria-describedby', hint.id);
+        cliTextHint.toggleAttribute('hidden', !cli);
+        if (cli) textRadio.setAttribute('aria-describedby', cliTextHint.id);
         else textRadio.removeAttribute('aria-describedby');
         for (const part of /** @type {HTMLElement[]} */ (Array.from(root.querySelectorAll('[data-show]')))) {
             const [name, value] = (part.dataset.show ?? '').split(':');
