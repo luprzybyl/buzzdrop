@@ -11,8 +11,8 @@ import pytest
 from io import BytesIO
 
 
-def test_index_page_has_sri_for_main_js(client):
-    """Test that index page includes SRI integrity check for main.js."""
+def test_index_page_has_sri_for_its_entry(client):
+    """Test that index page includes SRI integrity check for pages/index/entry.js."""
     # Login to access the page
     client.post('/login', data={
         'username': 'testuser',
@@ -25,18 +25,18 @@ def test_index_page_has_sri_for_main_js(client):
     html = response.data.decode('utf-8')
 
     # Check for integrity attribute with sha384
-    assert 'integrity="sha384-' in html, "main.js should have integrity attribute"
+    assert 'integrity="sha384-' in html, "pages/index/entry.js should have integrity attribute"
 
     # Check for crossorigin attribute
-    assert 'crossorigin="anonymous"' in html, "main.js should have crossorigin attribute"
+    assert 'crossorigin="anonymous"' in html, "pages/index/entry.js should have crossorigin attribute"
 
     # Verify the script tag structure
-    pattern = r'<script[^>]*src="[^"]*js/main\.js"[^>]*integrity="sha384-[A-Za-z0-9+/=]+"[^>]*crossorigin="anonymous"[^>]*>'
-    assert re.search(pattern, html), "main.js script tag should have correct SRI attributes"
+    pattern = r'<script[^>]*src="[^"]*js/pages/index/entry\.js"[^>]*integrity="sha384-[A-Za-z0-9+/=]+"[^>]*crossorigin="anonymous"[^>]*>'
+    assert re.search(pattern, html), "pages/index/entry.js script tag should have correct SRI attributes"
 
 
-def test_view_page_has_sri_for_view_js(client, db_instance, files_store, csrf_form_data, key_share):
-    """Test that view page includes SRI integrity check for view.js."""
+def test_view_page_has_sri_for_its_entry(client, db_instance, files_store, csrf_form_data, key_share):
+    """Test that view page includes SRI integrity check for pages/view/entry.js."""
     # Login first
     with client.session_transaction() as sess:
         sess['username'] = 'testuser'
@@ -68,16 +68,16 @@ def test_view_page_has_sri_for_view_js(client, db_instance, files_store, csrf_fo
     html = response.data.decode('utf-8')
 
     # Check for integrity attribute
-    assert 'integrity="sha384-' in html, "view.js should have integrity attribute"
-    assert 'crossorigin="anonymous"' in html, "view.js should have crossorigin attribute"
+    assert 'integrity="sha384-' in html, "pages/view/entry.js should have integrity attribute"
+    assert 'crossorigin="anonymous"' in html, "pages/view/entry.js should have crossorigin attribute"
 
     # Verify the script tag structure
-    pattern = r'<script[^>]*src="[^"]*js/view\.js"[^>]*integrity="sha384-[A-Za-z0-9+/=]+"[^>]*crossorigin="anonymous"[^>]*>'
-    assert re.search(pattern, html), "view.js script tag should have correct SRI attributes"
+    pattern = r'<script[^>]*src="[^"]*js/pages/view/entry\.js"[^>]*integrity="sha384-[A-Za-z0-9+/=]+"[^>]*crossorigin="anonymous"[^>]*>'
+    assert re.search(pattern, html), "pages/view/entry.js script tag should have correct SRI attributes"
 
 
-def test_success_page_has_sri_for_success_js(client, db_instance, files_store, key_share):
-    """Test that success page includes SRI integrity check for success.js."""
+def test_success_page_has_sri_for_its_entry(client, db_instance, files_store, key_share):
+    """Test that success page includes SRI integrity check for pages/success/entry.js."""
     with client.session_transaction() as sess:
         sess['username'] = 'testuser'
         sess['is_admin'] = False
@@ -107,12 +107,12 @@ def test_success_page_has_sri_for_success_js(client, db_instance, files_store, k
     html = response.data.decode('utf-8')
 
     # Check for integrity attribute
-    assert 'integrity="sha384-' in html, "success.js should have integrity attribute"
-    assert 'crossorigin="anonymous"' in html, "success.js should have crossorigin attribute"
+    assert 'integrity="sha384-' in html, "pages/success/entry.js should have integrity attribute"
+    assert 'crossorigin="anonymous"' in html, "pages/success/entry.js should have crossorigin attribute"
 
     # Verify the script tag structure
-    pattern = r'<script[^>]*src="[^"]*js/success\.js"[^>]*integrity="sha384-[A-Za-z0-9+/=]+"[^>]*crossorigin="anonymous"[^>]*>'
-    assert re.search(pattern, html), "success.js script tag should have correct SRI attributes"
+    pattern = r'<script[^>]*src="[^"]*js/pages/success/entry\.js"[^>]*integrity="sha384-[A-Za-z0-9+/=]+"[^>]*crossorigin="anonymous"[^>]*>'
+    assert re.search(pattern, html), "pages/success/entry.js script tag should have correct SRI attributes"
 
 
 def test_sri_hashes_are_valid_base64(client):
@@ -160,10 +160,10 @@ def test_module_scripts_maintain_type_attribute(client):
     response = client.get('/')
     html = response.data.decode('utf-8')
 
-    # Check that main.js has both type="module" and integrity
+    # Check that pages/index/entry.js has both type="module" and integrity
     assert 'type="module"' in html, "Should maintain ES6 module support"
     assert 'integrity="sha384-' in html, "Should have SRI"
 
-    # Verify both are on the same script tag for main.js
-    pattern = r'<script[^>]*type="module"[^>]*src="[^"]*js/main\.js"[^>]*integrity="sha384-[^"]*"[^>]*>'
-    assert re.search(pattern, html), "main.js should have both type='module' and integrity"
+    # Verify both are on the same script tag for pages/index/entry.js
+    pattern = r'<script[^>]*type="module"[^>]*src="[^"]*js/pages/index/entry\.js"[^>]*integrity="sha384-[^"]*"[^>]*>'
+    assert re.search(pattern, html), "pages/index/entry.js should have both type='module' and integrity"

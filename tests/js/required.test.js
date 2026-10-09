@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Window } from 'happy-dom';
-import { required, requiredClosest, requiredWindow } from '../../static/js/required.js';
+import { required, requiredClosest, requiredWindow } from '../../static/js/lib/required.js';
 import { browserView } from './support/dom-fixture.js';
 
 const page = () => {

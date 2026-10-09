@@ -2,7 +2,7 @@
 // crypto.js and real PBKDF2 (docs/frontend-test-strategy.md §7, JS integration
 // and the upload-side security invariants).
 import { describe, expect, it } from 'vitest';
-import { CryptoService, bytesToHex, hexToBytes } from '../../../static/js/crypto.js';
+import { CryptoService, bytesToHex, hexToBytes } from '../../../static/js/lib/crypto.js';
 import { PASSWORDS, openUploadPage, screen } from '../support/pages/upload.js';
 import { pathOf } from '../support/protocol-fake.js';
 

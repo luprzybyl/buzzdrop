@@ -7,15 +7,15 @@
 import { isInaccessible, within } from '@testing-library/dom';
 import { computeAccessibleName } from 'dom-accessibility-api';
 import { expect, vi } from 'vitest';
-import { initHeroFlow } from '../../../../static/js/hero-flow-page.js';
-import { initIndex } from '../../../../static/js/index-page.js';
+import { initHeroFlow } from '../../../../static/js/pages/hero-flow/hero-flow-page.js';
+import { initIndex } from '../../../../static/js/pages/index/index-page.js';
 import { makeProtocolFake } from '../protocol-fake.js';
 import { DEFAULT_PASSWORD, cryptoFor, openPage, replaceInFixture, typeable, waitUntil } from './page.js';
 
 export { screen } from './page.js';
 
 /**
- * @typedef {import('../../../../static/js/crypto.js').Bytes} Bytes
+ * @typedef {import('../../../../static/js/lib/crypto.js').Bytes} Bytes
  * @typedef {ReturnType<typeof makeProtocolFake>} Fake
  * @typedef {import('./page.js').Page} Page
  */
@@ -81,7 +81,7 @@ export const PASSWORDS = {
 /**
  * The page's dependencies, recording what it navigates to and alerts.
  * @param {typeof globalThis.fetch} fetch
- * @param {import('../../../../static/js/index-page.js').IndexDeps['crypto']} crypto
+ * @param {import('../../../../static/js/pages/index/index-page.js').IndexDeps['crypto']} crypto
  * @param {typeof XMLHttpRequest} xhr
  */
 function indexDeps(fetch, crypto, xhr) {

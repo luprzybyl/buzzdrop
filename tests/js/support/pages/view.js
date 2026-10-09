@@ -4,16 +4,16 @@
 // produced by the fake's own state. The DOM layer runs it with the stub
 // crypto, the JS-integration layer with the real crypto.js.
 import { expect, vi } from 'vitest';
-import { bytesToHex } from '../../../../static/js/crypto.js';
-import { initView } from '../../../../static/js/view-page.js';
+import { bytesToHex } from '../../../../static/js/lib/crypto.js';
+import { initView } from '../../../../static/js/pages/view/view-page.js';
 import { makeProtocolFake } from '../protocol-fake.js';
 import { DEFAULT_PASSWORD, addressOf, cryptoFor, openPage, replaceInFixture, typeable, waitUntil } from './page.js';
 
 export { DEFAULT_PASSWORD, screen } from './page.js';
 
 /**
- * @typedef {import('../../../../static/js/crypto.js').Bytes} Bytes
- * @typedef {import('../../../../static/js/crypto.js').CryptoService} CryptoService
+ * @typedef {import('../../../../static/js/lib/crypto.js').Bytes} Bytes
+ * @typedef {import('../../../../static/js/lib/crypto.js').CryptoService} CryptoService
  * @typedef {ReturnType<typeof makeProtocolFake>} Fake
  * @typedef {Fake['log'][number]} LoggedRequest
  * @typedef {import('./page.js').Page} Page

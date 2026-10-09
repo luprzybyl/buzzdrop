@@ -191,7 +191,7 @@ def test_no_inline_scripts_in_templates(client, key_release_upload):
     html = response.data.decode('utf-8')
     _assert_no_inline_script(response)
     _assert_no_inline_handlers(html)
-    assert 'js/confirm-download.js' in html
+    assert 'js/pages/confirm-download/entry.js' in html
 
     # view.html — the page that used to inject window.* URLs inline.
     response = client.post(

@@ -3,7 +3,7 @@
 // protocol fake's routes, so the driver answers it itself, the way app.py does.
 import { within } from '@testing-library/dom';
 import { expect } from 'vitest';
-import { initUsers } from '../../../../static/js/users-page.js';
+import { initUsers } from '../../../../static/js/pages/users/users-page.js';
 import { openPage, waitUntil } from './page.js';
 
 export { screen } from './page.js';

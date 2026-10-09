@@ -19,7 +19,7 @@ def get_sri_hash_function():
     with app.test_request_context():
         from flask import render_template_string
         # Render a simple template to access the function
-        template = "{{ sri_hash('js/main.js') }}"
+        template = "{{ sri_hash('js/pages/index/entry.js') }}"
         result = render_template_string(template)
         return result
     
@@ -43,7 +43,7 @@ def test_sri_hash_generates_valid_hash():
     with app.test_request_context():
         from flask import render_template_string
         # Test with main.js
-        template = "{{ sri_hash('js/main.js') }}"
+        template = "{{ sri_hash('js/pages/index/entry.js') }}"
         hash_result = render_template_string(template)
         
         # Should start with 'sha384-'
@@ -60,11 +60,11 @@ def test_sri_hash_matches_actual_file():
         from flask import render_template_string
         
         # Test with main.js
-        template = "{{ sri_hash('js/main.js') }}"
+        template = "{{ sri_hash('js/pages/index/entry.js') }}"
         hash_result = render_template_string(template)
         
         # Calculate hash manually
-        filepath = os.path.join(app.static_folder, 'js/main.js')
+        filepath = os.path.join(app.static_folder, 'js/pages/index/entry.js')
         with open(filepath, 'rb') as f:
             file_content = f.read()
             expected_hash = 'sha384-' + base64.b64encode(
@@ -79,8 +79,8 @@ def test_sri_hash_different_files_different_hashes():
     with app.test_request_context():
         from flask import render_template_string
         
-        hash1 = render_template_string("{{ sri_hash('js/main.js') }}")
-        hash2 = render_template_string("{{ sri_hash('js/view.js') }}")
+        hash1 = render_template_string("{{ sri_hash('js/pages/index/entry.js') }}")
+        hash2 = render_template_string("{{ sri_hash('js/pages/view/entry.js') }}")
         
         assert hash1 != hash2, "Different files should have different hashes"
 
@@ -113,8 +113,8 @@ def test_sri_hash_consistent_for_same_file():
     with app.test_request_context():
         from flask import render_template_string
         
-        hash1 = render_template_string("{{ sri_hash('js/main.js') }}")
-        hash2 = render_template_string("{{ sri_hash('js/main.js') }}")
+        hash1 = render_template_string("{{ sri_hash('js/pages/index/entry.js') }}")
+        hash2 = render_template_string("{{ sri_hash('js/pages/index/entry.js') }}")
         
         assert hash1 == hash2, "Same file should produce consistent hash"
 
@@ -125,7 +125,7 @@ def test_all_javascript_files_have_valid_hashes():
         from flask import render_template_string
         
         # List of JS files that should exist
-        js_files = ['js/main.js', 'js/view.js', 'js/success.js', 'js/crypto.js']
+        js_files = ['js/pages/index/entry.js', 'js/pages/view/entry.js', 'js/pages/success/entry.js', 'js/lib/crypto.js']
         
         for js_file in js_files:
             filepath = os.path.join(app.static_folder, js_file)

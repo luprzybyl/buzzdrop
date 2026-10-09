@@ -4,8 +4,8 @@
 // - Toggling password visibility
 // - Auto-filling the password and one-click link from the URL fragment
 
-import { buildOneClickLink, readFragmentPassword } from './fragment-password.js';
-import { required, requiredWindow } from './required.js';
+import { buildOneClickLink, readFragmentPassword } from '../../lib/one-click-link.js';
+import { required, requiredWindow } from '../../lib/required.js';
 
 /**
  * @typedef {Record<string, never>} SuccessDeps
@@ -151,7 +151,7 @@ export function initSuccess(root, deps) {
 
         // The convenience link: password in the fragment, ready to paste
         // anywhere. Deliberate, and deliberately labelled as such on the page —
-        // see the tradeoff spelled out in fragment-password.js. The page shows
+        // see the tradeoff spelled out in lib/one-click-link.js. The page shows
         // it with the fragment masked, like the password field.
         oneClickLink = buildOneClickLink(shareLink.value, pwd);
         oneClickDisplay.hidden = false;

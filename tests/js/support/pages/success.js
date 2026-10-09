@@ -1,6 +1,6 @@
 // Page driver for the success page, where the uploader picks up the link and
 // password (docs/frontend-test-strategy.md §7a).
-import { initSuccess } from '../../../../static/js/success-page.js';
+import { initSuccess } from '../../../../static/js/pages/success/success-page.js';
 import { addressOf, openPage } from './page.js';
 
 export { screen } from './page.js';

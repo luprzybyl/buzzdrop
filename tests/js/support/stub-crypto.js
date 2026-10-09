@@ -4,10 +4,10 @@
 // but still honest enough for the protocol fake to check: the verifier is a
 // hash of the password, so a wrong password is wrong to the server too, and
 // the receipt in a share hashes to the receipt_hash it was uploaded with.
-import { bytesToHex } from '../../../static/js/crypto.js';
+import { bytesToHex } from '../../../static/js/lib/crypto.js';
 
-/** @typedef {import('../../../static/js/crypto.js').Bytes} Bytes */
-/** @typedef {Pick<import('../../../static/js/crypto.js').CryptoService, 'encrypt' | 'receiptHash' | 'parseBlob' | 'deriveVerifier' | 'decrypt'>} StubCrypto */
+/** @typedef {import('../../../static/js/lib/crypto.js').Bytes} Bytes */
+/** @typedef {Pick<import('../../../static/js/lib/crypto.js').CryptoService, 'encrypt' | 'receiptHash' | 'parseBlob' | 'deriveVerifier' | 'decrypt'>} StubCrypto */
 
 const MAGIC = new TextEncoder().encode('STUB');
 const RECEIPT = new Uint8Array(32).fill(7);

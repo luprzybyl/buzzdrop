@@ -11,10 +11,9 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             include: ['static/js/**'],
-            // Never imported by tests: entry scripts (tests import the page
-            // module instead; add each entry here as its page is split) and the
-            // passphrase wordlist, which is data.
-            exclude: ['static/js/hero-flow.js', 'static/js/success.js', 'static/js/confirm-download.js', 'static/js/users.js', 'static/js/view.js', 'static/js/main.js', 'static/js/eff-wordlist.js'],
+            // Never imported by tests: the page entry scripts (tests import
+            // the page module instead) and the passphrase wordlist, which is data.
+            exclude: ['static/js/pages/*/entry.js', 'static/js/lib/eff-wordlist.js'],
             reporter: ['text', 'html'],
         },
     },

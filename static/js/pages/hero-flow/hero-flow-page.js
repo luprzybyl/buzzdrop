@@ -3,7 +3,7 @@
 // artwork in each stage is aria-hidden; the captions are real text in an
 // ordered list, so assistive tech reads the whole sequence regardless of which
 // stage happens to be on screen.
-import { requiredWindow } from './required.js';
+import { requiredWindow } from '../../lib/required.js';
 
 /**
  * @typedef {Record<string, never>} HeroFlowDeps

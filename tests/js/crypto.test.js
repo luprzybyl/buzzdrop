@@ -5,7 +5,7 @@ import test from 'node:test';
 // Only `crypto` is ever read through it, so Node's globalThis stands in.
 globalThis.window = /** @type {Window & typeof globalThis} */ (globalThis);
 
-const { CryptoService, bytesToHex, hexToBytes } = await import('../../static/js/crypto.js');
+const { CryptoService, bytesToHex, hexToBytes } = await import('../../static/js/lib/crypto.js');
 
 const service = new CryptoService();
 const encoder = new TextEncoder();

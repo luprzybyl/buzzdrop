@@ -4,8 +4,8 @@
 // history entry, then re-attach it to the form action on submit — the
 // POST navigation lands the next page on the same fragment, which
 // view.js reads and clears. Nothing is persisted (no sessionStorage).
-import { buildOneClickLink, readFragmentPassword } from './fragment-password.js';
-import { required, requiredWindow } from './required.js';
+import { buildOneClickLink, readFragmentPassword } from '../../lib/one-click-link.js';
+import { required, requiredWindow } from '../../lib/required.js';
 
 /**
  * @typedef {Record<string, never>} ConfirmDownloadDeps

@@ -7,11 +7,11 @@
 //    then decrypt with Kp ‖ H (docs/true-one-time.md §6.4)
 // 4. Save file to disk and notify server
 
-import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
-import { readFragmentPassword } from './fragment-password.js';
-import { required, requiredWindow } from './required.js';
+import { CryptoService, bytesToHex, hexToBytes } from '../../lib/crypto.js';
+import { readFragmentPassword } from '../../lib/one-click-link.js';
+import { required, requiredWindow } from '../../lib/required.js';
 
-/** @typedef {import('./crypto.js').Bytes} Bytes */
+/** @typedef {import('../../lib/crypto.js').Bytes} Bytes */
 
 /**
  * @typedef {object} ViewDeps

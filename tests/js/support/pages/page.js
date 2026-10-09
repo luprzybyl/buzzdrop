@@ -7,7 +7,7 @@
 import { within } from '@testing-library/dom';
 import { userEvent } from '@testing-library/user-event';
 import { vi } from 'vitest';
-import { CryptoService } from '../../../../static/js/crypto.js';
+import { CryptoService } from '../../../../static/js/lib/crypto.js';
 import { browserView, loadFixture } from '../dom-fixture.js';
 import { makeStubCrypto } from '../stub-crypto.js';
 

@@ -2,7 +2,7 @@
 // "Generate token" buttons on /users POST /api/token and render the raw token
 // inline. The token is returned exactly once and is never stored server-side,
 // so the result panel stays visible until the page is reloaded.
-import { required, requiredClosest } from './required.js';
+import { required, requiredClosest } from '../../lib/required.js';
 
 /**
  * @typedef {object} UsersDeps

@@ -2,13 +2,13 @@
 // because every test in the run shares one container and its database.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect } from '@playwright/test';
-import { CryptoService, bytesToHex } from '../../static/js/crypto.js';
+import { CryptoService, bytesToHex } from '../../static/js/lib/crypto.js';
 
 // crypto.js uses `window.crypto`; Node exposes Web Crypto on globalThis.
 globalThis.window ??= /** @type {Window & typeof globalThis} */ (globalThis);
 
 /** @typedef {import('@playwright/test').Page} Page */
-/** @typedef {import('../../static/js/crypto.js').Bytes} Bytes */
+/** @typedef {import('../../static/js/lib/crypto.js').Bytes} Bytes */
 /**
  * The in-memory file shape setInputFiles accepts (Playwright exports no name for it).
  * @typedef {{ name: string, mimeType: string, buffer: Buffer }} FilePayload

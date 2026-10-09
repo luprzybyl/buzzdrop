@@ -34,7 +34,7 @@
 
         {# Both panels share one grid cell, so the cell is as tall as the taller
            one and switching tabs doesn't move anything below. The inactive
-           panel keeps its space with visibility: hidden (index-page.js), which
+           panel keeps its space with visibility: hidden (pages/index/index-page.js), which
            also takes it out of the tab order and the accessibility tree. #}
         <div class="mt-6 grid *:col-start-1 *:row-start-1">
         <div id="file-upload-section" class="flex flex-col" role="tabpanel" aria-labelledby="file-tab">
@@ -153,7 +153,7 @@
                     </span>
                 </label>
                 {% if configured_notification_email %}
-                {# Shown while the box is ticked (index-page.js): it says where the
+                {# Shown while the box is ticked (pages/index/index-page.js): it says where the
                    notification will go, which matters only once one is asked for. #}
                 <div id="notification-email-field" hidden>
                     <label for="notification-email" class="field-label">Account email</label>
@@ -486,7 +486,7 @@
         </div>
     </section>
 </div>
-<script type="module" src="{{ url_for('static', filename='js/hero-flow.js') }}" integrity="{{ sri_hash('js/hero-flow.js') }}" crossorigin="anonymous"></script>
+<script type="module" src="{{ url_for('static', filename='js/pages/hero-flow/entry.js') }}" integrity="{{ sri_hash('js/pages/hero-flow/entry.js') }}" crossorigin="anonymous"></script>
 {% endif %}
 
 {% if session.get('username') and user_files %}
@@ -591,5 +591,5 @@
     'uploadUrl': url_for('upload_file'),
     'uploadBeginUrl': url_for('upload_begin'),
 } | tojson }}</script>
-<script type="module" src="{{ url_for('static', filename='js/main.js') }}" integrity="{{ sri_hash('js/main.js') }}" crossorigin="anonymous"></script>
+<script type="module" src="{{ url_for('static', filename='js/pages/index/entry.js') }}" integrity="{{ sri_hash('js/pages/index/entry.js') }}" crossorigin="anonymous"></script>
 {% endblock %}

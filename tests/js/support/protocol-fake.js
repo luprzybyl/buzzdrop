@@ -21,10 +21,10 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CryptoService, bytesToHex } from '../../../static/js/crypto.js';
+import { CryptoService, bytesToHex } from '../../../static/js/lib/crypto.js';
 
 /**
- * @typedef {import('../../../static/js/crypto.js').Bytes} Bytes
+ * @typedef {import('../../../static/js/lib/crypto.js').Bytes} Bytes
  * @typedef {'/upload/begin' | '/upload' | '/download' | '/release' | '/report_decryption'} Route
  * @typedef {{
  *   method: string,

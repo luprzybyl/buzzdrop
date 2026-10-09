@@ -3,12 +3,12 @@
 // shared-files list. The page loads for anonymous visitors too, who get
 // neither, so lookups into those parts keep their null checks.
 
-import { CryptoService, bytesToHex, hexToBytes } from './crypto.js';
-import { buildSharedFilesUrl, getSharedFilesPage, relativeTime, rowSearchText } from './shared-files.js';
-import { isAllowedFile } from './file-extensions.js';
-import { buildOneClickLink } from './fragment-password.js';
-import { assessPassword, generatePassphrase } from './passphrase.js';
-import { required, requiredWindow } from './required.js';
+import { CryptoService, bytesToHex, hexToBytes } from '../../lib/crypto.js';
+import { buildSharedFilesUrl, getSharedFilesPage, relativeTime, rowSearchText } from '../../features/shared-files/index.js';
+import { isAllowedFile } from '../../lib/file-extensions.js';
+import { buildOneClickLink } from '../../lib/one-click-link.js';
+import { assessPassword, generatePassphrase } from '../../lib/passphrase.js';
+import { required, requiredWindow } from '../../lib/required.js';
 
 /**
  * @typedef {object} IndexDeps
@@ -50,7 +50,7 @@ import { required, requiredWindow } from './required.js';
 
 /**
  * What the shared-files status endpoint answers.
- * @typedef {{files: Array<import('./shared-files.js').FileStatus & {id: string}>}} FileStatusesResponse
+ * @typedef {{files: Array<import('../../features/shared-files/index.js').FileStatus & {id: string}>}} FileStatusesResponse
  */
 
 /**
@@ -400,9 +400,9 @@ export function initIndex(root, deps) {
      * /upload/begin mints file_id + the server share H, the client derives
      * Kp/V from the password, encrypts under HKDF(Kp ‖ H), and returns the
      * blob plus the fields the finish POST needs.
-     * @param {import('./crypto.js').Bytes} data - Raw plaintext
+     * @param {import('../../lib/crypto.js').Bytes} data - Raw plaintext
      * @param {string} password
-     * @returns {Promise<{blob: import('./crypto.js').Bytes, fileId: string, keyVerifier: string, receiptHash: string}>}
+     * @returns {Promise<{blob: import('../../lib/crypto.js').Bytes, fileId: string, keyVerifier: string, receiptHash: string}>}
      * @throws {Error} When the server refuses the handshake
      */
     async function encryptForUpload(data, password) {
