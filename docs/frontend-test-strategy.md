@@ -1,6 +1,6 @@
 # Frontend test strategy
 
-The locked test strategy for Buzzdrop's browser JS (`static/js/`). Every tooling, layering, fixture, test-profile and CI decision is here, so the harnesses and tests can be built without re-deciding anything. Each section states the decision as it stands now and links to the ticket that holds its reasoning. Charted on the map [Wayfinder: frontend & JS test strategy](https://github.com/luprzybyl/buzzdrop/issues/154).
+The locked test strategy for Buzzdrop's browser JS (`static/js/`). The code itself is layered into `lib/`, `features/` and `pages/` ([#251](https://github.com/luprzybyl/buzzdrop/issues/251); the rules are in `static/js/CLAUDE.md`, enforced by `tests/js/architecture.test.js`); paths below are relative to `static/js/`. Every tooling, layering, fixture, test-profile and CI decision is here, so the harnesses and tests can be built without re-deciding anything. Each section states the decision as it stands now and links to the ticket that holds its reasoning. Charted on the map [Wayfinder: frontend & JS test strategy](https://github.com/luprzybyl/buzzdrop/issues/154).
 
 ## 1. Layers
 
@@ -10,7 +10,7 @@ Each behaviour is tested **once**, at the **lowest layer that can show it**.
 |---|---|---|---|
 | **Unit** | Pure modules on their own | `node --test` | Node |
 | **DOM** | One page module against its real markup, crypto stubbed, network on the protocol fake | Vitest | happy-dom |
-| **JS integration** | Page modules + real `crypto.js` against the protocol fake | Vitest | happy-dom |
+| **JS integration** | Page modules + real `lib/crypto.js` against the protocol fake | Vitest | happy-dom |
 | **E2E** | What needs a real browser *and* the real server | Playwright | Chromium, Firefox, WebKit against the Buzzdrop Docker image |
 
 "Integration" means the JS-integration layer and nothing else. The Python suite (`tests/`) is not changed by this strategy, except for the generators and CI steps named below.
@@ -21,7 +21,7 @@ From [Choose the runner and DOM environment for DOM + JS-integration tests](http
 
 - **Unit:** keep `node --test` for `tests/js/*.test.js`. These files don't run under Vitest.
 - **DOM + integration:** Vitest with happy-dom, pinned at **>= 20.8.9** (security advisories). Vitest's `include` covers only `tests/js/dom/**` and `tests/js/integration/**`.
-- **jsdom is rejected.** It puts byte arrays in two realms, so `TextEncoder`/`subtle` output fails `instanceof Uint8Array`, which breaks `crypto.js`. It also has no navigation, and `new Response(blob)` throws.
+- **jsdom is rejected.** It puts byte arrays in two realms, so `TextEncoder`/`subtle` output fails `instanceof Uint8Array`, which breaks `lib/crypto.js`. It also has no navigation, and `new Response(blob)` throws.
 - Real 600k-iteration PBKDF2 runs in happy-dom at acceptable cost. Tests don't stub the KDF.
 - **Node 24** via a committed `.nvmrc`.
 - **npm scripts:** `test:unit` (today's `test:js`, renamed), `test:dom` (`vitest run --coverage`), `test` (both), `fixtures` (regenerates the DOM fixtures and the protocol contract), `typecheck` (`tsc -p jsconfig.json`).
@@ -35,7 +35,7 @@ From [Choose the runner and DOM environment for DOM + JS-integration tests](http
 
 From [What shape should the testability refactor of page scripts take?](https://github.com/luprzybyl/buzzdrop/issues/158). Production JS may be refactored to make it testable, as long as behaviour doesn't change.
 
-- **Split:** each page gets a side-effect-free module (`index-page.js`, `view-page.js`, `success-page.js`, `confirm-download-page.js`, `hero-flow-page.js`, `users-page.js`) exporting `init<Page>(root, deps)` and `browserDeps()`. The existing entry files (`main.js`, `view.js`, `success.js`, `confirm-download.js`, `hero-flow.js`, `users.js`) shrink to `init<Page>(document, browserDeps())`. Template `<script>` tags, SRI attributes and JSON config blocks stay as they are. **Tests import the page module, never the entry.**
+- **Split:** each page gets a side-effect-free module (`pages/<page>/<page>-page.js` for `index`, `view`, `success`, `confirm-download`, `hero-flow` and `users`) exporting `init<Page>(root, deps)` and `browserDeps()`. Each page's `pages/<page>/entry.js` is only `init<Page>(document, browserDeps())`. Template `<script>` tags, SRI attributes and JSON config blocks stay as they are. **Tests import the page module, never the entry.**
 - **State lives in the `init` closure** (e.g. `uploadInProgress`, `activeShareMode`, parsed config, CSRF token). Every `init()` is a fresh page, and no `vi.resetModules()` is needed.
 - **Dependencies (`deps`):**
 
@@ -43,12 +43,12 @@ From [What shape should the testability refactor of page scripts take?](https://
   |---|---|
   | `fetch`, `XMLHttpRequest` | Network-level seams, so the protocol fake sees real URLs, headers and bodies. The XHR class also supplies `upload.onprogress`, which happy-dom never fires. |
   | `navigate(url)`, `alert(msg)` | Effects the tests observe |
-  | `crypto` (`CryptoService`) | Integration tests pass the real one. DOM tests may stub it. |
+  | `crypto` (`ShareCrypto` from `lib/crypto.js`: `seal`, `open`, `receiptHash`) | Integration tests pass the real one. DOM tests may stub it. |
 
   **Not passed in:** the DOM (it comes in as `root`), `history`, `clipboard`, and reads of `location`. happy-dom models these, and tests assert on them directly.
-- **`success.js` and `confirm-download.js` become ES modules** (`type="module"` in their templates).
-- **Template-guaranteed elements** are looked up with `required(parent, selector, tag)` / `requiredClosest(element, selector, tag)` from `static/js/required.js`: a missing element or wrong tag throws a named error, and the tag gives the element's type with no cast. Elements a template may really lack keep a plain null check. This is page code only; tests and drivers find elements by role, label or text (§7b).
-- **Upload `FormData`:** the file and note copies in the index page are merged into one local `appendShareOptions(formData, opts)`.
+- **The success and confirm-download scripts become ES modules** (`type="module"` in their templates).
+- **Template-guaranteed elements** are looked up with `required(parent, selector, tag)` / `requiredClosest(element, selector, tag)` from `lib/required.js`: a missing element or wrong tag throws a named error, and the tag gives the element's type with no cast. Elements a template may really lack keep a plain null check. This is page code only; tests and drivers find elements by role, label or text (§7b).
+- **Upload `FormData`:** built in one place, `createShare` in `features/share-protocol/`, for files and notes alike.
 
 ### Pure-module extraction
 
@@ -58,11 +58,11 @@ From [Which page-script logic is extracted into pure, unit-tested modules?](http
 
 | Module | Exports | Unit cases |
 |---|---|---|
-| `static/js/fragment-password.js` (new) | `readFragmentPassword(hash) → string \| null`, `buildOneClickLink(shareUrl, password)` | `""`, `#`, `#abc`, `#%E2%9C%93`, `#a%20b`, malformed `#%ZZ` → `null`; encode↔decode round trip |
-| `static/js/file-extensions.js` (new) | `isAllowedFile(name, allowedExtensions)` | No dot, trailing dot, dotfile, double extension, uppercase. **Pins current behaviour** (`README` → `readme`). |
-| `static/js/shared-files.js` (existing) | + `statusBadgeClass(file)`, `rowSearchText(searchBase, file)` | Badge priority downloaded > expired > active; null IP or missing display |
+| `lib/one-click-link.js` | `readFragmentPassword(hash) → string \| null`, `takeFragmentPassword(window)`, `buildOneClickLink(shareUrl, password)` | `""`, `#`, `#abc`, `#%E2%9C%93`, `#a%20b`, malformed `#%ZZ` → `null`; encode↔decode round trip |
+| `lib/file-extensions.js` | `isAllowedFile(name, allowedExtensions)` | No dot, trailing dot, dotfile, double extension, uppercase. **Pins current behaviour** (`README` → `readme`). |
+| `features/shared-files/shared-files.js` | + `statusBadgeClass(file)`, `rowSearchText(searchBase, file)`, `compareRows(sort)` | Badge priority downloaded > expired > active; null IP or missing display; sort by instant, rows without the time last |
 
-The `history.replaceState` fragment scrub stays in each page, because it's an effect. The strength-meter mapping stays in the index page, since `assessPassword` is already unit-tested. Tests live at `tests/js/<name>.test.js`.
+The fragment scrub lives in `takeFragmentPassword(window)`, so every page that reads a one-click password scrubs it the same way (#251 reversed the earlier "an effect, so it stays in each page"). The strength-meter mapping stays in the index page, since `assessPassword` is already unit-tested. Tests live at `tests/js/<name>.test.js`.
 
 ## 4. DOM fixtures
 
@@ -144,15 +144,15 @@ From [How is the protocol fake kept honest against the real server?](https://git
 
 From [Which behaviours and journeys must each layer cover?](https://github.com/luprzybyl/buzzdrop/issues/161), amended by [Which page-script logic is extracted into pure, unit-tested modules?](https://github.com/luprzybyl/buzzdrop/issues/167). Each scenario gets one test.
 
-**Granularity.** A test earns its place by catching a mistake that would weaken security or break a journey; the mutation table below names those mistakes. File and note run as separate cases only where their code differs: they share `encryptForUpload` and `uploadWithProgress`, so the error paths run once, in file mode. Which message the UI shows for which status is a DOM concern, not an integration one.
+**Granularity.** A test earns its place by catching a mistake that would weaken security or break a journey; the mutation table below names those mistakes. File and note run as separate cases only where their code differs: they share `createShare`, so the error paths run once, in file mode. Which message the UI shows for which status is a DOM concern, not an integration one.
 
 ### Unit (`node --test`)
-- Existing: `crypto`, `passphrase`, `shared-files` (the crypto fixtures are byte-identical to `tests/unit/test_cli_crypto.py`).
-- New: `fragment-password.test.js`, `file-extensions.test.js`; `shared-files.test.js` gains the badge and search-text cases (§3).
+- Existing: `crypto`, `hex`, `passphrase`, `shared-files`, `architecture` (the layer rules) (the crypto fixtures are byte-identical to `tests/unit/test_cli_crypto.py`).
+- New: `one-click-link.test.js`, `file-extensions.test.js`; `shared-files.test.js` gains the badge and search-text cases (§3).
 - `required.test.js`: the element lookups (§3) return the match, and throw on a missing element, a wrong tag or a windowless document.
 
 ### DOM (Vitest + happy-dom, against the template fixtures)
-- **Index page (`main.js`):**
+- **Index page (`pages/index/`):**
   - Tab switching, including arrow/Home/End keys and ARIA state.
   - Strength meter (`role="meter"`): one scenario per level (weak/fair/strong, its `aria-valuetext`, `aria-valuenow` and the bar's fill); empty → hidden; capped at 100 for ≥90 bits. The meter carries the fill as `--strength-fill` for the bar's width; jest-dom's `toHaveStyle` can't check a custom property, so the driver reads it (`strengthBarFill()`).
   - The generate-passphrase button.
@@ -163,17 +163,18 @@ From [Which behaviours and journeys must each layer cover?](https://github.com/l
   - Copy-to-clipboard status.
   - Delete confirmation via `data-confirm-message`.
   - Shared files: search, sort (newest upload first by default), pagination and their URL sync; the page controls hidden while everything fits on one page. Each status's label; a note titled by its private note, or by its time; plain words for a missing expiry, opening or address; times relative to the driver's fixed clock, with the full timestamp in the title. Copy link offered only on an active drop. Status refresh updates the row (status, opened time, address, Copy link withdrawn) and its search text (one row, answered by the driver).
-- **View page (`view.js`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment, Enter in the field decrypting without navigating, Decrypt disabled until the share has downloaded, the attempts warning (and the field's description of it) going after the first try, the status line as a live region.
-- **Success page (`success.js`):** copy link, password and one-click link (with "Failed" when the clipboard is blocked or missing, while Copy link, which copies by selection, still works without a Clipboard API), password visibility toggle, the fields filled from a well-formed fragment and the one-click link shown with its fragment masked.
-- **Confirm page (`confirm-download.js`):** the fragment password carried across the confirm POST (one well-formed case).
-- **Hero flow (`hero-flow.js`):** reduced motion means no autoplay; the toggle pauses it. The stage on screen is the list item with `aria-current="step"`.
-- **Users page (`users.js`, admin):** Generate shows the token and its expiry and re-enables the button; a server error shows its message; the request carries the CSRF header; Copy shows "Copied!".
+- **View page (`pages/view/`):** the plaintext view for text notes, the copy-text button, the error messages (including those for 410, 429 and 404 from `/release`), the field filled from a well-formed fragment, Enter in the field decrypting without navigating, Decrypt disabled until the share has downloaded, the attempts warning (and the field's description of it) going after the first try, the status line as a live region.
+- **Success page (`pages/success/`):** copy link, password and one-click link (with "Failed" when the clipboard is blocked or missing, while Copy link, which copies by selection, still works without a Clipboard API), password visibility toggle, the fields filled from a well-formed fragment and the one-click link shown with its fragment masked.
+- **Confirm page (`pages/confirm-download/`):** the fragment password carried across the confirm POST (one well-formed case).
+- **Hero flow (`pages/hero-flow/`):** reduced motion means no autoplay; the toggle pauses it. The stage on screen is the list item with `aria-current="step"`.
+- **Users page (`pages/users/`, admin):** Generate shows the token and its expiry and re-enables the button; a server error shows its message; the request carries the CSRF header; Copy shows "Copied!".
 
-### JS integration (page modules + real `crypto.js` + protocol fake)
+### JS integration (page modules + real `lib/crypto.js` + protocol fake)
 - **Two-phase upload, for file and for note:** begin → encrypt under H → upload with `file_id`, verifier and `receipt_hash` → progress updates → redirect to success.
 - **Share options sent on upload, for file and for note:** expiry, private note, notify-on-open, notification email. Asserted on the request bodies.
 - **Upload error paths, file mode only:** begin fails → the retry runs a fresh begin; upload fails → the retry finishes the newly issued share, not the stale one; 413 shows its message and the UI unlocks.
 - **View:** fetch the blob → release → decrypt → report the receipt, plus one upload → view round trip on one fake instance. 403 with `attempts_remaining`. The other `/release` statuses only pick a message and are DOM-tested.
+- **Share protocol (`features/share-protocol/`) on its own:** a successful open runs PBKDF2 once; a large note uploads and arrives whole.
 
 ### E2E journeys (Playwright, against the app container)
 1. File: upload → success → share link → confirm → decrypt → downloaded bytes equal the original.
@@ -235,7 +236,7 @@ From [Frontend tests: drive pages through user-behaviour helpers instead of setu
 
 - **Naming rule:** verbs are what a user does, in the app's own words ("share", "decrypt", "proceed", "Copy one-click link"), not what the code does. Options describe the user's situation in app terms, and the driver turns them into fixtures, fixture edits, protocol-fake state and crypto stubs: `openShare({ type: 'message', link: 'one-click', maxAttempts: 3, server: 'claimed', download: 'in-progress', share: 'unsupported-format' })`, `openUploadPage({ account: 'with-email', sharesPerPage: 2, clipboard: 'blocked' })`, `enterPassword({ strength: 'weak' })`, `share({ server: 'too-large' })`. No test spells out an HTTP status or body.
 - **Server situations come from the protocol fake** (§5–§6). The view and upload drivers put the page in front of a fake in both layers; a situation is produced by the fake's own state where it can be (a wrong password, a share someone already claimed or burned, a lockout) and by `failNext` otherwise (500, network, 413, rate limits). Drivers add no hand-written responses for the five protocol routes. Routes outside the fake (the shared-files status poll, `/api/token`) are answered by their driver.
-- **One driver, two layers.** A driver takes `crypto: 'stub' | 'real'`: DOM tests run the stub (`tests/js/support/stub-crypto.js`: no PBKDF2, but a verifier the fake can check and a receipt matching the share's `receipt_hash`), JS-integration tests run the real `crypto.js`. An integration test can hand one fake from the upload driver to `openShare({ uploaded: { backend, fileId } })` for a browser-only round trip.
+- **One driver, two layers.** A driver takes `crypto: 'stub' | 'real'`: DOM tests run the stub (`tests/js/support/stub-crypto.js`: no PBKDF2, but a verifier the fake can check and a receipt matching the share's `receipt_hash`), JS-integration tests run the real `lib/crypto.js`. An integration test can hand one fake from the upload driver to `openShare({ uploaded: { backend, fileId } })` for a browser-only round trip.
 - **What a driver returns:** verbs, plus the outcomes a test can't see on screen: `url()`, `historyLength()`, `clipboardText()`, `formsSubmitted()` (submissions the page let through, which would navigate), `storage()`, `reportsSent()`, `requestsSent()`, `navigatedTo()`, `alerts()`, `sharesIssued()`, `progressShown()`, `savedFile()`, and the fake itself (`backend`) for checks on server state. It hands out **no element handles**: everything on screen is asserted through Testing Library (§7b).
 - **Lifecycle:** each `open…` call is a fresh page; `screen` queries the page opened last; the setup file closes them all after each test.
 - Drivers are JSDoc-typed and pass `npm run typecheck`.
@@ -306,6 +307,6 @@ All gating CI lives in `ci.yml`. **`build-test.yml` is deleted** (it duplicated 
 - Visual regression, accessibility audits, performance and load testing.
 - Changes to the Python test suite beyond what this strategy names.
 - CLI ↔ browser cross-client E2E: format interop is proven by the shared byte-identical BKV3 fixtures.
-- E2E of the admin token UI: `users.js` is covered in the DOM layer (§7), and nothing in it needs a real browser plus server.
+- E2E of the admin token UI: the users page is covered in the DOM layer (§7), and nothing in it needs a real browser plus server.
 - SRI for ES modules imported by entry scripts. It was fixed outside this strategy by the import map in `base.html` ([SRI does not cover ES modules imported by entry scripts](https://github.com/luprzybyl/buzzdrop/issues/166)), and the DOM fixtures strip that map.
 - The `/release` 404-vs-403 mismatch. It was fixed outside this strategy ([Burned share: /release returns 404, CLAUDE.md says 403, view.js shows a generic error](https://github.com/luprzybyl/buzzdrop/issues/169)): 404 is the intended answer for a missing or burned share, `CLAUDE.md` now says so, and `view.js` shows a message for it. The fake and contract follow whatever `app.py` returns.
