@@ -42,6 +42,11 @@
             </button>
         </form>
 
+        {# A new tab, so the reader keeps their place on the one-time path. #}
+        <p class="mt-5 text-xs text-slate-500">
+            Curious what happens next, and what we can see? <a href="{{ url_for('how_it_works') }}" target="_blank" rel="noopener" aria-label="How it works (opens in new tab)" class="footer-link">How it works</a>
+        </p>
+
         <script type="module" src="{{ url_for('static', filename='js/pages/confirm-download/entry.js') }}" integrity="{{ sri_hash('js/pages/confirm-download/entry.js') }}" crossorigin="anonymous"></script>
     </div>
 </div>

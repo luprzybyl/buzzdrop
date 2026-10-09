@@ -68,6 +68,8 @@
 
     <p class="mt-6 text-center text-xs text-slate-600">
         Decryption happens entirely in your browser. Your password stays in your browser; only a derived check value is sent.
+        {# A new tab: leaving this page would lose it, as it can't be reopened. #}
+        <a href="{{ url_for('how_it_works') }}" target="_blank" rel="noopener" aria-label="How it works (opens in new tab)" class="footer-link">How it works</a>
     </p>
 </div>
 <script id="view-config-json" type="application/json">{{ {

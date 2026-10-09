@@ -829,6 +829,465 @@
   .stat-chip {
     @apply inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-slate-300;
   }
+  /* ------------------------------------------------ How it works (#245) */
+
+  /* A radio group as a segmented control. The input stays in the label, so
+     keyboard, screen readers and the label's click all work as usual. */
+  .hiw-choice {
+    @apply inline-flex gap-1 rounded-xl border border-white/[0.07] bg-hive-850/70 p-1;
+  }
+
+  .hiw-choice label {
+    @apply relative inline-flex cursor-pointer items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-slate-400 transition duration-200 hover:text-white;
+  }
+
+  .hiw-choice input {
+    @apply sr-only;
+  }
+
+  .hiw-choice label:has(input:checked) {
+    @apply bg-linear-to-br from-honey-300 to-honey-500 font-semibold text-hive-950 shadow-honey;
+  }
+
+  .hiw-choice label:has(input:focus-visible) {
+    @apply ring-2 ring-honey-300 ring-offset-2 ring-offset-hive-900;
+  }
+
+  .hiw-choice label:has(input:disabled) {
+    @apply cursor-not-allowed text-slate-600 hover:text-slate-600;
+  }
+
+  /* The countdown to the next step while playing: a bar along the bottom of
+     the current step's button, and a ring around Play (below). Both run on
+     the flow's --hiw-hold, freeze with .is-paused and clear when playing
+     stops. */
+  .hiw-stepper-progress {
+    @apply absolute inset-x-0 bottom-0 h-[3px] origin-left bg-honey-400;
+    scale: 0 1;
+  }
+
+  .is-playing [data-step-id][aria-current='step'] .hiw-stepper-progress {
+    animation: hiw-fill var(--hiw-hold) linear both;
+  }
+
+  .hiw-play {
+    @apply relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/10 bg-hive-850 text-honey-200 transition duration-200 hover:border-honey-400/40 hover:text-honey-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-honey-300;
+  }
+
+  .hiw-play-ring {
+    @apply pointer-events-none absolute -inset-1;
+  }
+
+  .hiw-play-ring svg {
+    @apply h-full w-full -rotate-90;
+  }
+
+  .hiw-play-track,
+  .hiw-play-fill {
+    fill: none;
+    stroke-width: 2.5;
+  }
+
+  .hiw-play-track {
+    stroke: transparent;
+  }
+
+  .is-playing .hiw-play-track {
+    stroke: rgb(255 255 255 / 0.08);
+  }
+
+  .hiw-play-fill {
+    stroke: var(--color-honey-400);
+    stroke-linecap: round;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+  }
+
+  .is-playing .hiw-play-ring.is-counting .hiw-play-fill {
+    animation: hiw-countdown var(--hiw-hold) linear both;
+  }
+
+  /* As specific as the rules that start them, whose animation shorthand
+     would otherwise reset the play state. */
+  .is-paused .hiw-play-ring.is-counting .hiw-play-fill,
+  .is-paused [data-step-id][aria-current='step'] .hiw-stepper-progress {
+    animation-play-state: paused;
+  }
+
+  .hiw-step.is-active {
+    animation: flow-rise 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .hiw-wire {
+    @apply relative my-2 h-24 w-full sm:my-0 sm:h-16;
+  }
+
+  .hiw-wire::before {
+    content: '';
+    @apply absolute inset-y-0 left-1/2 w-px bg-honey-400/40 sm:inset-x-0 sm:inset-y-auto sm:top-1/2 sm:h-px sm:w-auto;
+  }
+
+  .hiw-wire.is-idle::before {
+    @apply bg-white/10;
+  }
+
+  .hiw-packet {
+    @apply absolute rounded-md border border-honey-400/40 bg-hive-950 px-2 py-0.5 font-mono text-[0.68rem] whitespace-nowrap text-honey-200;
+  }
+
+  /* Each packet rests where it arrives, so a step reads the same with its
+     animation finished, skipped or off. Out goes sender → recipient
+     (down / right), back the other way. */
+  .hiw-packet.is-out {
+    left: calc(50% + 0.5rem);
+    top: 100%;
+    translate: 0 -100%;
+  }
+
+  .hiw-packet.is-back {
+    right: calc(50% + 0.5rem);
+    top: 0;
+  }
+
+  .is-active .hiw-packet.is-out {
+    animation: hiw-down 1.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  .is-active .hiw-packet.is-back {
+    animation: hiw-up 1.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  /* The answer follows the request. */
+  .is-active .hiw-packet + .hiw-packet,
+  .is-active .hiw-packet.is-later {
+    animation-delay: 1.3s;
+  }
+
+  @media (min-width: 40rem) {
+    .hiw-packet.is-out {
+      top: 0.15rem;
+      left: 100%;
+      translate: -100% 0;
+    }
+
+    .hiw-packet.is-back {
+      top: auto;
+      right: auto;
+      bottom: 0.15rem;
+      left: 0;
+    }
+
+    .is-active .hiw-packet.is-out {
+      animation-name: hiw-right;
+    }
+
+    .is-active .hiw-packet.is-back {
+      animation-name: hiw-left;
+    }
+  }
+
+  /* Step 4: link and password go from you to the recipient, past us. */
+  .hiw-bypass {
+    @apply relative mt-5 h-16 w-full border-t border-dashed border-white/15 sm:col-span-5;
+  }
+
+  .hiw-bypass .hiw-packet.is-out {
+    top: 0.6rem;
+    left: 100%;
+    translate: -100% 0;
+  }
+
+  .hiw-bypass .hiw-packet.is-later {
+    top: auto;
+    bottom: 0;
+  }
+
+  .is-active .hiw-bypass .hiw-packet.is-out {
+    animation-name: hiw-right;
+  }
+
+  /* What a reader must not miss: the visible filename, the one-click risk. */
+  .hiw-caveat {
+    @apply font-semibold text-honey-200;
+  }
+
+  .hiw code {
+    @apply rounded bg-white/[0.06] px-1 font-mono text-[0.85em] text-honey-200;
+  }
+
+
+  .hiw-title {
+    @apply text-4xl leading-[1.05] font-semibold tracking-tight text-white sm:text-5xl lg:text-6xl;
+  }
+
+  .hiw-promise {
+    @apply flex gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5 shadow-hairline backdrop-blur-sm;
+  }
+
+  .hiw-promise-icon {
+    @apply grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-honey-400/10 text-honey-300 ring-1 ring-honey-400/25;
+  }
+
+  .hiw-flow {
+    @apply relative overflow-hidden rounded-3xl border border-white/[0.07] bg-hive-900/70 shadow-buzz backdrop-blur-xl;
+  }
+
+  .hiw-flow::before {
+    content: '';
+    @apply pointer-events-none absolute inset-x-10 top-0 h-px bg-linear-to-r from-transparent via-honey-400/60 to-transparent;
+  }
+
+  .hiw-flow-head {
+    @apply flex flex-col gap-5 border-b border-white/[0.06] p-5 sm:p-7 lg:flex-row lg:items-end lg:justify-between;
+  }
+
+  .hiw-legend {
+    @apply mb-1.5 text-[0.65rem] font-semibold tracking-[0.18em] text-slate-500 uppercase;
+  }
+
+  .hiw-flow-body {
+    @apply grid lg:grid-cols-[16.5rem_1fr];
+  }
+
+  /* The step list: a row of numbered dots on phones, a timeline beside the
+     stage from lg up. A line runs through the dots either way. */
+  .hiw-rail {
+    @apply border-b border-white/[0.06] px-4 py-4 sm:px-7 lg:border-r lg:border-b-0 lg:p-5;
+  }
+
+  .hiw-rail ol {
+    @apply relative flex justify-between lg:flex-col lg:gap-1;
+  }
+
+  .hiw-rail ol::before {
+    content: '';
+    @apply absolute top-3.5 right-3.5 left-3.5 h-px bg-white/10 lg:top-5 lg:right-auto lg:bottom-5 lg:left-[1.625rem] lg:h-auto lg:w-px;
+  }
+
+  .hiw-rail-btn {
+    @apply relative flex w-full flex-col items-center gap-2 rounded-xl pb-2 text-left transition duration-200 focus-visible:outline-2 focus-visible:outline-honey-300 lg:flex-row lg:gap-3 lg:px-3 lg:py-2.5 lg:hover:bg-white/[0.03];
+  }
+
+  .hiw-rail-btn[aria-current='step'] {
+    @apply lg:bg-honey-400/[0.07] lg:ring-1 lg:ring-honey-400/20;
+  }
+
+  .hiw-rail-num {
+    @apply relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/15 bg-hive-900 text-xs font-bold text-slate-400 transition duration-300;
+  }
+
+  .hiw-rail-btn.is-done .hiw-rail-num {
+    @apply border-honey-400/50 text-honey-300;
+  }
+
+  .hiw-rail-btn[aria-current='step'] .hiw-rail-num {
+    @apply border-honey-300 bg-honey-400 text-hive-950 shadow-honey;
+  }
+
+  .hiw-rail-check {
+    @apply hidden;
+  }
+
+  .hiw-rail-btn.is-done .hiw-rail-check {
+    @apply block;
+  }
+
+  .hiw-rail-btn.is-done .hiw-rail-digit {
+    @apply hidden;
+  }
+
+  .hiw-rail-title {
+    @apply sr-only text-sm leading-snug text-slate-400 lg:not-sr-only;
+  }
+
+  .hiw-rail-btn[aria-current='step'] .hiw-rail-title {
+    @apply font-medium text-white;
+  }
+
+  .hiw-rail-btn .hiw-stepper-progress {
+    @apply inset-x-2 rounded-full lg:inset-x-3 lg:bottom-1;
+  }
+
+  .hiw-step {
+    @apply p-5 sm:p-7;
+  }
+
+  /* The stage: you, the server and the recipient, and what passes between
+     them, on the wires and packets above. A column on phones, a row from
+     sm up. */
+  .hiw-scene {
+    @apply relative grid grid-cols-1 items-center justify-items-center overflow-hidden rounded-2xl border border-white/[0.06] p-5 sm:grid-cols-[auto_1fr_auto_1fr_auto] sm:px-6 sm:py-8;
+    background:
+      radial-gradient(ellipse 60% 80% at 50% 0%, rgb(255 182 39 / 0.07), transparent 70%),
+      var(--color-hive-850);
+  }
+
+  .hiw-actor {
+    @apply z-10 flex w-28 flex-col items-center gap-2 text-center;
+  }
+
+  .hiw-actor-icon {
+    @apply grid h-14 w-14 place-items-center rounded-2xl border border-honey-400/50 bg-hive-900 text-honey-200 shadow-honey transition duration-300;
+  }
+
+  .hiw-actor-label {
+    @apply text-[0.7rem] leading-tight font-semibold text-slate-200;
+  }
+
+  .hiw-actor.is-idle .hiw-actor-icon {
+    @apply border-white/10 text-slate-600 shadow-none;
+  }
+
+  .hiw-actor.is-idle .hiw-actor-label {
+    @apply text-slate-600;
+  }
+
+  .hiw-actor.is-burning .hiw-actor-icon {
+    @apply border-rose-400/50 text-rose-300 shadow-none;
+  }
+
+  .is-active .hiw-actor.is-burning .hiw-actor-icon {
+    animation: hiw-burn 1.6s ease-in-out 0.4s 2 both;
+  }
+
+  .hiw-actor-doing {
+    @apply rounded-full bg-emerald-400/10 px-2 py-0.5 text-[0.65rem] font-medium whitespace-nowrap text-emerald-300 ring-1 ring-emerald-400/25;
+  }
+
+  .is-active .hiw-actor-doing {
+    animation: hiw-glow 1.4s ease-in-out 3;
+  }
+
+  .hiw-scene .hiw-wire {
+    @apply sm:mx-1;
+  }
+
+  .hiw-scene .hiw-wire:not(.is-idle)::before {
+    @apply bg-honey-400/60 shadow-[0_0_10px_rgb(255_182_39/0.45)];
+  }
+
+  .hiw-scene .hiw-packet {
+    @apply rounded-full px-2.5 py-1 shadow-honey;
+  }
+
+  .hiw-step-head {
+    @apply mt-7 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6;
+  }
+
+  .hiw-step-title {
+    @apply flex flex-col gap-1 text-xl font-semibold tracking-tight text-white sm:text-2xl;
+  }
+
+  .hiw-step-kicker {
+    @apply text-[0.68rem] font-semibold tracking-[0.2em] text-honey-300 uppercase;
+  }
+
+  /* How much the server sees at this step, at a glance. */
+  .hiw-lenses {
+    @apply flex shrink-0 flex-col items-start gap-1.5 self-start sm:items-end;
+  }
+
+  .hiw-lens {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs ring-1;
+  }
+
+  .hiw-lens.is-none {
+    @apply bg-emerald-400/10 text-emerald-200 ring-emerald-400/25;
+  }
+
+  .hiw-lens.is-some {
+    @apply bg-honey-400/10 text-honey-100 ring-honey-400/25;
+  }
+
+  .hiw-lens.is-burn {
+    @apply bg-rose-400/10 text-rose-200 ring-rose-400/25;
+  }
+
+  .hiw-lens-label {
+    @apply font-semibold;
+  }
+
+  .hiw-facts {
+    @apply mt-6 grid text-sm leading-relaxed sm:grid-cols-[9.5rem_1fr] sm:gap-x-8;
+  }
+
+  .hiw-facts dt {
+    @apply border-t border-white/[0.06] pt-3 text-[0.68rem] font-semibold tracking-[0.14em] text-slate-500 uppercase sm:pb-3;
+  }
+
+  .hiw-facts dd {
+    @apply pt-1 pb-3 text-slate-300 sm:border-t sm:border-white/[0.06] sm:pt-3;
+  }
+
+  .hiw-facts dt:first-of-type,
+  .hiw-facts dt:first-of-type + dd {
+    @apply border-t-0;
+  }
+
+  .hiw-controls {
+    @apply flex items-center justify-between gap-3 border-t border-white/[0.06] px-5 py-4 sm:px-7;
+  }
+
+  .hiw-sees {
+    @apply space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5;
+  }
+
+  .hiw-sees-label {
+    @apply text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase;
+  }
+
+  .hiw-sees-row {
+    @apply flex gap-3 rounded-xl p-3 text-sm leading-relaxed text-slate-200;
+  }
+
+  .hiw-sees-row svg {
+    @apply mt-0.5;
+  }
+
+  .hiw-sees-row.is-seen {
+    @apply bg-honey-400/[0.06] text-honey-300;
+  }
+
+  .hiw-sees-row.is-unseen {
+    @apply bg-emerald-400/[0.06] text-emerald-300;
+  }
+
+  .hiw-sees-row p {
+    @apply text-slate-200;
+  }
+
+  .hiw-sees-kind {
+    @apply mb-0.5 block text-[0.65rem] font-semibold tracking-[0.16em] uppercase;
+  }
+
+  .is-seen .hiw-sees-kind {
+    @apply text-honey-300;
+  }
+
+  .is-unseen .hiw-sees-kind {
+    @apply text-emerald-300;
+  }
+
+  .hiw-keep {
+    @apply rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 shadow-hairline;
+  }
+
+  .hiw-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-honey-400/25 bg-honey-400/10 px-2.5 py-1 text-xs font-medium text-honey-200;
+  }
+
+  .hiw-limits {
+    @apply divide-y divide-white/[0.06] rounded-2xl border border-white/[0.07] bg-white/[0.02];
+  }
+
+  .hiw-limits li {
+    @apply flex gap-4 p-5 text-sm leading-relaxed text-slate-400;
+  }
+
+  .hiw-limit-icon {
+    @apply grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-honey-400/10 text-honey-300;
+  }
+
 }
 
 @layer utilities {
@@ -863,6 +1322,21 @@
   .btn-primary:hover,
   .feature-card:hover {
     transform: none;
+  }
+
+  /* The countdown to the next step keeps its real pace: it is a slow,
+     linear fill, not movement, and without it a playing flow would change
+     step with no warning. */
+  .hiw-play-fill,
+  .hiw-stepper-progress {
+    animation-duration: var(--hiw-hold) !important;
+  }
+
+  /* The how-it-works diagrams show each step's finished state. */
+  .hiw-step,
+  .hiw-scene *,
+  .hiw-scene *::before {
+    animation: none !important;
   }
 
   /* The hero walkthrough does not auto-advance here, so every stage is laid
@@ -927,6 +1401,50 @@
 
 /* Settles upward into place once; its end state matches the resting
    transform, so dropping .is-active causes no jump back. */
+@keyframes hiw-down {
+  from { top: 0; translate: 0 0; opacity: 0; }
+  20% { opacity: 1; }
+  to { top: 100%; translate: 0 -100%; opacity: 1; }
+}
+
+@keyframes hiw-up {
+  from { top: 100%; translate: 0 -100%; opacity: 0; }
+  20% { opacity: 1; }
+  to { top: 0; translate: 0 0; opacity: 1; }
+}
+
+@keyframes hiw-right {
+  from { left: 0; translate: 0 0; opacity: 0; }
+  20% { opacity: 1; }
+  to { left: 100%; translate: -100% 0; opacity: 1; }
+}
+
+@keyframes hiw-left {
+  from { left: 100%; translate: -100% 0; opacity: 0; }
+  20% { opacity: 1; }
+  to { left: 0; translate: 0 0; opacity: 1; }
+}
+
+@keyframes hiw-fill {
+  from { scale: 0 1; }
+  to { scale: 1 1; }
+}
+
+@keyframes hiw-countdown {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes hiw-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(52 211 153 / 0); }
+  50% { box-shadow: 0 0 14px 2px rgb(52 211 153 / 0.35); }
+}
+
+@keyframes hiw-burn {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 113, 133, 0); }
+  50% { box-shadow: 0 0 24px 4px rgba(251, 113, 133, 0.35); }
+}
+
 @keyframes flow-rise {
   from { transform: translateY(8px); }
   to { transform: translateY(0); }
