@@ -7,6 +7,7 @@
 //    then decrypt with Kp ‖ H (docs/true-one-time.md §6.4)
 // 4. Save file to disk and notify server
 
+import { copyWithFeedback } from '../../features/clipboard-feedback/index.js';
 import { claimShare, downloadShare } from '../../features/share-protocol/index.js';
 import * as shareCrypto from '../../lib/crypto.js';
 import { readFragmentPassword } from '../../lib/one-click-link.js';
@@ -116,19 +117,10 @@ export async function initView(root, deps) {
             status.textContent = 'Text decrypted successfully.';
             decryptForm.style.display = 'none';
 
-            // Add copy functionality. The button's name stays "Copy text", so
-            // the flash on it is visual; the status line announces the copy.
+            // The status line also reports the decryption, so the copy's
+            // message stays on it after the flash.
             const btn = required(root, '#copy-text-btn', 'button');
-            btn.addEventListener('click', () => {
-                window.navigator.clipboard.writeText(text).then(() => {
-                    const originalText = btn.textContent;
-                    btn.textContent = 'Copied!';
-                    status.textContent = 'Text copied to clipboard.';
-                    setTimeout(() => {
-                        btn.textContent = originalText;
-                    }, 2000);
-                });
-            });
+            btn.addEventListener('click', () => copyWithFeedback(btn, text, { status, what: 'Text', keepStatus: true }));
         } else {
             // Trigger file download
             const blob = new Blob([fileBytes], { type: 'application/octet-stream' });

@@ -47,6 +47,7 @@ const WRONG_VERIFIER = 'f'.repeat(64);
  * @property {number} [maxAttempts] - wrong passwords allowed before the share
  *   locks (KEY_RELEASE_MAX_ATTEMPTS, 1 like the server's default)
  * @property {import('./page.js').CryptoKind} [crypto] - real in the JS-integration layer
+ * @property {import('./page.js').ClipboardKind} [clipboard]
  * @property {{ backend: Fake, fileId: string }} [uploaded] - open a share
  *   already uploaded to this server, instead of a new one
  */
@@ -94,6 +95,7 @@ export async function openShare({
     server = 'ok',
     maxAttempts = 1,
     crypto = 'stub',
+    clipboard = 'ok',
     uploaded,
 } = {}) {
     const { service: cryptoService, timeout } = cryptoFor(crypto,
@@ -107,6 +109,7 @@ export async function openShare({
     const { fixture, fileId: fixtureId } = FIXTURES[type];
     const page = openPage(fixture, {
         path: addressOf(`/view/${fileId}/confirm`, { link, password, query }),
+        clipboard,
         // As the server renders it for this share.
         edit: (html) => replaceInFixture(replaceInFixture(html, fixtureId, fileId),
             'You have one attempt', maxAttempts === 1 ? 'You have one attempt' : `You have ${maxAttempts} attempts`),

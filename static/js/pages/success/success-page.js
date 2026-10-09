@@ -4,6 +4,7 @@
 // - Toggling password visibility
 // - Auto-filling the password and one-click link from the URL fragment
 
+import { copyWithFeedback } from '../../features/clipboard-feedback/index.js';
 import { buildOneClickLink, readFragmentPassword } from '../../lib/one-click-link.js';
 import { required, requiredWindow } from '../../lib/required.js';
 
@@ -35,70 +36,8 @@ export function initSuccess(root, deps) {
     const toggleBtn = required(root, '#toggle-password', 'button');
     const toggleLabel = required(toggleBtn, '#toggle-password-label', 'span');
 
-    /**
-     * One region for the page announces every copy; the button flash is visual.
-     * @param {string} message
-     */
-    function setCopyStatus(message) {
-        const region = root.getElementById('copy-status');
-        if (region) region.textContent = message;
-    }
-
-    const COPIED_FLASH_MS = 2000;
-    const FAILED_FLASH_MS = 4000;
-
-    /** @type {WeakMap<HTMLButtonElement, {timer: ReturnType<typeof setTimeout>, originalText: string | null}>} */
-    const copyFlashes = new WeakMap();
-
-    /**
-     * Flash the outcome on the button and announce it. Only the visible label
-     * is rewritten: the button's accessible name comes from its aria-label,
-     * and setting textContent on the button itself would drop the label and
-     * the invisible words that keep the button one width.
-     * @param {HTMLButtonElement} button
-     * @param {string} label
-     * @param {string} message
-     * @param {boolean} failed
-     */
-    function flashCopyResult(button, label, message, failed) {
-        setCopyStatus(message);
-        const labelEl = button.querySelector('.copy-label');
-        // A re-click mid-flash must not capture "Copied!" as the text to restore,
-        // which would leave the label stuck on it.
-        const pending = copyFlashes.get(button);
-        if (pending) clearTimeout(pending.timer);
-        const originalText = pending ? pending.originalText : (labelEl ? labelEl.textContent : '');
-
-        if (labelEl) labelEl.textContent = label;
-        const timer = setTimeout(() => {
-            if (labelEl) labelEl.textContent = originalText;
-            copyFlashes.delete(button);
-            // Emptying it means the next copy writes fresh text, which is what
-            // makes assistive tech announce it again.
-            setCopyStatus('');
-        }, failed ? FAILED_FLASH_MS : COPIED_FLASH_MS);
-        copyFlashes.set(button, { timer, originalText });
-    }
-
-    /**
-     * Put `text` on the clipboard through the Clipboard API. The share link is
-     * copied by selecting its field instead, which also works over plain HTTP,
-     * where there is no Clipboard API; a password field's value can't be
-     * copied by selection, and the one-click link isn't on the page in full.
-     * @param {HTMLButtonElement} button
-     * @param {string} text
-     * @param {string} what - what is copied, as the status names it, e.g. 'Password'
-     */
-    function copyText(button, text, what) {
-        // Started inside a promise so a missing Clipboard API (a non-secure
-        // context has no navigator.clipboard) lands in the failure branch
-        // instead of throwing with no feedback at all.
-        Promise.resolve().then(() => window.navigator.clipboard.writeText(text)).then(
-            () => flashCopyResult(button, 'Copied!', `${what} copied to clipboard.`, false),
-            () => flashCopyResult(button, 'Failed',
-                `Your browser blocked clipboard access, so the ${what.toLowerCase()} was not copied.`, true),
-        );
-    }
+    // One region for the page announces every copy; the button flash is visual.
+    const copyStatus = required(root, '#copy-status', 'p');
 
     /** The one-click link, once the fragment has supplied a password. */
     let oneClickLink = '';
@@ -127,13 +66,16 @@ export function initSuccess(root, deps) {
     }
 
     // Buttons wire up here, not via inline onclick — CSP forbids inline handlers.
-    copyLinkBtn.addEventListener('click', () => {
-        shareLink.select();
-        root.execCommand('copy');
-        flashCopyResult(copyLinkBtn, 'Copied!', 'Link copied to clipboard.', false);
-    });
-    copyPasswordBtn.addEventListener('click', () => copyText(copyPasswordBtn, pwdInput.value, 'Password'));
-    copyOneClickBtn.addEventListener('click', () => copyText(copyOneClickBtn, oneClickLink, 'One-click link'));
+    // The share link is copied by selecting its field, which also works over
+    // plain HTTP, where there is no Clipboard API; a password field's value
+    // can't be copied by selection, and the one-click link isn't on the page
+    // in full.
+    copyLinkBtn.addEventListener('click', () =>
+        copyWithFeedback(copyLinkBtn, shareLink, { status: copyStatus, what: 'Link' }));
+    copyPasswordBtn.addEventListener('click', () =>
+        copyWithFeedback(copyPasswordBtn, pwdInput.value, { status: copyStatus, what: 'Password' }));
+    copyOneClickBtn.addEventListener('click', () =>
+        copyWithFeedback(copyOneClickBtn, oneClickLink, { status: copyStatus, what: 'One-click link' }));
     toggleBtn.addEventListener('click', togglePasswordVisibility);
 
     // Auto-fill the password from the URL fragment (the upload flow navigates

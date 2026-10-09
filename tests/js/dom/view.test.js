@@ -63,6 +63,35 @@ describe('view page', () => {
         expect(copy).toHaveTextContent('Copy');
     });
 
+    it('a second Copy mid-flash still returns the button to "Copy"', async () => {
+        const share = await openShare();
+        await share.decryptWithPassword(DEFAULT_PASSWORD);
+        vi.useFakeTimers();
+        const copy = screen.getByRole('button', { name: 'Copy text' });
+
+        await share.copyMessage();
+        await vi.waitFor(() => expect(copy).toHaveTextContent('Copied!'));
+        await share.copyMessage();
+        vi.advanceTimersByTime(2000);
+
+        expect(copy).toHaveTextContent('Copy');
+    });
+
+    it.each([
+        ['blocks the clipboard', /** @type {const} */ ('blocked')],
+        ['has no Clipboard API', /** @type {const} */ ('unavailable')],
+    ])('Copy says so when the browser %s', async (_, clipboard) => {
+        const share = await openShare({ clipboard });
+        await share.decryptWithPassword(DEFAULT_PASSWORD);
+
+        await share.copyMessage();
+
+        const copy = screen.getByRole('button', { name: 'Copy text' });
+        await vi.waitFor(() => expect(copy).toHaveTextContent('Failed'));
+        expect(screen.getByRole('status'))
+            .toHaveTextContent('Your browser blocked clipboard access, so the text was not copied.');
+    });
+
     it.each([
         ['a wrong password, with the attempts left', { maxAttempts: 3 }, WRONG_PASSWORD,
             'Incorrect password. 2 attempts remaining.'],

@@ -312,20 +312,23 @@ describe('index page', () => {
             expect(await upload.clipboardText()).toBe('http://localhost/view/00000000-0000-4000-8000-000000000001');
             expect(shareRow('report.pdf').getByText('Copied!')).toBeVisible();
 
-            vi.advanceTimersByTime(1800);
+            vi.advanceTimersByTime(2000);
 
             expect(shareRow('report.pdf').queryByText('Copied!')).toBeNull();
             expect(shareRow('report.pdf').getByText('Copy link')).toBeVisible();
             expect(clipboardStatus()).toBeEmptyDOMElement();
         });
 
-        it('says so when the browser blocks the clipboard', async () => {
-            const upload = openUploadPage({ clipboard: 'blocked' });
+        it.each([
+            ['blocks the clipboard', /** @type {const} */ ('blocked')],
+            ['has no Clipboard API', /** @type {const} */ ('unavailable')],
+        ])('says so when the browser %s', async (_, clipboard) => {
+            const upload = openUploadPage({ clipboard });
 
             await upload.copyShareLink('report.pdf');
 
             await vi.waitFor(() => expect(clipboardStatus())
-                .toHaveTextContent('Your browser blocked clipboard access, so the link was not copied.'));
+                .toHaveTextContent('Your browser blocked clipboard access, so the share link was not copied.'));
             expect(shareRow('report.pdf').getByText('Failed')).toBeVisible();
         });
 

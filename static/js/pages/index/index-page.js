@@ -3,6 +3,7 @@
 // shared-files list. The page loads for anonymous visitors too, who get
 // neither, so lookups into those parts keep their null checks.
 
+import { copyWithFeedback } from '../../features/clipboard-feedback/index.js';
 import { createShare } from '../../features/share-protocol/index.js';
 import { buildSharedFilesUrl, getSharedFilesPage, relativeTime, rowSearchText } from '../../features/shared-files/index.js';
 import { isAllowedFile } from '../../lib/file-extensions.js';
@@ -291,44 +292,10 @@ export function initIndex(root, deps) {
     }
 
     if (copyPasswordBtn && passwordInput) {
-        const copyStatus = required(root, '#password-copy-status', 'p');
-        const copyLabel = required(copyPasswordBtn, '#copy-password-label', 'span');
-        // The label the template renders, which each flash returns to.
-        const restingLabel = copyLabel.textContent;
-        // How long a flash stays up; a failure has to be read, so it stays longer.
-        const COPIED_FLASH_MS = 2000;
-        const FAILED_FLASH_MS = 4000;
-        /** @type {ReturnType<typeof setTimeout> | undefined} */
-        let copyResultTimer;
-
-        /**
-         * As on the view page's Copy: the button flashes the outcome and
-         * keeps its name, and the status region announces it.
-         * @param {string} label
-         * @param {string} message
-         * @param {boolean} failed
-         */
-        const showCopyResult = (label, message, failed) => {
-            copyLabel.textContent = label;
-            copyStatus.textContent = message;
-            clearTimeout(copyResultTimer);
-            copyResultTimer = setTimeout(() => {
-                copyLabel.textContent = restingLabel;
-                // Emptying it means the next copy writes fresh text, which is
-                // what makes assistive tech announce it again.
-                copyStatus.textContent = '';
-            }, failed ? FAILED_FLASH_MS : COPIED_FLASH_MS);
-        };
-
-        copyPasswordBtn.addEventListener('click', () => {
-            // Started inside a promise so a missing Clipboard API (a
-            // non-secure context has no navigator.clipboard) lands in the
-            // failure branch instead of throwing with no feedback at all.
-            Promise.resolve().then(() => window.navigator.clipboard.writeText(passwordInput.value)).then(
-                () => showCopyResult('Copied!', 'Password copied to clipboard.', false),
-                () => showCopyResult('Failed', 'Your browser blocked clipboard access, so the password was not copied.', true),
-            );
-        });
+        const status = required(root, '#password-copy-status', 'p');
+        const label = required(copyPasswordBtn, '#copy-password-label', 'span');
+        copyPasswordBtn.addEventListener('click', () =>
+            copyWithFeedback(copyPasswordBtn, passwordInput.value, { status, label, what: 'Password' }));
     }
 
     /**
@@ -579,53 +546,14 @@ export function initIndex(root, deps) {
     }
 
     // --- Copy URL to Clipboard Logic ---
-    /**
-     * Every row shares one status region, so a long list does not become a page
-     * full of live regions. The per-row pill is visual only.
-     * @param {string} message
-     */
-    function setCopyStatus(message) {
-        const region = root.getElementById('copy-status');
-        if (region) region.textContent = message;
-    }
-
+    // Every row shares one status region, so a long list does not become a
+    // page full of live regions. The per-row pill is visual only.
     /** @type {NodeListOf<HTMLButtonElement>} */ (root.querySelectorAll('.copy-url')).forEach((button) => {
-        const label = required(button, '.copy-label', 'span');
-        const idleText = label.textContent;
-        /** @type {ReturnType<typeof setTimeout> | undefined} */
-        let flashTimer;
-
-        /**
-         * Inline confirmation beats a modal dialog for something this small. The
-         * button's label carries the outcome for sighted users (its accessible
-         * name stays its aria-label), the shared region announces it, and a
-         * failure lingers longer because it has to be read.
-         * @param {string} outcome
-         * @param {string} message
-         * @param {boolean} failed
-         */
-        const showResult = (outcome, message, failed) => {
-            setCopyStatus(message);
-            label.textContent = outcome;
-            clearTimeout(flashTimer);
-            flashTimer = setTimeout(() => {
-                label.textContent = idleText;
-                // Emptying it means the next copy writes fresh text, which is
-                // what makes assistive tech announce it again.
-                setCopyStatus('');
-            }, failed ? 4000 : 1800);
-        };
-
         button.addEventListener('click', (e) => {
             e.preventDefault();
             // Every .copy-url in the template carries its link in data-url.
             const url = /** @type {string} */ (button.getAttribute('data-url'));
-            window.navigator.clipboard.writeText(url).then(
-                () => showResult('Copied!', 'Share link copied to clipboard.', false),
-                // A denied permission or a non-secure context rejects here. Say so
-                // rather than leaving the click with no feedback at all.
-                () => showResult('Failed', 'Your browser blocked clipboard access, so the link was not copied.', true),
-            );
+            copyWithFeedback(button, url, { status: required(root, '#copy-status', 'p'), what: 'Share link' });
         });
     });
 
