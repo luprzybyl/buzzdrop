@@ -4,17 +4,9 @@
 
 {% block content %}
 <div class="mx-auto {{ self.content_width() }} space-y-8">
-    <header class="animate-fade-up flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div class="space-y-3">
-            <span class="eyebrow">Admin area</span>
-            <h1 class="text-3xl font-semibold tracking-tight text-white">User management</h1>
-        </div>
-        <a href="{{ url_for('index') }}" class="btn-secondary self-start sm:self-auto">
-            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M17 10a1 1 0 0 1-1 1H6.414l4.293 4.293a1 1 0 0 1-1.414 1.414l-6-6a1 1 0 0 1 0-1.414l6-6a1 1 0 0 1 1.414 1.414L6.414 9H16a1 1 0 0 1 1 1Z" clip-rule="evenodd"/>
-            </svg>
-            Back to home
-        </a>
+    <header class="animate-fade-up space-y-3">
+        <span class="eyebrow">Admin area</span>
+        <h1 class="text-3xl font-semibold tracking-tight text-white">User management</h1>
     </header>
 
     <div class="alert-banner alert-banner-warning animate-fade-up delay-1">

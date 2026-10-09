@@ -131,6 +131,9 @@
 
   html {
     scroll-behavior: smooth;
+    /* Reserve the scrollbar's width on every page, so the header doesn't
+       shift between pages that scroll and pages that don't. */
+    scrollbar-gutter: stable;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -331,6 +334,11 @@
 
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-slate-400 transition duration-200 hover:bg-white/5 hover:text-white;
+  }
+
+  /* The header link for the page you're on. */
+  .btn-ghost[aria-current='page'] {
+    @apply bg-white/5 text-honey-300;
   }
 
   .btn-danger {

@@ -3,6 +3,14 @@
 {# The landing page uses the full shell; the composer and drop list a narrower column. #}
 {% block content_width %}{{ 'max-w-5xl' if session.get('username') }}{% endblock %}
 
+{% block footer_note %}
+{%- if session.get('username') -%}
+Send the link and the password through different channels.
+{%- else -%}
+{{ super() }}
+{%- endif -%}
+{% endblock %}
+
 {% block content %}
 {% if session.get('username') %}
 {# ------------------------------------------------------------- Composer #}
