@@ -2,10 +2,8 @@
 // because every test in the run shares one container and its database.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect } from '@playwright/test';
-import { CryptoService, bytesToHex } from '../../static/js/lib/crypto.js';
-
-// crypto.js uses `window.crypto`; Node exposes Web Crypto on globalThis.
-globalThis.window ??= /** @type {Window & typeof globalThis} */ (globalThis);
+import { open } from '../../static/js/lib/crypto.js';
+import { bytesToHex } from '../../static/js/lib/hex.js';
 
 /** @typedef {import('@playwright/test').Page} Page */
 /** @typedef {import('../../static/js/lib/crypto.js').Bytes} Bytes */
@@ -226,7 +224,7 @@ export async function decryptShare(page, link, password) {
 /**
  * Proves a password to /release the way the view page does, from outside the
  * page: for asking again once the page has given up on the share. Derives V
- * with the app's own crypto.js, under Node's Web Crypto.
+ * with the app's own lib/crypto.js, under Node's Web Crypto.
  * @param {Page} page - its request context carries the call
  * @param {string} link
  * @param {Bytes} blob - the ciphertext from openShare
@@ -234,9 +232,8 @@ export async function decryptShare(page, link, password) {
  * @returns {Promise<number>} the response status
  */
 export async function releaseStatus(page, link, blob, password) {
-    const service = new CryptoService();
-    const v = await service.deriveVerifier(password, service.parseBlob(blob).salt);
-    return verifierStatus(page, link, bytesToHex(v));
+    const { verifier } = await open(blob).unlock(password);
+    return verifierStatus(page, link, bytesToHex(verifier));
 }
 
 /**

@@ -3,9 +3,10 @@
 // shared-files list. The page loads for anonymous visitors too, who get
 // neither, so lookups into those parts keep their null checks.
 
-import { CryptoService, bytesToHex, hexToBytes } from '../../lib/crypto.js';
+import { createShare } from '../../features/share-protocol/index.js';
 import { buildSharedFilesUrl, getSharedFilesPage, relativeTime, rowSearchText } from '../../features/shared-files/index.js';
 import { isAllowedFile } from '../../lib/file-extensions.js';
+import * as shareCrypto from '../../lib/crypto.js';
 import { buildOneClickLink } from '../../lib/one-click-link.js';
 import { assessPassword, generatePassphrase } from '../../lib/passphrase.js';
 import { required, requiredWindow } from '../../lib/required.js';
@@ -16,7 +17,7 @@ import { required, requiredWindow } from '../../lib/required.js';
  * @property {typeof XMLHttpRequest} XMLHttpRequest - supplies upload.onprogress
  * @property {(url: string) => void} navigate
  * @property {(message: string) => void} alert
- * @property {Pick<CryptoService, 'encrypt' | 'receiptHash'>} crypto
+ * @property {import('../../features/share-protocol/index.js').CreateDeps['crypto']} crypto
  * @property {() => number} now - epoch milliseconds, for the drop list's relative times
  */
 
@@ -34,32 +35,8 @@ import { required, requiredWindow } from '../../lib/required.js';
  */
 
 /**
- * What POST /upload/begin answers: the new share's id and the server share H
- * (hex).
- * @typedef {object} UploadBeginResponse
- * @property {string} file_id
- * @property {string} h
- */
-
-/**
- * What POST /upload answers: the share's id on success, `{error}` otherwise.
- * @typedef {object} UploadResponse
- * @property {string} [file_id]
- * @property {string} [error]
- */
-
-/**
  * What the shared-files status endpoint answers.
  * @typedef {{files: Array<import('../../features/shared-files/index.js').FileStatus & {id: string}>}} FileStatusesResponse
- */
-
-/**
- * The options both upload paths send alongside the encrypted payload.
- * @typedef {object} ShareOptions
- * @property {string} expiry
- * @property {string} privateNote
- * @property {boolean} notifyOnOpen
- * @property {string} notificationEmail
  */
 
 /**
@@ -78,7 +55,7 @@ export function browserDeps() {
         XMLHttpRequest: window.XMLHttpRequest,
         navigate: (url) => { window.location.href = url; },
         alert: (message) => window.alert(message),
-        crypto: new CryptoService(),
+        crypto: shareCrypto,
         now: () => Date.now(),
     };
 }
@@ -396,44 +373,8 @@ export function initIndex(root, deps) {
         /** @type {HTMLMetaElement | null} */ (root.querySelector('meta[name="csrf-token"]'))?.content || '';
 
     /**
-     * Encrypt data for upload through the two-phase key-release handshake:
-     * /upload/begin mints file_id + the server share H, the client derives
-     * Kp/V from the password, encrypts under HKDF(Kp ‖ H), and returns the
-     * blob plus the fields the finish POST needs.
-     * @param {import('../../lib/crypto.js').Bytes} data - Raw plaintext
-     * @param {string} password
-     * @returns {Promise<{blob: import('../../lib/crypto.js').Bytes, fileId: string, keyVerifier: string, receiptHash: string}>}
-     * @throws {Error} When the server refuses the handshake
-     */
-    async function encryptForUpload(data, password) {
-        const res = await deps.fetch(uploadEndpoints.uploadBeginUrl, {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-Token': csrfToken,
-            },
-        });
-        if (!res.ok) {
-            throw new Error('The server refused the upload handshake.');
-        }
-        /** @type {UploadBeginResponse} */
-        const { file_id, h } = await res.json();
-        const { blob, verifier, receipt } = await cryptoService.encrypt(
-            data, password, hexToBytes(h));
-        return {
-            blob,
-            fileId: file_id,
-            keyVerifier: bytesToHex(verifier),
-            // SHA-256 of the in-ciphertext receipt — the server stores the
-            // hash so /report_decryption can prove the client really
-            // decrypted the payload.
-            receiptHash: await cryptoService.receiptHash(receipt),
-        };
-    }
-
-    /**
      * The share options as the composer currently holds them.
-     * @returns {ShareOptions}
+     * @returns {import('../../features/share-protocol/index.js').ShareOptions}
      */
     function readShareOptions() {
         return {
@@ -447,105 +388,57 @@ export function initIndex(root, deps) {
     }
 
     /**
-     * Add the options that were set; the server treats a missing field as unset.
-     * @param {FormData} formData
-     * @param {ShareOptions} opts
+     * Seal the payload and upload it, with the progress bar standing in for
+     * the share button while the upload runs. On success the page leaves for
+     * the success page; otherwise it alerts and the button comes back.
+     * @param {import('../../features/share-protocol/index.js').Payload} payload
+     * @param {string} password - carried to the success page in the URL fragment
      */
-    function appendShareOptions(formData, opts) {
-        if (opts.expiry) {
-            formData.append('expiry', opts.expiry);
-        }
-        if (opts.privateNote) {
-            formData.append('private_note', opts.privateNote);
-        }
-        if (opts.notifyOnOpen) {
-            formData.append('notify_on_open', 'true');
-        }
-        if (opts.notificationEmail) {
-            formData.append('notification_email', opts.notificationEmail);
-        }
-    }
-
-    /**
-     * Upload data with progress tracking via XHR.
-     * @param {FormData} formData - Form data to upload
-     * @param {string} password - Password carried to the success page in the URL fragment
-     */
-    function uploadWithProgress(formData, password) {
+    async function share(payload, password) {
         const uploadBtn = required(root, '#share-action-btn', 'button');
         const progressContainer = required(root, '#share-progress-container', 'div');
         const progressBar = required(root, '#share-progress-bar', 'div');
         const progressText = required(root, '#share-progress-text', 'span');
 
-        if (uploadInProgress) {
-            return;
-        }
+        /** @param {number} percent */
+        const showProgress = (percent) => {
+            uploadBtn.disabled = true;
+            uploadBtn.style.display = 'none';
+            progressContainer.style.display = 'flex';
+            progressBar.style.width = percent + '%';
+            progressText.textContent = percent + '%';
+            progressContainer.setAttribute('aria-valuenow', String(percent));
+        };
 
         uploadInProgress = true;
-        uploadBtn.disabled = true;
-        uploadBtn.style.display = 'none';
-        progressContainer.style.display = 'flex';
-        progressBar.style.width = '0%';
-        progressText.textContent = '0%';
-        progressContainer.setAttribute('aria-valuenow', '0');
+        /** @type {import('../../features/share-protocol/index.js').CreateResult} */
+        let result;
+        try {
+            result = await createShare(payload, password, readShareOptions(), {
+                fetch: deps.fetch,
+                XMLHttpRequest: deps.XMLHttpRequest,
+                crypto: deps.crypto,
+                urls: { begin: uploadEndpoints.uploadBeginUrl, upload: uploadEndpoints.uploadUrl },
+                csrfToken,
+                onProgress: showProgress,
+            });
+        } catch (err) {
+            const error = /** @type {Error | undefined} */ (err);
+            result = { kind: 'refused', message: error && error.message ? error.message : 'Upload failed' };
+        }
 
-        const xhr = new deps.XMLHttpRequest();
-        xhr.open('POST', uploadEndpoints.uploadUrl, true);
-        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-        xhr.setRequestHeader('X-CSRF-Token', csrfToken);
-
-        xhr.upload.onprogress = function(e) {
-            if (e.lengthComputable) {
-                const percent = Math.round((e.loaded / e.total) * 100);
-                progressBar.style.width = percent + '%';
-                progressText.textContent = percent + '%';
-                progressContainer.setAttribute('aria-valuenow', String(percent));
-            }
-        };
-
-        xhr.onload = function() {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                /** @type {UploadResponse} */
-                let json = {};
-                try {
-                    json = JSON.parse(xhr.responseText);
-                } catch (e) {
-                    deps.alert('Upload succeeded but server returned invalid JSON');
-                    uploadInProgress = false;
-                    uploadBtn.disabled = false;
-                    uploadBtn.style.display = '';
-                    progressContainer.style.display = 'none';
-                    return;
-                }
-                // Hand the password to the success page via the URL fragment —
-                // the same in-memory-only channel as one-click links. It is
-                // read once there and scrubbed; nothing is persisted.
-                deps.navigate(
-                    buildOneClickLink(`/success/${json.file_id}`, password));
-            } else {
-                let msg = 'Upload failed';
-                try {
-                    /** @type {UploadResponse} */
-                    const err = JSON.parse(xhr.responseText);
-                    if (err.error) msg = err.error;
-                } catch (e) {}
-                deps.alert(msg);
-                uploadInProgress = false;
-                uploadBtn.disabled = false;
-                uploadBtn.style.display = '';
-                progressContainer.style.display = 'none';
-            }
-        };
-
-        xhr.onerror = function() {
-            deps.alert('Network error during upload');
-            uploadInProgress = false;
-            uploadBtn.disabled = false;
-            uploadBtn.style.display = '';
-            progressContainer.style.display = 'none';
-        };
-
-        xhr.send(formData);
+        if (result.kind === 'created') {
+            // Hand the password to the success page via the URL fragment —
+            // the same in-memory-only channel as one-click links. It is read
+            // once there and scrubbed; nothing is persisted.
+            deps.navigate(buildOneClickLink(`/success/${result.fileId}`, password));
+            return;
+        }
+        deps.alert(result.kind === 'refused' ? result.message : 'Network error during upload');
+        uploadInProgress = false;
+        uploadBtn.disabled = false;
+        uploadBtn.style.display = '';
+        progressContainer.style.display = 'none';
     }
 
     // --- Dropzone Logic ---
@@ -643,28 +536,7 @@ export function initIndex(root, deps) {
             }
             if (!acceptPassword(password)) return;
 
-            // Read and encrypt file data via the key-release handshake
-            const fileData = new Uint8Array(await file.arrayBuffer());
-            let prepared;
-            try {
-                prepared = await encryptForUpload(fileData, password);
-            } catch (err) {
-                const error = /** @type {Error | undefined} */ (err);
-                deps.alert(error && error.message ? error.message : 'Upload failed');
-                return;
-            }
-
-            // Prepare FormData
-            const encBlob = new Blob([prepared.blob], { type: 'application/octet-stream' });
-            const formData = new FormData();
-            formData.append('file', new File([encBlob], file.name));
-            formData.append('file_id', prepared.fileId);
-            formData.append('key_verifier', prepared.keyVerifier);
-            formData.append('receipt_hash', prepared.receiptHash);
-            appendShareOptions(formData, readShareOptions());
-
-            // Upload with progress
-            uploadWithProgress(formData, password);
+            await share({ kind: 'file', name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }, password);
         });
     }
 
@@ -679,7 +551,6 @@ export function initIndex(root, deps) {
         const noteField = required(root, '#note-text', 'textarea');
         const noteText = noteField.value;
         const password = required(root, '#shared-password', 'input').value;
-        const shareOptions = readShareOptions();
 
         if (!noteText) {
             showRefusal('note-error', 'Write the note you want to share.');
@@ -688,30 +559,7 @@ export function initIndex(root, deps) {
         }
         if (!acceptPassword(password)) return;
 
-        // Encrypt text data via the key-release handshake
-        const enc = new TextEncoder();
-        const textData = enc.encode(noteText);
-        let prepared;
-        try {
-            prepared = await encryptForUpload(textData, password);
-        } catch (err) {
-            const error = /** @type {Error | undefined} */ (err);
-            deps.alert(error && error.message ? error.message : 'Upload failed');
-            return;
-        }
-
-        // Prepare FormData with base64 encoded encrypted data
-        const base64Encrypted = btoa(String.fromCharCode(...prepared.blob));
-        const formData = new FormData();
-        formData.append('note_text', base64Encrypted);
-        formData.append('type', 'text');
-        formData.append('file_id', prepared.fileId);
-        formData.append('key_verifier', prepared.keyVerifier);
-        formData.append('receipt_hash', prepared.receiptHash);
-        appendShareOptions(formData, shareOptions);
-
-        // Upload with progress
-        uploadWithProgress(formData, password);
+        await share({ kind: 'text', bytes: new TextEncoder().encode(noteText) }, password);
     }
 
     const shareActionButton = root.getElementById('share-action-btn');

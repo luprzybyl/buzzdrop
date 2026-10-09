@@ -7,7 +7,8 @@
 //    then decrypt with Kp ‖ H (docs/true-one-time.md §6.4)
 // 4. Save file to disk and notify server
 
-import { CryptoService, bytesToHex, hexToBytes } from '../../lib/crypto.js';
+import { claimShare, downloadShare } from '../../features/share-protocol/index.js';
+import * as shareCrypto from '../../lib/crypto.js';
 import { readFragmentPassword } from '../../lib/one-click-link.js';
 import { required, requiredWindow } from '../../lib/required.js';
 
@@ -16,7 +17,7 @@ import { required, requiredWindow } from '../../lib/required.js';
 /**
  * @typedef {object} ViewDeps
  * @property {typeof fetch} fetch
- * @property {Pick<CryptoService, 'parseBlob' | 'deriveVerifier' | 'decrypt'>} crypto
+ * @property {Pick<import('../../lib/crypto.js').ShareCrypto, 'open'>} crypto
  */
 
 /**
@@ -30,22 +31,12 @@ import { required, requiredWindow } from '../../lib/required.js';
  */
 
 /**
- * What POST /release answers: `{h}` (the server share, hex) on a verifier
- * match; otherwise `{error}`, plus `attempts_remaining` on a 403 miss.
- * 404 means the file or its share is gone (deleted, expired or burned).
- * @typedef {object} ReleaseResponse
- * @property {string} [h]
- * @property {number} [attempts_remaining]
- * @property {string} [error]
- */
-
-/**
  * `fetch` is bound to the window: called unbound, as deps.fetch(...), the
  * browser's fetch throws "Illegal invocation".
  * @returns {ViewDeps}
  */
 export function browserDeps() {
-    return { fetch: window.fetch.bind(window), crypto: new CryptoService() };
+    return { fetch: window.fetch.bind(window), crypto: shareCrypto };
 }
 
 /**
@@ -57,7 +48,6 @@ export function browserDeps() {
  */
 export async function initView(root, deps) {
     const window = requiredWindow(root);
-    const cryptoService = deps.crypto;
 
     /**
      * Per-share config injected as a type="application/json" data island —
@@ -72,9 +62,7 @@ export async function initView(root, deps) {
         fileType,
     } = JSON.parse(required(root, '#view-config-json', 'script').text);
 
-    // Download the encrypted file as a single Uint8Array
-    const res = await deps.fetch(downloadUrl);
-    const encryptedData = new Uint8Array(await res.arrayBuffer());
+    const download = await downloadShare(downloadUrl, deps);
     const decryptForm = required(root, '#decrypt-form', 'form');
     const decryptBtn = required(root, '#decrypt-btn', 'button');
     const passInput = required(root, '#password-input', 'input');
@@ -94,16 +82,13 @@ export async function initView(root, deps) {
         passInput.removeAttribute('aria-describedby');
     }
 
-    /** @type {Bytes} */
-    let salt;
-    try {
-        ({ salt } = cryptoService.parseBlob(encryptedData));
-    } catch (err) {
+    if (download.kind === 'unsupported') {
         lockForm();
         status.textContent =
             'This share uses an unsupported format. Ask the author to upload it again.';
         return;
     }
+    const { sealed } = download;
 
     // One-click links carry the password in the URL fragment — read it
     // once and scrub it from the address bar and history entry; nothing is
@@ -118,20 +103,6 @@ export async function initView(root, deps) {
             const passwordStatus = /** @type {HTMLElement | null} */ (root.querySelector('#password-status'));
             if (passwordStatus) passwordStatus.style.display = 'flex';
         }
-    }
-
-    /**
-     * @param {boolean} success
-     * @param {string} [receiptHex]
-     */
-    function reportDecryption(success, receiptHex) {
-        deps.fetch(reportDecryptionUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // The receipt lives inside the ciphertext — only a successful
-            // decryption can produce it; the server stores its SHA-256.
-            body: JSON.stringify({ success, receipt: receiptHex || null })
-        }).catch(() => {});
     }
 
     /** @param {Bytes} fileBytes */
@@ -173,67 +144,32 @@ export async function initView(root, deps) {
     }
 
     /**
-     * The blob alone is mathematically dead — the password must be proven
-     * to /release, which hands out the server share H once. Returns the
-     * decrypted bytes, or null when the attempt failed in a recoverable
-     * way (wrong password with attempts left).
-     * @param {string} password
-     * @returns {Promise<{data: Bytes, receipt: Bytes} | null>}
+     * What the status line says when an attempt ends without the plaintext.
+     * @param {Exclude<import('../../features/share-protocol/index.js').ClaimResult, {kind: 'opened'}>} result
+     * @returns {string}
      */
-    async function decryptKeyRelease(password) {
-        const v = await cryptoService.deriveVerifier(password, salt);
-
-        let res;
-        try {
-            res = await deps.fetch(releaseUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({ v: bytesToHex(v) }),
-            });
-        } catch (err) {
-            throw new Error('Could not reach the server to release the key.');
+    function failureMessage(result) {
+        switch (result.kind) {
+        case 'retry': {
+            const { remaining } = result;
+            const suffix = remaining === null
+                ? ''
+                : ` ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`;
+            return `Incorrect password.${suffix}`;
         }
-
-        /** @type {ReleaseResponse} */
-        const body = await res.json().catch(() => ({}));
-
-        if (res.status === 403) {
-            // Verifier miss — the server counts attempts, so a typo is not
-            // fatal anymore; report how many tries remain and let them retry.
-            const remaining = body.attempts_remaining;
-            const suffix = (typeof remaining === 'number')
-                ? ` ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`
-                : '';
-            status.textContent =
-                `Incorrect password.${suffix}`;
-            return null;
+        case 'unreachable':
+            return 'Could not reach the server to release the key.';
+        case 'gone':
+            return {
+                claimed: 'This share has already been claimed.',
+                locked: 'Too many incorrect attempts — this share is locked.',
+                // A 404 means the share was gone before this attempt (e.g. a
+                // link holder burned it); our own lockout is 'locked'.
+                missing: 'This share no longer exists — it was deleted, has expired, '
+                    + 'or was locked by wrong password attempts.',
+                refused: 'The server refused to release the key.',
+            }[result.reason];
         }
-        if (res.status === 410) {
-            throw new Error('This share has already been claimed.');
-        }
-        if (res.status === 429) {
-            throw new Error(
-                'Too many incorrect attempts — this share is locked.');
-        }
-        if (res.status === 404) {
-            // A deleted file, an expired or burned share all answer a uniform
-            // 404. Our own lockout gets the 429 above; a 404 means the share
-            // was gone before this attempt (e.g. a link holder burned it).
-            throw new Error(
-                'This share no longer exists — it was deleted, has expired, '
-                + 'or was locked by wrong password attempts.');
-        }
-        if (!res.ok || typeof body.h !== 'string') {
-            throw new Error('The server refused to release the key.');
-        }
-
-        const h = hexToBytes(body.h);
-        const { data, receipt } = await cryptoService.decrypt(
-            encryptedData, password, h);
-        return { data, receipt };
     }
 
     // Submitting the form (the Decrypt button or Enter in the field) attempts
@@ -244,29 +180,28 @@ export async function initView(root, deps) {
         if (!password) return;
         lockForm();
 
+        // The blob alone is mathematically dead: the password must be
+        // proven to /release, which hands out the server share H once.
+        let result;
         try {
-            const result = await decryptKeyRelease(password);
-            if (result === null) {
-                // Wrong password, attempts remaining — let them retry.
-                decryptBtn.disabled = false;
-                passInput.disabled = false;
-                passInput.select();
-                return;
-            }
-
-            showPlaintext(result.data);
-
-            // Notify server that decryption was successful — the receipt
-            // proves it (it's only reachable inside the plaintext).
-            reportDecryption(true, bytesToHex(result.receipt));
-        } catch (err) {
-            const error = /** @type {Error | undefined} */ (err);
+            result = await claimShare(sealed, password, {
+                fetch: deps.fetch,
+                urls: { release: releaseUrl, report: reportDecryptionUrl },
+            });
+        } catch {
             status.textContent =
-                error && error.message
-                    ? error.message
-                    : 'Incorrect password or corrupted file. Ask the author to upload the file again.';
-            // Notify server that decryption failed
-            reportDecryption(false);
+                'Incorrect password or corrupted file. Ask the author to upload the file again.';
+            return;
+        }
+        if (result.kind === 'opened') {
+            showPlaintext(result.data);
+            return;
+        }
+        status.textContent = failureMessage(result);
+        if (result.kind === 'retry') {
+            decryptBtn.disabled = false;
+            passInput.disabled = false;
+            passInput.select();
         }
     });
     // The template renders the button disabled so nothing submits natively

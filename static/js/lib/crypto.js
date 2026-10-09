@@ -1,5 +1,5 @@
 /**
- * CryptoService - Client-side encryption/decryption for Buzzdrop
+ * The BKV3 share format: client-side encryption for Buzzdrop.
  *
  * Implements the server-gated key release design (docs/true-one-time.md §6):
  * the file key is split in two — Kp derives from the password client-side,
@@ -18,320 +18,218 @@
  * 'BKP-FILE' ‖ receipt(32B random) ‖ payload — the receipt is the
  * decryption proof the client returns to /report_decryption; the server
  * only ever stores its SHA-256 hash.
+ *
+ * The interface is a sealed share rather than a call order: seal() makes
+ * one, open() parses one, and unlock() derives the master key once per
+ * attempt, keeping Kp for finish() so the 600k PBKDF2 never runs twice.
+ */
+
+import { bytesToHex } from './hex.js';
+
+/** @typedef {import('./hex.js').Bytes} Bytes */
+
+/**
+ * What seal() returns: the blob to upload, the verifier V to bind on finish,
+ * and the in-plaintext decryption receipt (report it back to
+ * /report_decryption; the server stores only receiptHash(receipt)).
+ * @typedef {object} Sealed
+ * @property {Bytes} blob - 'BKV3' + salt + iv + ciphertext
+ * @property {Bytes} verifier
+ * @property {Bytes} receipt
  */
 
 /**
- * Bytes backed by a plain ArrayBuffer, which is what Web Crypto accepts.
- * Every array this module creates (`new Uint8Array(n)`, `slice()`,
- * `TextEncoder`) is one.
- * @typedef {Uint8Array<ArrayBuffer>} Bytes
+ * What an opened share yields: the payload and its receipt.
+ * @typedef {object} Opened
+ * @property {Bytes} data
+ * @property {Bytes} receipt
  */
 
 /**
- * Convert bytes to a lowercase hex string (H/V travel the wire as hex).
- * @param {Uint8Array} bytes
- * @returns {string}
+ * One password attempt on a share: the verifier to prove to /release, and
+ * finish(h) to decrypt with the server share it releases.
+ * @typedef {object} Attempt
+ * @property {Bytes} verifier
+ * @property {(h: Bytes) => Promise<Opened>} finish - rejects on a wrong password, H or a damaged share
  */
-export function bytesToHex(bytes) {
-    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+
+/**
+ * A downloaded share whose envelope parsed.
+ * @typedef {object} SealedShare
+ * @property {(password: string) => Promise<Attempt>} unlock
+ */
+
+/**
+ * What the pages and features use: the lib itself in the browser, a stub in
+ * the DOM tests (tests/js/support/stub-crypto.js).
+ * @typedef {object} ShareCrypto
+ * @property {typeof seal} seal
+ * @property {(blob: Bytes) => SealedShare} open - throws 'Unsupported share format'
+ * @property {typeof receiptHash} receiptHash
+ */
+
+const encoder = new TextEncoder();
+
+// PBKDF2 iteration count for the master key.
+const ITERATIONS = 600000;
+// Outer envelope magic ('BKV3') — the only supported version.
+const ENVELOPE_MAGIC = encoder.encode('BKV3');
+// HKDF domain separation labels (docs/true-one-time.md §6.2).
+const HKDF_INFO_ENC = encoder.encode('enc');
+const HKDF_INFO_VER = encoder.encode('ver');
+const HKDF_INFO_FILE = encoder.encode('file');
+// Inner plaintext magic, prepended before encryption.
+const HEADER = encoder.encode('BKP-FILE');
+const SALT_LENGTH = 16;
+const IV_LENGTH = 12;
+const SHARE_LENGTH = 32;
+// Random 32-byte receipt encrypted inside the payload — proves decryption
+// to /report_decryption via its stored SHA-256 hash.
+const RECEIPT_LENGTH = 32;
+// Smallest legal blob: magic + salt + iv + GCM tag (16) + the inner header
+// (8) + receipt (32) — anything shorter cannot be a BKV3 blob.
+const MIN_BLOB_LENGTH = 4 + 16 + 12 + 16 + 8 + 32;
+
+/**
+ * Encrypt data for a share.
+ * @param {Bytes} data - Raw data to encrypt
+ * @param {string} password
+ * @param {Bytes} h - Server share from /upload/begin (32 bytes)
+ * @returns {Promise<Sealed>}
+ */
+export async function seal(data, password, h) {
+    checkServerShare(h);
+    const salt = randomBytes(SALT_LENGTH);
+    const iv = randomBytes(IV_LENGTH);
+    const receipt = randomBytes(RECEIPT_LENGTH);
+    const { kp, verifier } = await deriveKeys(password, salt);
+    const key = await fileKey(kp, h, salt, 'encrypt');
+
+    const headLen = HEADER.length + RECEIPT_LENGTH;
+    const plain = new Uint8Array(headLen + data.length);
+    plain.set(HEADER);
+    plain.set(receipt, HEADER.length);
+    plain.set(data, headLen);
+
+    const encrypted = await globalThis.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain);
+
+    const blob = new Uint8Array(ENVELOPE_MAGIC.length + salt.length + iv.length + encrypted.byteLength);
+    blob.set(ENVELOPE_MAGIC);
+    blob.set(salt, ENVELOPE_MAGIC.length);
+    blob.set(iv, ENVELOPE_MAGIC.length + salt.length);
+    blob.set(new Uint8Array(encrypted), ENVELOPE_MAGIC.length + salt.length + iv.length);
+
+    return { blob, verifier, receipt };
 }
 
 /**
- * Parse a hex string into bytes. Throws on malformed input.
- * @param {string} hex
+ * Parse a downloaded blob into a share that can be unlocked.
+ * @param {Bytes} blob - 'BKV3' + salt + iv + ciphertext
+ * @returns {SealedShare}
+ * @throws {Error} 'Unsupported share format' for anything but a BKV3 blob
+ */
+export function open(blob) {
+    if (blob.length < MIN_BLOB_LENGTH || ENVELOPE_MAGIC.some((byte, i) => blob[i] !== byte)) {
+        throw new Error('Unsupported share format');
+    }
+    const ivStart = ENVELOPE_MAGIC.length + SALT_LENGTH;
+    const salt = blob.slice(ENVELOPE_MAGIC.length, ivStart);
+    const iv = blob.slice(ivStart, ivStart + IV_LENGTH);
+    const ciphertext = blob.slice(ivStart + IV_LENGTH);
+
+    return {
+        async unlock(password) {
+            const { kp, verifier } = await deriveKeys(password, salt);
+            return {
+                verifier,
+                async finish(h) {
+                    checkServerShare(h);
+                    const key = await fileKey(kp, h, salt, 'decrypt');
+                    const plain = new Uint8Array(
+                        await globalThis.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext));
+                    const headLen = HEADER.length + RECEIPT_LENGTH;
+                    if (plain.length < headLen || HEADER.some((byte, i) => plain[i] !== byte)) {
+                        throw new Error('Invalid password or corrupted data');
+                    }
+                    return { data: plain.slice(headLen), receipt: plain.slice(HEADER.length, headLen) };
+                },
+            };
+        },
+    };
+}
+
+/**
+ * The upload-time receipt hash: hex SHA-256(receipt).
+ * @param {Bytes} receipt
+ * @returns {Promise<string>}
+ */
+export async function receiptHash(receipt) {
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', receipt);
+    return bytesToHex(new Uint8Array(digest));
+}
+
+/**
+ * Assert the server share is exactly 32 bytes — a short/missing H must fail
+ * loudly before any crypto runs.
+ * @param {Bytes} h
+ */
+function checkServerShare(h) {
+    if (!(h instanceof Uint8Array) || h.length !== SHARE_LENGTH) {
+        throw new Error(`server share H must be ${SHARE_LENGTH} bytes`);
+    }
+}
+
+/**
+ * @param {number} length
  * @returns {Bytes}
  */
-export function hexToBytes(hex) {
-    if (typeof hex !== 'string' || hex.length % 2 !== 0 || /[^0-9a-f]/i.test(hex)) {
-        throw new Error('Invalid hex string');
-    }
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-    }
-    return bytes;
+function randomBytes(length) {
+    return globalThis.crypto.getRandomValues(new Uint8Array(length));
 }
 
-export class CryptoService {
-    constructor() {
-        this.encoder = new TextEncoder();
-        this.decoder = new TextDecoder();
-        // PBKDF2 iteration count for the master key.
-        this.ITERATIONS = 600000;
-        // Outer envelope magic ('BKV3') — the only supported version.
-        this.ENVELOPE_MAGIC = this.encoder.encode('BKV3');
-        this.VERSION = 3;
-        // HKDF domain separation labels (docs/true-one-time.md §6.2).
-        this.HKDF_INFO_ENC = this.encoder.encode('enc');
-        this.HKDF_INFO_VER = this.encoder.encode('ver');
-        this.HKDF_INFO_FILE = this.encoder.encode('file');
-        // Inner plaintext magic, prepended before encryption.
-        this.HEADER = this.encoder.encode('BKP-FILE');
-        this.SALT_LENGTH = 16;
-        this.IV_LENGTH = 12;
-        this.SHARE_LENGTH = 32;
-        // Random 32-byte receipt encrypted inside the payload — proves
-        // decryption to /report_decryption via its stored SHA-256 hash.
-        this.RECEIPT_LENGTH = 32;
-        // Smallest legal blob: magic + salt + iv + GCM tag (16) + the
-        // inner header (8) + receipt (32) — anything shorter cannot be
-        // a BKV3 blob.
-        this.MIN_BLOB_LENGTH = 4 + 16 + 12 + 16 + 8 + 32;
-    }
+/**
+ * The client half Kp and the verifier V, from one PBKDF2 run.
+ * @param {string} password
+ * @param {Bytes} salt - The blob's PBKDF2 salt
+ * @returns {Promise<{kp: Bytes, verifier: Bytes}>}
+ */
+async function deriveKeys(password, salt) {
+    const keyMaterial = await globalThis.crypto.subtle.importKey(
+        'raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
+    const master = new Uint8Array(await globalThis.crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt, iterations: ITERATIONS, hash: 'SHA-256' }, keyMaterial, 256));
+    return {
+        kp: await hkdf(master, salt, HKDF_INFO_ENC),
+        verifier: await hkdf(master, salt, HKDF_INFO_VER),
+    };
+}
 
-    /**
-     * Assert the server share is exactly 32 bytes — a short/missing H
-     * must fail loudly before any crypto runs.
-     * @param {Bytes} h
-     */
-    _checkServerShare(h) {
-        if (!(h instanceof Uint8Array) || h.length !== this.SHARE_LENGTH) {
-            throw new Error(`server share H must be ${this.SHARE_LENGTH} bytes`);
-        }
-    }
+/**
+ * HKDF-SHA256 → 32 bytes. The blob's salt doubles as the HKDF salt: it is
+ * random, non-secret, and known to both parties.
+ * @param {Bytes} ikm - Input key material
+ * @param {Bytes} salt
+ * @param {Bytes} info - Domain separation label
+ * @returns {Promise<Bytes>}
+ */
+async function hkdf(ikm, salt, info) {
+    const key = await globalThis.crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
+    return new Uint8Array(await globalThis.crypto.subtle.deriveBits(
+        { name: 'HKDF', hash: 'SHA-256', salt, info }, key, 256));
+}
 
-    /**
-     * Generate random salt (16 bytes)
-     * @returns {Bytes} Random salt
-     */
-    generateSalt() {
-        return window.crypto.getRandomValues(new Uint8Array(this.SALT_LENGTH));
-    }
-
-    /**
-     * Generate random IV (12 bytes)
-     * @returns {Bytes} Random initialization vector
-     */
-    generateIV() {
-        return window.crypto.getRandomValues(new Uint8Array(this.IV_LENGTH));
-    }
-
-    /**
-     * Derive the raw 32-byte master key from a password.
-     * @param {string} password
-     * @param {Bytes} salt
-     * @returns {Promise<Bytes>}
-     */
-    async deriveMaster(password, salt) {
-        const keyMaterial = await window.crypto.subtle.importKey(
-            'raw',
-            this.encoder.encode(password),
-            'PBKDF2',
-            false,
-            ['deriveBits']
-        );
-        const bits = await window.crypto.subtle.deriveBits(
-            {
-                name: 'PBKDF2',
-                salt: salt,
-                iterations: this.ITERATIONS,
-                hash: 'SHA-256'
-            },
-            keyMaterial,
-            256
-        );
-        return new Uint8Array(bits);
-    }
-
-    /**
-     * HKDF-SHA256 → 32 bytes. The blob's salt doubles as the HKDF salt:
-     * it is random, non-secret, and known to both parties.
-     * @param {Bytes} ikm - Input key material
-     * @param {Bytes} salt - HKDF salt
-     * @param {Bytes} info - Domain separation label
-     * @returns {Promise<Bytes>}
-     */
-    async hkdf(ikm, salt, info) {
-        const key = await window.crypto.subtle.importKey(
-            'raw',
-            ikm,
-            'HKDF',
-            false,
-            ['deriveBits']
-        );
-        const bits = await window.crypto.subtle.deriveBits(
-            { name: 'HKDF', hash: 'SHA-256', salt: salt, info: info },
-            key,
-            256
-        );
-        return new Uint8Array(bits);
-    }
-
-    /**
-     * Derive the client half Kp and the verifier V for a share.
-     * @param {string} password
-     * @param {Bytes} salt - The blob's PBKDF2 salt
-     * @returns {Promise<{kp: Bytes, v: Bytes}>}
-     */
-    async deriveKeyReleaseKeys(password, salt) {
-        const master = await this.deriveMaster(password, salt);
-        const kp = await this.hkdf(master, salt, this.HKDF_INFO_ENC);
-        const v = await this.hkdf(master, salt, this.HKDF_INFO_VER);
-        return { kp, v };
-    }
-
-    /**
-     * Derive just the verifier V — what /release checks.
-     * @param {string} password
-     * @param {Bytes} salt - The blob's PBKDF2 salt
-     * @returns {Promise<Bytes>} V (32 bytes)
-     */
-    async deriveVerifier(password, salt) {
-        const master = await this.deriveMaster(password, salt);
-        return this.hkdf(master, salt, this.HKDF_INFO_VER);
-    }
-
-    /**
-     * Assemble the file key from both halves: HKDF(Kp ‖ H).
-     * @param {Bytes} kp - Client half (from the password)
-     * @param {Bytes} h - Server half (released once by /release)
-     * @param {Bytes} salt - The blob's salt, reused as HKDF salt
-     * @returns {Promise<Bytes>} file_key (32 bytes)
-     */
-    async deriveFileKey(kp, h, salt) {
-        const ikm = new Uint8Array(kp.length + h.length);
-        ikm.set(kp);
-        ikm.set(h, kp.length);
-        return this.hkdf(ikm, salt, this.HKDF_INFO_FILE);
-    }
-
-    /**
-     * Parse a BKV3 envelope into its components.
-     * @param {Bytes} blob - 'BKV3' + salt + iv + ciphertext
-     * @returns {{version: number, salt: Bytes, iv: Bytes, ciphertext: Bytes}}
-     * @throws {Error} If the magic is not 'BKV3'
-     */
-    parseBlob(blob) {
-        const magic = this.ENVELOPE_MAGIC;
-        if (blob.length < this.MIN_BLOB_LENGTH) {
-            throw new Error('Unsupported share format');
-        }
-        for (let i = 0; i < magic.length; i++) {
-            if (blob[i] !== magic[i]) {
-                throw new Error('Unsupported share format');
-            }
-        }
-        return {
-            version: this.VERSION,
-            salt: blob.slice(magic.length, magic.length + this.SALT_LENGTH),
-            iv: blob.slice(
-                magic.length + this.SALT_LENGTH,
-                magic.length + this.SALT_LENGTH + this.IV_LENGTH),
-            ciphertext: blob.slice(magic.length + this.SALT_LENGTH + this.IV_LENGTH),
-        };
-    }
-
-    /**
-     * Encrypt data for a share.
-     * @param {Bytes} data - Raw data to encrypt
-     * @param {string} password - Encryption password
-     * @param {Bytes} h - Server share from /upload/begin (32 bytes)
-     * @returns {Promise<{blob: Bytes, verifier: Bytes, receipt: Bytes}>}
-     *   blob = 'BKV3' + salt + iv + ciphertext; verifier = V to bind on
-     *   finish; receipt = the in-plaintext decryption proof (report back
-     *   to /report_decryption; the server stores only its SHA-256)
-     */
-    async encrypt(data, password, h) {
-        this._checkServerShare(h);
-        const salt = this.generateSalt();
-        const iv = this.generateIV();
-        const receipt = window.crypto.getRandomValues(
-            new Uint8Array(this.RECEIPT_LENGTH));
-        const { kp, v } = await this.deriveKeyReleaseKeys(password, salt);
-        const fileKey = await this.deriveFileKey(kp, h, salt);
-
-        const key = await window.crypto.subtle.importKey(
-            'raw', fileKey, 'AES-GCM', false, ['encrypt']
-        );
-
-        const headLen = this.HEADER.length + this.RECEIPT_LENGTH;
-        const plain = new Uint8Array(headLen + data.length);
-        plain.set(this.HEADER);
-        plain.set(receipt, this.HEADER.length);
-        plain.set(data, headLen);
-
-        const encrypted = await window.crypto.subtle.encrypt(
-            { name: 'AES-GCM', iv },
-            key,
-            plain
-        );
-
-        const magic = this.ENVELOPE_MAGIC;
-        const blob = new Uint8Array(
-            magic.length + salt.length + iv.length + encrypted.byteLength
-        );
-        blob.set(magic);
-        blob.set(salt, magic.length);
-        blob.set(iv, magic.length + salt.length);
-        blob.set(new Uint8Array(encrypted), magic.length + salt.length + iv.length);
-
-        return { blob, verifier: v, receipt };
-    }
-
-    /**
-     * Compute the upload-time receipt hash: hex SHA-256(receipt).
-     * @param {Bytes} receipt
-     * @returns {Promise<string>}
-     */
-    async receiptHash(receipt) {
-        const digest = await window.crypto.subtle.digest('SHA-256', receipt);
-        return bytesToHex(new Uint8Array(digest));
-    }
-
-    /**
-     * Decrypt a blob once the server has released H.
-     * @param {Bytes} encryptedData - 'BKV3' + salt + iv + ciphertext
-     * @param {string} password - Decryption password
-     * @param {Bytes} h - Server share released by /release (32 bytes)
-     * @returns {Promise<{data: Bytes, receipt: Bytes}>}
-     *   data = payload without header/receipt; receipt = decryption proof
-     * @throws {Error} If password/H is wrong or data is corrupted
-     */
-    async decrypt(encryptedData, password, h) {
-        this._checkServerShare(h);
-        const { salt, iv, ciphertext } = this.parseBlob(encryptedData);
-
-        const { kp } = await this.deriveKeyReleaseKeys(password, salt);
-        const fileKey = await this.deriveFileKey(kp, h, salt);
-
-        const key = await window.crypto.subtle.importKey(
-            'raw', fileKey, 'AES-GCM', false, ['decrypt']
-        );
-
-        const decrypted = await window.crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv },
-            key,
-            ciphertext
-        );
-
-        const decryptedBytes = new Uint8Array(decrypted);
-        if (!this.validateHeader(decryptedBytes)) {
-            throw new Error('Invalid password or corrupted data');
-        }
-        const headLen = this.HEADER.length + this.RECEIPT_LENGTH;
-        if (decryptedBytes.length < headLen) {
-            throw new Error('Invalid password or corrupted data');
-        }
-        return {
-            data: decryptedBytes.slice(headLen),
-            receipt: decryptedBytes.slice(this.HEADER.length, headLen),
-        };
-    }
-
-    /**
-     * Validate magic header in decrypted data
-     * @param {Bytes} data - Decrypted data to validate
-     * @returns {boolean} True if header is valid
-     */
-    validateHeader(data) {
-        if (data.length < this.HEADER.length) {
-            return false;
-        }
-        for (let i = 0; i < this.HEADER.length; i++) {
-            if (data[i] !== this.HEADER[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
+/**
+ * The AES-GCM file key from both halves: HKDF(Kp ‖ H).
+ * @param {Bytes} kp - Client half (from the password)
+ * @param {Bytes} h - Server half (released once by /release)
+ * @param {Bytes} salt - The blob's salt, reused as HKDF salt
+ * @param {'encrypt' | 'decrypt'} usage
+ * @returns {Promise<CryptoKey>}
+ */
+async function fileKey(kp, h, salt, usage) {
+    const ikm = new Uint8Array(kp.length + h.length);
+    ikm.set(kp);
+    ikm.set(h, kp.length);
+    const raw = await hkdf(ikm, salt, HKDF_INFO_FILE);
+    return globalThis.crypto.subtle.importKey('raw', raw, 'AES-GCM', false, [usage]);
 }

@@ -1,8 +1,9 @@
 // The index page's upload flows against the protocol fake, with the real
-// crypto.js and real PBKDF2 (docs/frontend-test-strategy.md §7, JS integration
+// lib/crypto.js and real PBKDF2 (docs/frontend-test-strategy.md §7, JS integration
 // and the upload-side security invariants).
 import { describe, expect, it } from 'vitest';
-import { CryptoService, bytesToHex, hexToBytes } from '../../../static/js/lib/crypto.js';
+import { open, receiptHash } from '../../../static/js/lib/crypto.js';
+import { bytesToHex, hexToBytes } from '../../../static/js/lib/hex.js';
 import { PASSWORDS, openUploadPage, screen } from '../support/pages/upload.js';
 import { pathOf } from '../support/protocol-fake.js';
 
@@ -124,11 +125,10 @@ describe('index page uploads', { timeout: TEST_TIMEOUT }, () => {
             // The blob opens under the password and the H the fake issued, and
             // the verifier and receipt hash bound to it are the blob's own.
             const blob = await uploadedBlob(request);
-            const cryptoService = new CryptoService();
-            const { data, receipt } = await cryptoService.decrypt(blob, PASSWORD, hexToBytes(h));
+            const { verifier, finish } = await open(blob).unlock(PASSWORD);
+            const { data, receipt } = await finish(hexToBytes(h));
             expect(data).toEqual(mode === 'text' ? new TextEncoder().encode(NOTE) : FILE_BYTES);
-            expect(field(request, 'receipt_hash')).toBe(await cryptoService.receiptHash(receipt));
-            const verifier = await cryptoService.deriveVerifier(PASSWORD, cryptoService.parseBlob(blob).salt);
+            expect(field(request, 'receipt_hash')).toBe(await receiptHash(receipt));
             expect(field(request, 'key_verifier')).toBe(bytesToHex(verifier));
             expect(upload.backend.state.keys.get(fileId)?.v).toBe(bytesToHex(verifier));
 
