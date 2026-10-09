@@ -677,16 +677,6 @@ def how_it_works():
     files only (#247), so CLI + text falls back to a file. The page script
     applies the same rules (normalizeChoice in pages/how-it-works/).
     """
-    return _how_it_works_page('how_it_works.html')
-
-
-@app.route('/how-it-works/v2')
-def how_it_works_v2():
-    """The same explainer in a second layout, to compare with the first."""
-    return _how_it_works_page('how_it_works_v2.html')
-
-
-def _how_it_works_page(template):
     sender = request.args.get('sender')
     if sender not in ('web', 'cli'):
         sender = 'web'
@@ -694,7 +684,7 @@ def _how_it_works_page(template):
     if content not in ('file', 'text') or sender == 'cli':
         content = 'file'
     return render_template(
-        template,
+        'how_it_works.html',
         sender=sender,
         content=content,
         max_attempts=current_app.config['KEY_RELEASE_MAX_ATTEMPTS'],
