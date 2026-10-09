@@ -23,26 +23,33 @@ const STRENGTH = {
 };
 
 /**
+ * @typedef {object} PasswordGateOptions
+ * @property {(password: string) => void} [onChange] - after every change to
+ *   the password, typed or generated, for the page's own controls that act
+ *   on it (the index page's Copy)
+ */
+
+/**
  * Wire up the password field, or return null where the page has none (an
  * anonymous visitor's landing page).
  * @param {Document} root
+ * @param {PasswordGateOptions} [options]
  * @returns {PasswordGate | null}
  */
-export function initPasswordGate(root) {
+export function initPasswordGate(root, options = {}) {
     const input = /** @type {HTMLInputElement | null} */ (root.getElementById('shared-password'));
-    return input && wire(root, input);
+    return input && wire(root, input, options);
 }
 
 /**
  * @param {Document} root
  * @param {HTMLInputElement} input
+ * @param {PasswordGateOptions} options
  * @returns {PasswordGate}
  */
-function wire(root, input) {
+function wire(root, input, { onChange }) {
     const generateBtn = required(root, '#generate-password-btn', 'button');
     const toggleBtn = required(root, '#toggle-password-btn', 'button');
-    // Copied by the page; the gate only keeps it disabled while there is nothing to copy.
-    const copyBtn = required(root, '#copy-password-btn', 'button');
     const strengthRegion = required(root, '#password-strength', 'div');
     const strengthMeter = required(root, '#password-strength-meter', 'div');
     const strengthBar = required(root, '#password-strength-bar', 'div');
@@ -82,14 +89,15 @@ function wire(root, input) {
         toggleBtn.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
     }
 
-    /** Show/Hide and Copy have nothing to act on until there is a password. */
-    function syncButtons() {
-        for (const button of [toggleBtn, copyBtn]) button.disabled = !input.value;
+    /** Show/Hide, and whatever the page wires to onChange, have nothing to act on until there is a password. */
+    function changed() {
+        toggleBtn.disabled = !input.value;
+        onChange?.(input.value);
     }
 
     input.addEventListener('input', () => {
         updateStrength();
-        syncButtons();
+        changed();
         // Re-typing clears a stale refusal so the user sees progress.
         refusal.textContent = '';
     });
@@ -103,7 +111,7 @@ function wire(root, input) {
         setVisible(true);
         refusal.textContent = '';
         updateStrength();
-        syncButtons();
+        changed();
         input.focus();
     });
 

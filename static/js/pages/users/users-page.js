@@ -3,6 +3,7 @@
 // inline. The token is returned exactly once and is never stored server-side,
 // so the result panel stays visible until the page is reloaded.
 import { copyWithFeedback } from '../../features/clipboard-feedback/index.js';
+import { csrfToken } from '../../features/csrf/index.js';
 import { required, requiredClosest } from '../../lib/required.js';
 
 /**
@@ -33,7 +34,7 @@ export function browserDeps() {
  * @param {UsersDeps} deps
  */
 export function initUsers(root, deps) {
-    const csrfToken = /** @type {HTMLMetaElement | null} */ (root.querySelector('meta[name="csrf-token"]'))?.content || '';
+    const csrf = csrfToken(root);
 
     /** @param {HTMLButtonElement} button */
     async function generateToken(button) {
@@ -50,7 +51,7 @@ export function initUsers(root, deps) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-Token': csrfToken,
+                    'X-CSRF-Token': csrf,
                 },
                 body: JSON.stringify({ username: button.dataset.username }),
             });

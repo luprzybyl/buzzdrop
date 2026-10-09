@@ -7,7 +7,6 @@
 import { bytesToHex } from '../../../static/js/lib/hex.js';
 
 /** @typedef {import('../../../static/js/lib/crypto.js').Bytes} Bytes */
-/** @typedef {import('../../../static/js/lib/crypto.js').ShareCrypto} StubCrypto */
 
 const MAGIC = new TextEncoder().encode('STUB');
 const RECEIPT = new Uint8Array(32).fill(7);
@@ -29,7 +28,7 @@ async function sha256(input) {
 
 /**
  * @param {StubCryptoOptions} [options]
- * @returns {StubCrypto}
+ * @returns {import('../../../static/js/lib/crypto.js').ShareCrypto}
  */
 export function makeStubCrypto({ unsupportedFormat = false, corrupted = false } = {}) {
     return {

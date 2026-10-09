@@ -6,6 +6,7 @@
 // null checks.
 
 import { copyWithFeedback } from '../../features/clipboard-feedback/index.js';
+import { csrfToken } from '../../features/csrf/index.js';
 import { initPasswordGate } from '../../features/password-gate/index.js';
 import { createShare } from '../../features/share-protocol/index.js';
 import { initSharedFilesList } from '../../features/shared-files/index.js';
@@ -194,20 +195,29 @@ export function initIndex(root, deps) {
     }
 
     // --- Password Generation & Strength Gate ---
-    const passwordGate = initPasswordGate(root);
-    if (passwordGate) {
-        const copyBtn = required(root, '#copy-password-btn', 'button');
+    // Copy has nothing to copy until there is a password; the template
+    // renders it disabled.
+    const copyPasswordBtn = /** @type {HTMLButtonElement | null} */ (root.getElementById('copy-password-btn'));
+    const passwordGate = initPasswordGate(root, {
+        onChange: (password) => { if (copyPasswordBtn) copyPasswordBtn.disabled = !password; },
+    });
+    if (passwordGate && copyPasswordBtn) {
         const status = required(root, '#password-copy-status', 'p');
-        const label = required(copyBtn, '#copy-password-label', 'span');
-        copyBtn.addEventListener('click', () =>
-            copyWithFeedback(copyBtn, passwordGate.input.value, { status, label, what: 'Password' }));
+        const label = required(copyPasswordBtn, '#copy-password-label', 'span');
+        copyPasswordBtn.addEventListener('click', () =>
+            copyWithFeedback(copyPasswordBtn, passwordGate.input.value, { status, label, what: 'Password' }));
     }
 
     /**
-     * The gate every upload passes: a missing or weak password is refused.
-     * @param {string} password
+     * The password every upload uses, through the gate: null, with the
+     * refusal shown, when it is missing or weak.
+     * @returns {string | null}
      */
-    const acceptPassword = (password) => passwordGate !== null && passwordGate.accept(password);
+    const acceptedPassword = () => {
+        if (!passwordGate) return null;
+        const password = passwordGate.input.value;
+        return passwordGate.accept(password) ? password : null;
+    };
 
     // --- Open notifications ---
     // The account email (rendered only when there is one) shows while the
@@ -222,10 +232,8 @@ export function initIndex(root, deps) {
 
     // --- Shared Upload Logic ---
 
-    // Session-authed mutating routes require the CSRF token the server
-    // renders into <meta name="csrf-token"> — read once, reused per request.
-    const csrfToken =
-        /** @type {HTMLMetaElement | null} */ (root.querySelector('meta[name="csrf-token"]'))?.content || '';
+    // Read once, reused per request.
+    const csrf = csrfToken(root);
 
     /**
      * The share options as the composer currently holds them.
@@ -274,7 +282,7 @@ export function initIndex(root, deps) {
                 XMLHttpRequest: deps.XMLHttpRequest,
                 crypto: deps.crypto,
                 urls: { begin: uploadEndpoints.uploadBeginUrl, upload: uploadEndpoints.uploadUrl },
-                csrfToken,
+                csrfToken: csrf,
                 onProgress: showProgress,
             });
         } catch (err) {
@@ -381,15 +389,13 @@ export function initIndex(root, deps) {
         fileUploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (uploadInProgress) return;
-            const fileInput = required(root, '#file', 'input');
-            const passInput = required(root, '#shared-password', 'input');
-            const file = fileInput.files?.[0];
-            const password = passInput.value;
+            const file = required(root, '#file', 'input').files?.[0];
             if (!file) {
                 showRefusal('file-error', 'Choose a file to share.');
                 return;
             }
-            if (!acceptPassword(password)) return;
+            const password = acceptedPassword();
+            if (password === null) return;
 
             await share({ kind: 'file', name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }, password);
         });
@@ -405,14 +411,13 @@ export function initIndex(root, deps) {
         if (uploadInProgress) return;
         const noteField = required(root, '#note-text', 'textarea');
         const noteText = noteField.value;
-        const password = required(root, '#shared-password', 'input').value;
-
         if (!noteText) {
             showRefusal('note-error', 'Write the note you want to share.');
             noteField.focus();
             return;
         }
-        if (!acceptPassword(password)) return;
+        const password = acceptedPassword();
+        if (password === null) return;
 
         await share({ kind: 'text', bytes: new TextEncoder().encode(noteText) }, password);
     }
