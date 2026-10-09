@@ -89,6 +89,18 @@ export function initHowItWorks(root, deps) {
     let playing = false;
     /** @type {ReturnType<typeof setTimeout> | undefined} */
     let timer;
+    // The countdown to the next step: what is left of it, and when the
+    // running part of it started. A pause keeps what is left.
+    let remaining = HOLD_MS;
+    let countingSince = 0;
+
+    // The countdown is drawn by CSS (the ring around Play and the bar under
+    // the current step), timed by the same hold; the classes on the flow
+    // run, freeze and clear it.
+    flow.style.setProperty('--hiw-hold', `${HOLD_MS}ms`);
+    const playIcon = required(play, '[data-icon="play"]', 'span');
+    const pauseIcon = required(play, '[data-icon="pause"]', 'span');
+    const ring = required(play, '.hiw-play-ring', 'span');
 
     // Restart the step's animation: drop the class, let the browser see the
     // step without it, then put it back.
@@ -115,32 +127,69 @@ export function initHowItWorks(root, deps) {
         next.disabled = index === steps.length - 1;
     };
 
+    /** @param {boolean} value */
+    const setPlaying = (value) => {
+        playing = value;
+        play.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+        play.title = playing ? 'Pause' : 'Play the steps';
+        playIcon.toggleAttribute('hidden', playing);
+        pauseIcon.toggleAttribute('hidden', !playing);
+        // A step changed by hand is announced; one changing on a timer
+        // would talk over the reader, as a carousel's does.
+        stepsBox.setAttribute('aria-live', playing ? 'off' : 'polite');
+    };
+
+    // A fresh countdown for the step on screen: the ring starts over (the
+    // step bar does by itself, as it moves to another step's button).
+    const restartCountdown = () => {
+        remaining = HOLD_MS;
+        ring.classList.remove('is-counting');
+        void ring.getBoundingClientRect();
+        ring.classList.add('is-counting');
+    };
+
+    const countDown = () => {
+        countingSince = Date.now();
+        timer = setTimeout(() => {
+            showStep(current + 1);
+            if (current === steps.length - 1) {
+                stopPlaying();
+            } else {
+                restartCountdown();
+                countDown();
+            }
+        }, remaining);
+    };
+
+    // Stepping by hand, or reaching the end: autoplay is over, and the
+    // countdown with it.
     const stopPlaying = () => {
         clearTimeout(timer);
         timer = undefined;
-        playing = false;
-        play.textContent = 'Play';
-        // A step changed by hand is announced; one changing on a timer
-        // would talk over the reader, as a carousel's does.
-        stepsBox.setAttribute('aria-live', 'polite');
+        setPlaying(false);
+        remaining = HOLD_MS;
+        flow.classList.remove('is-playing', 'is-paused');
+        ring.classList.remove('is-counting');
     };
 
-    const scheduleNext = () => {
+    // The countdown freezes where it is, for Play to pick up.
+    const pausePlaying = () => {
         clearTimeout(timer);
-        timer = setTimeout(() => {
-            showStep(current + 1);
-            if (current === steps.length - 1) stopPlaying();
-            else scheduleNext();
-        }, HOLD_MS);
+        timer = undefined;
+        remaining = Math.max(0, remaining - (Date.now() - countingSince));
+        setPlaying(false);
+        flow.classList.add('is-paused');
     };
 
     const startPlaying = () => {
-        playing = true;
-        play.textContent = 'Pause';
-        stepsBox.setAttribute('aria-live', 'off');
+        const resuming = flow.classList.contains('is-paused');
+        setPlaying(true);
+        flow.classList.add('is-playing');
+        flow.classList.remove('is-paused');
         // Play on the last step starts over.
-        if (current === steps.length - 1) showStep(0);
-        scheduleNext();
+        if (!resuming && current === steps.length - 1) showStep(0);
+        if (!resuming) restartCountdown();
+        countDown();
     };
 
     const applyChoice = () => {
@@ -183,7 +232,7 @@ export function initHowItWorks(root, deps) {
         stopPlaying();
         showStep(current + 1);
     });
-    play.addEventListener('click', () => (playing ? stopPlaying() : startPlaying()));
+    play.addEventListener('click', () => (playing ? pausePlaying() : startPlaying()));
 
     // A link to a step (#step-release) opens it, here as on load.
     window.addEventListener('hashchange', () => {
@@ -193,9 +242,10 @@ export function initHowItWorks(root, deps) {
         showStep(index);
     });
 
-    // Don't advance in a background tab, where nobody is reading.
+    // Don't advance in a background tab, where nobody is reading; Play
+    // picks up where it was.
     root.addEventListener('visibilitychange', () => {
-        if (root.hidden && playing) stopPlaying();
+        if (root.hidden && playing) pausePlaying();
     });
 
     // The controls only work with this script, so they appear with it.

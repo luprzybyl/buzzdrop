@@ -2,7 +2,8 @@ import { within } from '@testing-library/dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { openHowItWorks, screen } from '../support/pages/how-it-works.js';
 
-// Longer than any step's hold time, so a playing flow must have advanced.
+// How long a step holds while playing, and a wait longer than that.
+const HOLD_MS = 7000;
 const LONGEST_HOLD_MS = 10_000;
 const STEPS = 8;
 
@@ -74,6 +75,21 @@ describe('how it works: stepping through', () => {
 
         await page.pause();
         vi.advanceTimersByTime(LONGEST_HOLD_MS * 3);
+        expect(currentStep()).toHaveAccessibleName(/Encrypt where you are/);
+    });
+
+    // A pause keeps the countdown where it was, so Play doesn't make the
+    // reader sit through the whole step again.
+    it('Play after Pause picks up the time that was left', async () => {
+        const page = openHowItWorks();
+
+        await page.play();
+        vi.advanceTimersByTime(HOLD_MS - 1000);
+        await page.pause();
+        vi.advanceTimersByTime(LONGEST_HOLD_MS * 3);
+        await page.play();
+        vi.advanceTimersByTime(1000);
+
         expect(currentStep()).toHaveAccessibleName(/Encrypt where you are/);
     });
 

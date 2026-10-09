@@ -862,7 +862,7 @@
   }
 
   .hiw-stepper-btn {
-    @apply flex h-full w-full flex-col items-center gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-1 py-2 text-center text-slate-500 transition duration-200 hover:border-honey-400/30 hover:text-slate-200 focus-visible:outline-2 focus-visible:outline-honey-300;
+    @apply relative flex h-full w-full overflow-hidden flex-col items-center gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-1 py-2 text-center text-slate-500 transition duration-200 hover:border-honey-400/30 hover:text-slate-200 focus-visible:outline-2 focus-visible:outline-honey-300;
   }
 
   .hiw-stepper-btn[aria-current='step'] {
@@ -875,6 +875,63 @@
 
   .hiw-stepper-title {
     @apply sr-only text-[0.68rem] leading-tight md:not-sr-only;
+  }
+
+  /* The countdown to the next step while playing: a bar along the bottom of
+     the current step's button, and a ring around Play (below). Both run on
+     the flow's --hiw-hold, freeze with .is-paused and clear when playing
+     stops. */
+  .hiw-stepper-progress {
+    @apply absolute inset-x-0 bottom-0 h-[3px] origin-left bg-honey-400;
+    scale: 0 1;
+  }
+
+  .is-playing .hiw-stepper-btn[aria-current='step'] .hiw-stepper-progress {
+    animation: hiw-fill var(--hiw-hold) linear both;
+  }
+
+  .hiw-play {
+    @apply relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/10 bg-hive-850 text-honey-200 transition duration-200 hover:border-honey-400/40 hover:text-honey-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-honey-300;
+  }
+
+  .hiw-play-ring {
+    @apply pointer-events-none absolute -inset-1;
+  }
+
+  .hiw-play-ring svg {
+    @apply h-full w-full -rotate-90;
+  }
+
+  .hiw-play-track,
+  .hiw-play-fill {
+    fill: none;
+    stroke-width: 2.5;
+  }
+
+  .hiw-play-track {
+    stroke: transparent;
+  }
+
+  .is-playing .hiw-play-track {
+    stroke: rgb(255 255 255 / 0.08);
+  }
+
+  .hiw-play-fill {
+    stroke: var(--color-honey-400);
+    stroke-linecap: round;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+  }
+
+  .is-playing .hiw-play-ring.is-counting .hiw-play-fill {
+    animation: hiw-countdown var(--hiw-hold) linear both;
+  }
+
+  /* As specific as the rules that start them, whose animation shorthand
+     would otherwise reset the play state. */
+  .is-paused .hiw-play-ring.is-counting .hiw-play-fill,
+  .is-paused .hiw-stepper-btn[aria-current='step'] .hiw-stepper-progress {
+    animation-play-state: paused;
   }
 
   .hiw-step.is-active {
@@ -1088,6 +1145,14 @@
     transform: none;
   }
 
+  /* The countdown to the next step keeps its real pace: it is a slow,
+     linear fill, not movement, and without it a playing flow would change
+     step with no warning. */
+  .hiw-play-fill,
+  .hiw-stepper-progress {
+    animation-duration: var(--hiw-hold) !important;
+  }
+
   /* The how-it-works diagrams show each step's finished state. */
   .hiw-step,
   .hiw-art *,
@@ -1179,6 +1244,16 @@
   from { left: 100%; translate: -100% 0; opacity: 0; }
   20% { opacity: 1; }
   to { left: 0; translate: 0 0; opacity: 1; }
+}
+
+@keyframes hiw-fill {
+  from { scale: 0 1; }
+  to { scale: 1 1; }
+}
+
+@keyframes hiw-countdown {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
 }
 
 @keyframes hiw-burn {

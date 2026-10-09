@@ -125,21 +125,21 @@
         <nav aria-label="Steps">
             <ol class="hiw-stepper">
                 
-                <li><button type="button" class="hiw-stepper-btn" data-step-id="upload-begin" aria-controls="step-upload-begin" aria-current="step"><span class="hiw-stepper-num" aria-hidden="true">1</span><span class="sr-only">Step 1: </span><span class="hiw-stepper-title">Upload, phase 1</span></button></li>
+                <li><button type="button" class="hiw-stepper-btn" data-step-id="upload-begin" aria-controls="step-upload-begin" aria-current="step"><span class="hiw-stepper-num" aria-hidden="true">1</span><span class="sr-only">Step 1: </span><span class="hiw-stepper-title">Upload, phase 1</span><span class="hiw-stepper-progress" aria-hidden="true"></span></button></li>
                 
-                <li><button type="button" class="hiw-stepper-btn" data-step-id="encrypt" aria-controls="step-encrypt"><span class="hiw-stepper-num" aria-hidden="true">2</span><span class="sr-only">Step 2: </span><span class="hiw-stepper-title">Encrypt where you are</span></button></li>
+                <li><button type="button" class="hiw-stepper-btn" data-step-id="encrypt" aria-controls="step-encrypt"><span class="hiw-stepper-num" aria-hidden="true">2</span><span class="sr-only">Step 2: </span><span class="hiw-stepper-title">Encrypt where you are</span><span class="hiw-stepper-progress" aria-hidden="true"></span></button></li>
                 
-                <li><button type="button" class="hiw-stepper-btn" data-step-id="upload-finish" aria-controls="step-upload-finish"><span class="hiw-stepper-num" aria-hidden="true">3</span><span class="sr-only">Step 3: </span><span class="hiw-stepper-title">Upload, phase 2</span></button></li>
+                <li><button type="button" class="hiw-stepper-btn" data-step-id="upload-finish" aria-controls="step-upload-finish"><span class="hiw-stepper-num" aria-hidden="true">3</span><span class="sr-only">Step 3: </span><span class="hiw-stepper-title">Upload, phase 2</span><span class="hiw-stepper-progress" aria-hidden="true"></span></button></li>
                 
-                <li><button type="button" class="hiw-stepper-btn" data-step-id="share" aria-controls="step-share"><span class="hiw-stepper-num" aria-hidden="true">4</span><span class="sr-only">Step 4: </span><span class="hiw-stepper-title">Share</span></button></li>
+                <li><button type="button" class="hiw-stepper-btn" data-step-id="share" aria-controls="step-share"><span class="hiw-stepper-num" aria-hidden="true">4</span><span class="sr-only">Step 4: </span><span class="hiw-stepper-title">Share</span><span class="hiw-stepper-progress" aria-hidden="true"></span></button></li>
                 
-                <li><button type="button" class="hiw-stepper-btn" data-step-id="release" aria-controls="step-release"><span class="hiw-stepper-num" aria-hidden="true">5</span><span class="sr-only">Step 5: </span><span class="hiw-stepper-title">The recipient proves the password</span></button></li>
+                <li><button type="button" class="hiw-stepper-btn" data-step-id="release" aria-controls="step-release"><span class="hiw-stepper-num" aria-hidden="true">5</span><span class="sr-only">Step 5: </span><span class="hiw-stepper-title">The recipient proves the password</span><span class="hiw-stepper-progress" aria-hidden="true"></span></button></li>
                 
-                <li><button type="button" class="hiw-stepper-btn" data-step-id="download" aria-controls="step-download"><span class="hiw-stepper-num" aria-hidden="true">6</span><span class="sr-only">Step 6: </span><span class="hiw-stepper-title">Download once</span></button></li>
+                <li><button type="button" class="hiw-stepper-btn" data-step-id="download" aria-controls="step-download"><span class="hiw-stepper-num" aria-hidden="true">6</span><span class="sr-only">Step 6: </span><span class="hiw-stepper-title">Download once</span><span class="hiw-stepper-progress" aria-hidden="true"></span></button></li>
                 
-                <li><button type="button" class="hiw-stepper-btn" data-step-id="decrypt" aria-controls="step-decrypt"><span class="hiw-stepper-num" aria-hidden="true">7</span><span class="sr-only">Step 7: </span><span class="hiw-stepper-title">Decrypt in the browser</span></button></li>
+                <li><button type="button" class="hiw-stepper-btn" data-step-id="decrypt" aria-controls="step-decrypt"><span class="hiw-stepper-num" aria-hidden="true">7</span><span class="sr-only">Step 7: </span><span class="hiw-stepper-title">Decrypt in the browser</span><span class="hiw-stepper-progress" aria-hidden="true"></span></button></li>
                 
-                <li><button type="button" class="hiw-stepper-btn" data-step-id="expiry" aria-controls="step-expiry"><span class="hiw-stepper-num" aria-hidden="true">8</span><span class="sr-only">Step 8: </span><span class="hiw-stepper-title">Expiry and manual delete</span></button></li>
+                <li><button type="button" class="hiw-stepper-btn" data-step-id="expiry" aria-controls="step-expiry"><span class="hiw-stepper-num" aria-hidden="true">8</span><span class="sr-only">Step 8: </span><span class="hiw-stepper-title">Expiry and manual delete</span><span class="hiw-stepper-progress" aria-hidden="true"></span></button></li>
                 
             </ol>
         </nav>
@@ -347,12 +347,28 @@
             </article>
         </div>
 
-        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-5">
-            <p id="hiw-counter" class="text-sm text-slate-400">8 steps</p>
-            <div class="flex gap-2">
-                <button id="hiw-prev" type="button" class="btn-secondary px-4 py-2" hidden>Previous</button>
-                <button id="hiw-play" type="button" class="btn-secondary px-4 py-2" hidden>Play</button>
-                <button id="hiw-next" type="button" class="btn-primary px-4 py-2" hidden><span class="relative z-10">Next</span></button>
+        
+        <div class="flex items-center justify-between gap-3 border-t border-white/[0.06] pt-5">
+            <div class="flex min-w-0 items-center gap-3">
+                <button id="hiw-play" type="button" class="hiw-play" aria-label="Play" title="Play the steps" hidden>
+                    <span class="hiw-play-ring" aria-hidden="true"><svg viewBox="0 0 48 48">
+                        <circle class="hiw-play-track" cx="24" cy="24" r="22"/>
+                        <circle class="hiw-play-fill" cx="24" cy="24" r="22" pathLength="100"/>
+                    </svg></span>
+                    <span data-icon="play" class="relative translate-x-px" aria-hidden="true"><svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M6 3.8v12.4a1 1 0 0 0 1.5.86l10.2-6.2a1 1 0 0 0 0-1.72L7.5 2.94A1 1 0 0 0 6 3.8Z"/></svg></span>
+                    <span data-icon="pause" class="relative" aria-hidden="true" hidden><svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><rect x="4.5" y="3" width="4" height="14" rx="1.2"/><rect x="11.5" y="3" width="4" height="14" rx="1.2"/></svg></span>
+                </button>
+                <p id="hiw-counter" class="text-sm text-slate-400">8 steps</p>
+            </div>
+            <div class="flex shrink-0 gap-2">
+                <button id="hiw-prev" type="button" aria-label="Previous" class="btn-secondary px-3 py-2 sm:px-4" hidden>
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.83 10l3.94 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clip-rule="evenodd"/></svg>
+                    <span class="hidden sm:inline">Previous</span>
+                </button>
+                <button id="hiw-next" type="button" aria-label="Next" class="btn-primary px-3 py-2 sm:px-4" hidden>
+                    <span class="relative z-10 hidden sm:inline">Next</span>
+                    <svg class="relative z-10 h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.17 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd"/></svg>
+                </button>
             </div>
         </div>
     </section>
