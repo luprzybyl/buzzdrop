@@ -54,13 +54,15 @@ def test_index_anonymous_user(client, app):
     assert b'File sharing that stings' in response.data
     assert b'BuzzDrop: secure, one-time file sharing.' in response.data
     assert b'Read the code. Then trust it.' in response.data
-    assert b'Open Buzzdrop on GitHub' in response.data
+    assert b'Browse the source code' in response.data
     assert b'Login to start sharing' not in response.data
     assert b'View on GitHub' not in response.data
     assert b'https://github.com/luprzybyl/buzzdrop' in response.data
-    assert b'https://github.com/luprzybyl/buzzdrop/blob/main/README.md' in response.data
-    assert b'aria-label="Open Buzzdrop on GitHub (opens in new tab)"' in response.data
-    assert b'Read the Buzzdrop README on GitHub (opens in new tab)' in response.data
+    assert b'https://github.com/luprzybyl/buzzdrop#readme' in response.data
+    assert b'aria-label="Source code (opens in new tab)"' in response.data
+    assert b'aria-label="Read the README (opens in new tab)"' in response.data
+    # The repository may live anywhere SOURCE_CODE_URL points.
+    assert b'GitHub' not in response.data
     assert b'Login' in response.data # Login link in header
     assert b'Your drops' not in response.data # Should not see this section title
     assert b'/static/css/app.css' in response.data

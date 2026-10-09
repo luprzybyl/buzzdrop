@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Buzzdrop UI asset build tooling",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "build:css": "tailwindcss -i ./static/css/tailwind.css -o ./static/css/app.css --minify",

@@ -124,6 +124,14 @@ class Config:
     EXPIRY_SWEEP_INTERVAL_SECONDS = int(
         os.getenv('EXPIRY_SWEEP_INTERVAL_SECONDS', '300'))
 
+    # AGPL-3.0 §13: users of a modified Buzzdrop served over the network
+    # must be offered its source. The footer links here; a deployment
+    # running changed code points this at its own repository. Every
+    # repository link on the site uses it; an empty value falls back to
+    # the default rather than rendering href="".
+    SOURCE_CODE_URL = (os.getenv('SOURCE_CODE_URL', '').strip()
+                       or 'https://github.com/luprzybyl/buzzdrop')
+
     @classmethod
     def validate(cls):
         """

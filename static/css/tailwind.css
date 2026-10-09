@@ -223,6 +223,10 @@
     @apply relative z-10 mt-16 border-t border-white/5 bg-hive-950/60 backdrop-blur-sm;
   }
 
+  .footer-link {
+    @apply underline decoration-slate-700 underline-offset-4 transition hover:text-slate-300;
+  }
+
   /* --------------------------------------------------------------- Shapes */
 
   .hex,
