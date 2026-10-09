@@ -6,12 +6,18 @@ spec tests/e2e/header.spec.js covers it.
 """
 import re
 
+import pytest
 from flask import url_for
 
 
 def _login(client, username='testuser', password='password'):
     response = client.post(url_for('login'), data={'username': username, 'password': password})
     assert response.status_code == 302
+
+
+@pytest.fixture
+def as_admin(client):
+    _login(client, 'adminuser', 'adminpass')
 
 
 def _region(client, endpoint, tag, **values):
@@ -51,37 +57,39 @@ def test_logout_is_not_styled_as_destructive(client):
     assert 'btn-secondary' in logout
 
 
-def test_manage_users_is_marked_current_on_the_users_page(client):
-    _login(client, 'adminuser', 'adminpass')
+def test_manage_users_is_marked_current_on_the_users_page(client, as_admin):
     assert 'aria-current="page"' in _tag_with_text(_header(client, 'manage_users'), 'Manage Users')
 
 
-def test_manage_users_is_not_marked_current_elsewhere(client):
-    _login(client, 'adminuser', 'adminpass')
+def test_manage_users_is_not_marked_current_elsewhere(client, as_admin):
     assert 'aria-current' not in _tag_with_text(_header(client, 'index'), 'Manage Users')
 
 
-def test_users_page_has_no_back_to_home_link(client):
-    _login(client, 'adminuser', 'adminpass')
+def test_users_page_has_no_back_to_home_link(client, as_admin):
     assert 'Back to home' not in client.get(url_for('manage_users')).get_data(as_text=True)
 
 
-def test_footer_note_is_neutral_by_default(client):
-    _login(client, 'adminuser', 'adminpass')
-    for footer in (_footer(client, 'manage_users'), _footer(client, 'view_file', file_id='missing')):
-        assert 'Each drop opens once' in footer
-        assert 'key' not in footer.lower()
-        assert 'password' not in footer.lower()
-
-
-def test_footer_note_on_the_login_page_is_neutral(client):
-    footer = _footer(client, 'login')
+@pytest.mark.parametrize('endpoint, values', [
+    ('login', {}),
+    ('manage_users', {}),
+    ('view_file', {'file_id': 'missing'}),
+])
+def test_footer_note_is_neutral_by_default(client, as_admin, endpoint, values):
+    footer = _footer(client, endpoint, **values)
     assert 'Each drop opens once' in footer
+    assert 'key' not in footer.lower()
+    assert 'password' not in footer.lower()
 
 
 def test_footer_tells_the_uploader_to_split_link_and_password(client):
     _login(client)
     assert 'Send the link and the password through different channels' in _footer(client, 'index')
+
+
+def test_success_page_footer_tells_the_uploader_to_split_link_and_password(client, file_record):
+    _login(client)
+    footer = _footer(client, 'upload_success', file_id=file_record())
+    assert 'Send the link and the password through different channels' in footer
 
 
 def test_landing_page_footer_does_not_address_an_uploader(client):

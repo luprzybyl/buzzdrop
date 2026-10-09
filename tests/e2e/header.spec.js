@@ -3,7 +3,7 @@
 // doesn't scroll sideways (#232). Desktop Chrome's window can't go this
 // narrow, so this is the only place it gets checked.
 import { test, expect } from './fixtures.js';
-import { logIn } from './support.js';
+import { USER, logIn } from './support.js';
 
 /** @typedef {import('@playwright/test').Page} Page */
 /** @typedef {import('@playwright/test').Locator} Locator */
@@ -40,7 +40,7 @@ for (const width of [375, 320]) {
 
         await logIn(page);
         await expectOneRow(page, [
-            header.getByText('e2e', { exact: true }),
+            header.getByText(USER.username, { exact: true }),
             header.getByRole('button', { name: 'Logout' }),
         ]);
     });
