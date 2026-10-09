@@ -106,10 +106,19 @@ def test_landing_page_footer_does_not_address_an_uploader(client):
 def test_footer_links_to_the_source_code(client, endpoint, values):
     footer = _footer(client, endpoint, **values)
     assert 'href="https://github.com/luprzybyl/buzzdrop"' in _tag_with_text(footer, 'Source code')
-    assert 'agpl-3.0' in _tag_with_text(footer, 'AGPL-3.0')
+    assert 'href="https://www.gnu.org/licenses/agpl-3.0.html"' in _tag_with_text(footer, 'AGPL-3.0')
 
 
 def test_footer_source_link_follows_the_configured_url(app, client, monkeypatch):
     monkeypatch.setitem(app.config, 'SOURCE_CODE_URL', 'https://git.example.org/fork')
     footer = _footer(client, 'index')
     assert 'href="https://git.example.org/fork"' in _tag_with_text(footer, 'Source code')
+
+
+def test_every_repository_link_follows_the_configured_url(app, client, monkeypatch):
+    # A fork that sets SOURCE_CODE_URL must not keep sending its users to
+    # the upstream repository from the header or the landing page.
+    monkeypatch.setitem(app.config, 'SOURCE_CODE_URL', 'https://git.example.org/fork')
+    page = client.get(url_for('index')).get_data(as_text=True)
+    assert 'github.com/luprzybyl' not in page
+    assert 'href="https://git.example.org/fork"' in _header(client, 'index')

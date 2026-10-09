@@ -207,6 +207,7 @@ Key variables in `.env`:
 - Secrets: `TOKEN_HASH_SECRET` is required in `FLASK_ENV=production` and must differ from `FLASK_SECRET_KEY` (dev falls back to `FLASK_SECRET_KEY`)
 - Database: `DATABASE_URL` (`DATABASE_PATH` deprecated → sqlite:/// fallback)
 - Key release: `KEY_RELEASE_RATE_LIMIT` (default `10 per minute`, per file_id), `KEY_RELEASE_MAX_ATTEMPTS` (default 1), `KEY_RELEASE_BURN_ON_LOCKOUT` (default on — lockout deletes the `file_keys` row, H+V destroyed; off keeps the row but permanently refuses releases — currently no unlock path), `KEY_SHARE_PENDING_TTL_SECONDS` (default 3600 — TTL for begun-but-never-finished shares)
+- Source code: `SOURCE_CODE_URL` (default: the upstream GitHub repo; empty falls back to it) — every repository link on the site, including the AGPL-3.0 §13 footer link; a deployment running modified code must point it at its own source
 - Metadata: `REPORT_DECRYPTION_RATE_LIMIT` (default `10 per minute`, per file_id); notification email subjects never carry the filename
 
 ### Deployment

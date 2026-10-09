@@ -1,4 +1,8 @@
 """Unit tests for configuration validation and session cookie hardening."""
+import os
+import subprocess
+import sys
+
 import pytest
 
 from config import Config, DevelopmentConfig, ProductionConfig, _looks_like_placeholder
@@ -118,3 +122,15 @@ def test_validate_rejects_invalid_samesite(monkeypatch):
 ])
 def test_looks_like_placeholder(value, expected):
     assert _looks_like_placeholder(value) is expected
+
+
+@pytest.mark.parametrize('value', ['', '   '])
+def test_empty_source_code_url_falls_back_to_the_upstream_repository(value):
+    # Config reads the environment at import time, so import it afresh in a
+    # child process; an empty value must not render the footer link as href="".
+    env = {**os.environ, 'SOURCE_CODE_URL': value}
+    result = subprocess.run(
+        [sys.executable, '-c', 'from config import Config; print(Config.SOURCE_CODE_URL)'],
+        env=env, capture_output=True, text=True, check=True,
+        cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    assert result.stdout.strip() == 'https://github.com/luprzybyl/buzzdrop'
