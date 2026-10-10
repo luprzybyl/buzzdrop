@@ -133,4 +133,4 @@ def test_empty_source_code_url_falls_back_to_the_upstream_repository(value):
         [sys.executable, '-c', 'from config import Config; print(Config.SOURCE_CODE_URL)'],
         env=env, capture_output=True, text=True, check=True,
         cwd=os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    assert result.stdout.strip() == 'https://github.com/luprzybyl/buzzdrop'
+    assert result.stdout.strip() == 'https://github.com/buzzdrop/buzzdrop'

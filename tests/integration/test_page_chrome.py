@@ -105,7 +105,7 @@ def test_landing_page_footer_does_not_address_an_uploader(client):
 ])
 def test_footer_links_to_the_source_code(client, endpoint, values):
     footer = _footer(client, endpoint, **values)
-    assert 'href="https://github.com/luprzybyl/buzzdrop"' in _tag_with_text(footer, 'Source code')
+    assert 'href="https://github.com/buzzdrop/buzzdrop"' in _tag_with_text(footer, 'Source code')
     assert 'href="https://www.gnu.org/licenses/agpl-3.0.html"' in _tag_with_text(footer, 'AGPL-3.0')
 
 

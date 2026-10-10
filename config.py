@@ -136,7 +136,7 @@ class Config:
     # repository link on the site uses it; an empty value falls back to
     # the default rather than rendering href="".
     SOURCE_CODE_URL = (os.getenv('SOURCE_CODE_URL', '').strip()
-                       or 'https://github.com/luprzybyl/buzzdrop')
+                       or 'https://github.com/buzzdrop/buzzdrop')
 
     @classmethod
     def validate(cls):
