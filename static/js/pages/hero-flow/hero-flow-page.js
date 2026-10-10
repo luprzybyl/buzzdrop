@@ -39,6 +39,22 @@ export function initHeroFlow(root, deps) {
     // A deliberate pause has to outlast hovering and tab switches, so it is
     // tracked apart from the transient reasons to hold still.
     let paused = false;
+    // The countdown to the next stage: what is left of it, and when the
+    // running part of it started. Holding still keeps what is left, so the
+    // stage picks up where the ring froze instead of starting over.
+    let remaining = DEFAULT_HOLD_MS;
+    let countingSince = 0;
+
+    // The ring around the toggle and the fill in the active pip are drawn by
+    // CSS from --flow-hold. .is-counting on the stage runs them (dropping and
+    // re-adding it starts both over together) and .is-held freezes them.
+    const restartCountdown = () => {
+        remaining = HOLD_MS[current] ?? DEFAULT_HOLD_MS;
+        stage.style.setProperty('--flow-hold', `${remaining}ms`);
+        stage.classList.remove('is-counting');
+        void stage.offsetWidth;
+        stage.classList.add('is-counting');
+    };
 
     /** @param {number} index */
     const render = (index) => {
@@ -58,8 +74,12 @@ export function initHeroFlow(root, deps) {
     };
 
     const stop = () => {
+        stage.classList.add('is-held');
+        // Already still (paused, then hovered): nothing more has elapsed.
+        if (timer === undefined) return;
         clearTimeout(timer);
         timer = undefined;
+        remaining = Math.max(0, remaining - (Date.now() - countingSince));
     };
 
     const play = () => {
@@ -67,13 +87,18 @@ export function initHeroFlow(root, deps) {
         // Reduced motion shows every stage at once instead of auto-advancing;
         // see the prefers-reduced-motion block in the stylesheet.
         if (paused || reduceMotion.matches || root.hidden) return;
+        stage.classList.remove('is-held');
+        countingSince = Date.now();
         timer = setTimeout(() => {
+            timer = undefined;
             render((current + 1) % steps.length);
+            restartCountdown();
             play();
-        }, HOLD_MS[current] ?? DEFAULT_HOLD_MS);
+        }, remaining);
     };
 
     render(0);
+    restartCountdown();
     play();
 
     // Hover only pauses while the pointer is there, which leaves keyboard and
@@ -108,6 +133,9 @@ export function initHeroFlow(root, deps) {
         if (reduceMotion.matches) {
             stop();
         } else {
+            // Reduced motion cancelled the ring's animation, so it starts
+            // over from empty; the stage gets a full hold to match.
+            restartCountdown();
             play();
         }
     });

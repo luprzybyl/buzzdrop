@@ -8,6 +8,10 @@ const LONGEST_HOLD_MS = 6000;
 const currentStage = () => screen.getByRole('listitem', { current: 'step' });
 const FIRST_STAGE = /Pick a file/;
 const SECOND_STAGE = /Set a password/;
+// How long the first and second stages hold (HOLD_MS in hero-flow-page.js):
+// the resume tests need to land just either side of the end of a hold.
+const FIRST_HOLD_MS = 4320;
+const SECOND_HOLD_MS = 3840;
 
 describe('hero flow', () => {
     beforeEach(() => {
@@ -49,5 +53,59 @@ describe('hero flow', () => {
 
         expect(currentStage()).toHaveTextContent(SECOND_STAGE);
         expect(screen.getByRole('button', { name: 'Pause walkthrough' })).toBeVisible();
+    });
+
+    // The countdown ring freezes while the stage is held, so the stage has to
+    // pick up where it froze rather than start a full hold again.
+    it('resumes the hold where hovering froze it', async () => {
+        const landing = openLandingPage();
+
+        vi.advanceTimersByTime(3000);
+        await landing.pointAtWalkthrough();
+        vi.advanceTimersByTime(LONGEST_HOLD_MS * 3);
+        await landing.moveAwayFromWalkthrough();
+        vi.advanceTimersByTime(FIRST_HOLD_MS - 3000 - 1);
+
+        expect(currentStage()).toHaveTextContent(FIRST_STAGE);
+
+        vi.advanceTimersByTime(1);
+
+        expect(currentStage()).toHaveTextContent(SECOND_STAGE);
+    });
+
+    it('resumes the hold where the pause button froze it', async () => {
+        const landing = openLandingPage();
+
+        vi.advanceTimersByTime(1000);
+        await landing.pauseWalkthrough();
+        vi.advanceTimersByTime(500);
+        // Hovering and leaving while paused takes nothing more off the hold.
+        await landing.pointAtWalkthrough();
+        await landing.moveAwayFromWalkthrough();
+        vi.advanceTimersByTime(LONGEST_HOLD_MS * 3);
+        await landing.playWalkthrough();
+        vi.advanceTimersByTime(FIRST_HOLD_MS - 1000 - 1);
+
+        expect(currentStage()).toHaveTextContent(FIRST_STAGE);
+
+        vi.advanceTimersByTime(1);
+
+        expect(currentStage()).toHaveTextContent(SECOND_STAGE);
+    });
+
+    it('gives the next stage its full hold after a resumed one', async () => {
+        const landing = openLandingPage();
+
+        vi.advanceTimersByTime(3000);
+        await landing.pointAtWalkthrough();
+        await landing.moveAwayFromWalkthrough();
+        vi.advanceTimersByTime(FIRST_HOLD_MS - 3000);
+        vi.advanceTimersByTime(SECOND_HOLD_MS - 1);
+
+        expect(currentStage()).toHaveTextContent(SECOND_STAGE);
+
+        vi.advanceTimersByTime(1);
+
+        expect(currentStage()).not.toHaveTextContent(SECOND_STAGE);
     });
 });
