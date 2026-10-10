@@ -225,19 +225,14 @@
                         </li>
                     </ol>
 
-                    
-                    <svg class="flow-countdown" viewBox="0 0 44 44" aria-hidden="true">
-                        <polygon class="flow-countdown-track" points="22,2 39.32,12 39.32,32 22,42 4.68,32 4.68,12"/>
-                        <polygon class="flow-countdown-fill" points="22,2 39.32,12 39.32,32 22,42 4.68,32 4.68,12" pathLength="1"/>
-                    </svg>
-                    <button id="flow-toggle" type="button" class="flow-toggle" aria-label="Pause walkthrough">
-                        <svg data-flow-icon="pause" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path d="M6 4h3v12H6zM11 4h3v12h-3z"/>
-                        </svg>
-                        <svg data-flow-icon="play" class="h-3.5 w-3.5" hidden viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path d="M7 4.5v11l9-5.5z"/>
-                        </svg>
-                    </button>
+                    <button id="flow-toggle" type="button" class="play-toggle flow-toggle" aria-label="Pause walkthrough" hidden>
+    <span class="play-toggle-ring" aria-hidden="true"><svg viewBox="0 0 48 48">
+        <circle class="play-toggle-track" cx="24" cy="24" r="22"/>
+        <circle class="play-toggle-fill" cx="24" cy="24" r="22" pathLength="100"/>
+    </svg></span>
+    <span data-icon="play" class="relative translate-x-px" aria-hidden="true" hidden><svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M6 3.8v12.4a1 1 0 0 0 1.5.86l10.2-6.2a1 1 0 0 0 0-1.72L7.5 2.94A1 1 0 0 0 6 3.8Z"/></svg></span>
+    <span data-icon="pause" class="relative" aria-hidden="true"><svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><rect x="4.5" y="3" width="4" height="14" rx="1.2"/><rect x="11.5" y="3" width="4" height="14" rx="1.2"/></svg></span>
+</button>
                 </div>
             </div>
         </div>
