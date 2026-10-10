@@ -539,9 +539,11 @@
   /* Play/pause with a ring counting down to the next step
      (templates/_play_toggle.html, static/js/features/play-toggle/). The
      ring runs on --countdown-hold from an ancestor, shows its track while
-     the ancestor is .is-playing and freezes while it is .is-paused. */
+     the ancestor is .is-playing and freezes while it is .is-paused. The
+     focus ring (the global :focus-visible box shadow) paints under it, so
+     its offset clears the countdown ring, which reaches about 3px out. */
   .play-toggle {
-    @apply relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/10 bg-hive-850 text-honey-200 transition duration-200 hover:border-honey-400/40 hover:text-honey-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-honey-300;
+    @apply relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/10 bg-hive-850 text-honey-200 transition duration-200 hover:border-honey-400/40 hover:text-honey-100 focus-visible:ring-offset-[5px];
   }
 
   .play-toggle-ring {
@@ -553,7 +555,8 @@
   }
 
   .play-toggle-track,
-  .play-toggle-fill {
+  .play-toggle-fill,
+  .play-toggle-done {
     fill: none;
     stroke-width: 2.5;
   }
@@ -563,7 +566,7 @@
   }
 
   .is-playing .play-toggle-track {
-    stroke: rgb(255 255 255 / 0.08);
+    stroke: rgb(255 255 255 / 0.1);
   }
 
   .play-toggle-fill {
@@ -581,6 +584,17 @@
      would otherwise reset the play state. */
   .is-paused .play-toggle-ring.is-counting .play-toggle-fill {
     animation-play-state: paused;
+  }
+
+  /* When a countdown runs out, the full ring fades out over the next one
+     filling from empty, instead of snapping back. */
+  .play-toggle-done {
+    stroke: var(--color-honey-400);
+    opacity: 0;
+  }
+
+  .play-toggle-ring.is-counting.after-full .play-toggle-done {
+    animation: countdown-ring-out 400ms ease-out both;
   }
 
   /* ------------------------------------------------- Hero flow walkthrough */
@@ -1464,6 +1478,11 @@
 @keyframes countdown-ring {
   from { stroke-dashoffset: 100; }
   to { stroke-dashoffset: 0; }
+}
+
+@keyframes countdown-ring-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 @keyframes hiw-glow {

@@ -10,6 +10,10 @@ import { createPlayToggle } from '../../features/play-toggle/index.js';
  * @typedef {Record<string, never>} HeroFlowDeps
  */
 
+/** How long each stage holds, as long as its caption needs to be read. */
+export const HOLD_MS = [4320, 3840, 3480, 3960, 3720, 5040];
+const DEFAULT_HOLD_MS = 3840;
+
 /**
  * The hero needs nothing beyond the DOM, which comes in as `root`; the
  * reduced-motion query is read from the root's own window.
@@ -29,15 +33,14 @@ export function initHeroFlow(root, deps) {
 
     const steps = Array.from(stage.querySelectorAll('.flow-step'));
     const dots = Array.from(stage.querySelectorAll('.flow-dot'));
-    // Each stage gets as long as its caption needs to be read.
-    const HOLD_MS = [4320, 3840, 3480, 3960, 3720, 5040];
-    const DEFAULT_HOLD_MS = 3840;
-
     const reduceMotion = requiredWindow(root).matchMedia('(prefers-reduced-motion: reduce)');
     let current = 0;
     // A deliberate pause has to outlast hovering and tab switches, so it is
     // tracked apart from the transient reasons to hold still.
     let paused = false;
+    // The pointer resting on the stage holds it still too, until it leaves
+    // or play is pressed; coming back to the tab must not override it.
+    let hovering = false;
 
     /** @param {number} index */
     const render = (index) => {
@@ -71,18 +74,18 @@ export function initHeroFlow(root, deps) {
         toggle.restart(holdOf(current));
     });
 
-    const stop = () => toggle.freeze();
+    const freeze = () => toggle.freeze();
 
     const play = () => {
         // Reduced motion shows every stage at once instead of auto-advancing;
         // see the prefers-reduced-motion block in the stylesheet.
-        if (paused || reduceMotion.matches || root.hidden) return;
+        if (paused || hovering || reduceMotion.matches || root.hidden) return;
         toggle.resume();
     };
 
     // Set the first countdown frozen, then let play() decide if it runs.
     render(0);
-    stop();
+    freeze();
     toggle.restart(holdOf(0));
     play();
 
@@ -91,20 +94,31 @@ export function initHeroFlow(root, deps) {
         toggle.showPlaying(!paused);
         // Pressing play while the pointer rests on the stage resumes it:
         // an explicit press outranks the hover heuristic.
-        if (paused) stop(); else play();
+        if (paused) {
+            freeze();
+        } else {
+            hovering = false;
+            play();
+        }
     });
     button.hidden = false;
 
     // Let people linger on a stage they are still reading.
-    stage.addEventListener('mouseenter', stop);
-    stage.addEventListener('mouseleave', play);
+    stage.addEventListener('mouseenter', () => {
+        hovering = true;
+        freeze();
+    });
+    stage.addEventListener('mouseleave', () => {
+        hovering = false;
+        play();
+    });
 
     // Don't burn frames in a background tab.
-    root.addEventListener('visibilitychange', () => (root.hidden ? stop() : play()));
+    root.addEventListener('visibilitychange', () => (root.hidden ? freeze() : play()));
 
     reduceMotion.addEventListener('change', () => {
         if (reduceMotion.matches) {
-            stop();
+            freeze();
         } else {
             // Reduced motion cancelled the ring's animation, so it starts
             // over from empty; the stage gets a full hold to match.

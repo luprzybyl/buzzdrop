@@ -5,6 +5,7 @@
 // The ring is drawn by CSS from --countdown-hold on `scope`, which also
 // carries .is-playing while a countdown is set and .is-paused while it is
 // frozen; a page's own countdown bars read the same three.
+import { required } from '../../lib/required.js';
 
 /**
  * @typedef {object} PlayToggleLabels
@@ -19,7 +20,8 @@
  * @property {(playing: boolean) => void} showPlaying - name the button and
  *   show the icon for playing (Pause) or not (Play); the countdown is apart
  * @property {(holdMs: number) => void} restart - a fresh countdown of
- *   `holdMs`, with the ring starting over; it runs unless frozen
+ *   `holdMs`, with the ring starting over (from onElapsed, the full ring
+ *   fades out over it); it runs unless frozen
  * @property {() => void} freeze - hold the countdown where it is
  * @property {() => void} resume - run the countdown on from where it froze
  * @property {() => void} stop - drop the countdown, and clear the ring
@@ -35,9 +37,9 @@
  * @returns {PlayToggle}
  */
 export function createPlayToggle(button, scope, labels, onElapsed) {
-    const ring = /** @type {Element} */ (button.querySelector('.play-toggle-ring'));
-    const playIcon = button.querySelector('[data-icon="play"]');
-    const pauseIcon = button.querySelector('[data-icon="pause"]');
+    const ring = required(button, '.play-toggle-ring', 'span');
+    const playIcon = required(button, '[data-icon="play"]', 'span');
+    const pauseIcon = required(button, '[data-icon="pause"]', 'span');
 
     /** @type {ReturnType<typeof setTimeout> | undefined} */
     let timer;
@@ -46,12 +48,17 @@ export function createPlayToggle(button, scope, labels, onElapsed) {
     let remaining = 0;
     let countingSince = 0;
     let frozen = false;
+    // Set while onElapsed runs, so the countdown it starts fades out the
+    // full ring instead of snapping it back to empty.
+    let ranOut = false;
 
     const run = () => {
         countingSince = Date.now();
         timer = setTimeout(() => {
             timer = undefined;
+            ranOut = true;
             onElapsed();
+            ranOut = false;
         }, remaining);
     };
 
@@ -67,8 +74,8 @@ export function createPlayToggle(button, scope, labels, onElapsed) {
             button.setAttribute('aria-label', playing ? labels.pause : labels.play);
             const title = playing ? labels.pauseTitle : labels.playTitle;
             if (title) button.title = title;
-            playIcon?.toggleAttribute('hidden', playing);
-            pauseIcon?.toggleAttribute('hidden', !playing);
+            playIcon.toggleAttribute('hidden', playing);
+            pauseIcon.toggleAttribute('hidden', !playing);
         },
         restart(holdMs) {
             clearTimeout(timer);
@@ -78,6 +85,7 @@ export function createPlayToggle(button, scope, labels, onElapsed) {
             scope.classList.add('is-playing');
             // Drop the class, let the browser see the ring without it, then
             // put it back: the ring's animation starts over.
+            ring.classList.toggle('after-full', ranOut);
             ring.classList.remove('is-counting');
             void ring.getBoundingClientRect();
             ring.classList.add('is-counting');
@@ -98,7 +106,7 @@ export function createPlayToggle(button, scope, labels, onElapsed) {
             timer = undefined;
             frozen = false;
             scope.classList.remove('is-playing', 'is-paused');
-            ring.classList.remove('is-counting');
+            ring.classList.remove('is-counting', 'after-full');
         },
         isFrozen: () => frozen,
     };
