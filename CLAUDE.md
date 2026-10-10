@@ -154,7 +154,7 @@ Content-Type: application/json
 Standalone Python script. Requires `cryptography` and `requests` (see `requirements-cli.txt`). Reads `~/.buzz_token` as JSON `{"token": "...", "server": "https://..."}`.
 
 ```bash
-buzz file.pdf                  # generates 4-word passphrase
+buzz file.pdf                  # generates 6-word passphrase
 buzz file.pdf -p mypassword
 buzz file.pdf --expiry 2025-12-31T23:59
 ```
