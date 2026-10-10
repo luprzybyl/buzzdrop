@@ -201,7 +201,7 @@ def test_text_note_success_page(client, app, files_store):
 
     assert response.status_code == 200
     assert b'Note is in the hive' in response.data
-    assert b'is destroyed as soon as the recipient continues' in response.data
+    assert b'downloads once, when the recipient enters the password' in response.data
 
 def test_text_note_deletion_after_view(client, app, files_store, claim_ticket):
     """Test that text note is marked as downloaded after viewing."""
@@ -362,7 +362,7 @@ def test_success_route_shows_note_wording_after_xhr_upload(client, app, files_st
 
     assert response.status_code == 200
     assert b'Note is in the hive' in response.data
-    assert b'The note is destroyed' in response.data
+    assert b'The note downloads once' in response.data
 
 
 def test_success_route_shows_file_wording_for_files(client, app, key_release_upload):
