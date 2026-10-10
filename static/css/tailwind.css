@@ -534,6 +534,69 @@
     @apply grid h-11 w-11 shrink-0 place-items-center bg-linear-to-br from-honey-300 to-honey-600 text-sm font-bold text-hive-950;
   }
 
+  /* ---------------------------------------------------------- Play toggle */
+
+  /* Play/pause with a ring counting down to the next step
+     (templates/_play_toggle.html, static/js/features/play-toggle/). The
+     ring runs on --countdown-hold from an ancestor, shows its track while
+     the ancestor is .is-playing and freezes while it is .is-paused. The
+     focus ring (the global :focus-visible box shadow) paints under it, so
+     its offset clears the countdown ring, which reaches about 3px out. */
+  .play-toggle {
+    @apply relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/10 bg-hive-850 text-honey-200 transition duration-200 hover:border-honey-400/40 hover:text-honey-100 focus-visible:ring-offset-[5px];
+  }
+
+  .play-toggle-ring {
+    @apply pointer-events-none absolute -inset-1;
+  }
+
+  .play-toggle-ring svg {
+    @apply h-full w-full -rotate-90;
+  }
+
+  .play-toggle-track,
+  .play-toggle-fill,
+  .play-toggle-done {
+    fill: none;
+    stroke-width: 2.5;
+  }
+
+  .play-toggle-track {
+    stroke: transparent;
+  }
+
+  .is-playing .play-toggle-track {
+    stroke: rgb(255 255 255 / 0.1);
+  }
+
+  .play-toggle-fill {
+    stroke: var(--color-honey-400);
+    stroke-linecap: round;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+  }
+
+  .is-playing .play-toggle-ring.is-counting .play-toggle-fill {
+    animation: countdown-ring var(--countdown-hold) linear both;
+  }
+
+  /* As specific as the rule that starts it, whose animation shorthand
+     would otherwise reset the play state. */
+  .is-paused .play-toggle-ring.is-counting .play-toggle-fill {
+    animation-play-state: paused;
+  }
+
+  /* When a countdown runs out, the full ring fades out over the next one
+     filling from empty, instead of snapping back. */
+  .play-toggle-done {
+    stroke: var(--color-honey-400);
+    opacity: 0;
+  }
+
+  .play-toggle-ring.is-counting.after-full .play-toggle-done {
+    animation: countdown-ring-out 400ms ease-out both;
+  }
+
   /* ------------------------------------------------- Hero flow walkthrough */
 
   .flow-stage {
@@ -569,9 +632,10 @@
     @apply flex shrink-0 items-center gap-2;
   }
 
-  /* Progress pips: the active stage stretches into a bar. */
+  /* Progress pips: the active stage stretches into a bar, which fills
+     Stories-style in step with the ring around the toggle (.play-toggle). */
   .flow-dot {
-    @apply h-1.5 w-1.5 rounded-full bg-white/15 transition-all duration-[600ms];
+    @apply relative h-1.5 w-1.5 overflow-hidden rounded-full bg-white/15 transition-all duration-[600ms];
   }
 
   .flow-dot.is-done {
@@ -579,17 +643,36 @@
   }
 
   .flow-dot.is-active {
-    @apply w-7 bg-honey-400;
+    @apply w-7 bg-honey-400/25;
+  }
+
+  .flow-dot::after {
+    content: '';
+    @apply absolute inset-0 origin-left bg-honey-400;
+    scale: 0 1;
+  }
+
+  /* Full until the script starts the countdown. */
+  .flow-dot.is-active::after {
+    scale: 1 1;
+  }
+
+  .is-playing .flow-dot.is-active::after {
+    animation: countdown-fill var(--countdown-hold) linear both;
+  }
+
+  /* As specific as the rule that starts it, and after it. */
+  .is-paused .flow-dot.is-active::after {
+    animation-play-state: paused;
   }
 
   .flow-body {
     @apply relative z-10 min-h-[17rem];
   }
 
-  /* Bottom-right of the mock window, quiet until hovered or focused. The
-     global focus-visible ring covers keyboard focus. */
+  /* The play toggle (.play-toggle), in the bottom-right of the mock window. */
   .flow-toggle {
-    @apply absolute bottom-4 right-4 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-hive-950/70 text-slate-500 backdrop-blur-sm transition duration-200 hover:border-honey-400/40 hover:text-honey-300;
+    @apply absolute bottom-4 right-4 z-20;
   }
 
   /* Only opacity is transitioned. The lift is a one-shot animation on entry,
@@ -858,58 +941,20 @@
   }
 
   /* The countdown to the next step while playing: a bar along the bottom of
-     the current step's button, and a ring around Play (below). Both run on
-     the flow's --hiw-hold, freeze with .is-paused and clear when playing
-     stops. */
+     the current step's button, and the ring around Play (.play-toggle).
+     Both run on the flow's --countdown-hold, freeze with .is-paused and
+     clear when playing stops. */
   .hiw-stepper-progress {
     @apply absolute inset-x-0 bottom-0 h-[3px] origin-left bg-honey-400;
     scale: 0 1;
   }
 
   .is-playing [data-step-id][aria-current='step'] .hiw-stepper-progress {
-    animation: hiw-fill var(--hiw-hold) linear both;
+    animation: countdown-fill var(--countdown-hold) linear both;
   }
 
-  .hiw-play {
-    @apply relative grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/10 bg-hive-850 text-honey-200 transition duration-200 hover:border-honey-400/40 hover:text-honey-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-honey-300;
-  }
-
-  .hiw-play-ring {
-    @apply pointer-events-none absolute -inset-1;
-  }
-
-  .hiw-play-ring svg {
-    @apply h-full w-full -rotate-90;
-  }
-
-  .hiw-play-track,
-  .hiw-play-fill {
-    fill: none;
-    stroke-width: 2.5;
-  }
-
-  .hiw-play-track {
-    stroke: transparent;
-  }
-
-  .is-playing .hiw-play-track {
-    stroke: rgb(255 255 255 / 0.08);
-  }
-
-  .hiw-play-fill {
-    stroke: var(--color-honey-400);
-    stroke-linecap: round;
-    stroke-dasharray: 100;
-    stroke-dashoffset: 100;
-  }
-
-  .is-playing .hiw-play-ring.is-counting .hiw-play-fill {
-    animation: hiw-countdown var(--hiw-hold) linear both;
-  }
-
-  /* As specific as the rules that start them, whose animation shorthand
+  /* As specific as the rule that starts it, whose animation shorthand
      would otherwise reset the play state. */
-  .is-paused .hiw-play-ring.is-counting .hiw-play-fill,
   .is-paused [data-step-id][aria-current='step'] .hiw-stepper-progress {
     animation-play-state: paused;
   }
@@ -1327,9 +1372,9 @@
   /* The countdown to the next step keeps its real pace: it is a slow,
      linear fill, not movement, and without it a playing flow would change
      step with no warning. */
-  .hiw-play-fill,
+  .play-toggle-fill,
   .hiw-stepper-progress {
-    animation-duration: var(--hiw-hold) !important;
+    animation-duration: var(--countdown-hold) !important;
   }
 
   /* The how-it-works diagrams show each step's finished state. */
@@ -1425,14 +1470,19 @@
   to { left: 0; translate: 0 0; opacity: 1; }
 }
 
-@keyframes hiw-fill {
+@keyframes countdown-fill {
   from { scale: 0 1; }
   to { scale: 1 1; }
 }
 
-@keyframes hiw-countdown {
+@keyframes countdown-ring {
   from { stroke-dashoffset: 100; }
   to { stroke-dashoffset: 0; }
+}
+
+@keyframes countdown-ring-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 @keyframes hiw-glow {

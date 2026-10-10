@@ -7,7 +7,7 @@
 import { isInaccessible, within } from '@testing-library/dom';
 import { computeAccessibleName } from 'dom-accessibility-api';
 import { expect, vi } from 'vitest';
-import { initHeroFlow } from '../../../../static/js/pages/hero-flow/hero-flow-page.js';
+import { HOLD_MS, initHeroFlow } from '../../../../static/js/pages/hero-flow/hero-flow-page.js';
 import { initIndex } from '../../../../static/js/pages/index/index-page.js';
 import { makeProtocolFake } from '../protocol-fake.js';
 import { DEFAULT_PASSWORD, cryptoFor, openPage, replaceInFixture, typeable, waitUntil } from './page.js';
@@ -104,6 +104,9 @@ function indexDeps(fetch, crypto, xhr) {
     };
 }
 
+/** How long each walkthrough stage holds, in order. */
+export const WALKTHROUGH_HOLD_MS = HOLD_MS;
+
 /**
  * Open the landing page an anonymous visitor sees, with both its scripts.
  * @param {{ path?: string, reducedMotion?: boolean }} [options]
@@ -117,6 +120,13 @@ export function openLandingPage({ path = '/', reducedMotion = false } = {}) {
     initHeroFlow(page.window.document, {});
     const { screen, user } = page;
     const walkthrough = () => screen.getByRole('region', { name: 'How a drop works' });
+    // happy-dom never hides a tab, so a tab switch is the flag and the event
+    // a browser would give.
+    const { document } = page.window;
+    const setTabHidden = (/** @type {boolean} */ hidden) => {
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+        document.dispatchEvent(new page.window.Event('visibilitychange'));
+    };
     return {
         url: page.url,
         historyLength: page.historyLength,
@@ -124,6 +134,8 @@ export function openLandingPage({ path = '/', reducedMotion = false } = {}) {
         playWalkthrough: () => user.click(screen.getByRole('button', { name: 'Play walkthrough' })),
         pointAtWalkthrough: () => user.hover(walkthrough()),
         moveAwayFromWalkthrough: () => user.unhover(walkthrough()),
+        leaveTab: () => setTabHidden(true),
+        returnToTab: () => setTabHidden(false),
     };
 }
 

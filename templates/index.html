@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_play_toggle.html' import play_toggle %}
 
 {# The landing page uses the full shell; the composer and drop list a narrower column. #}
 {% block content_width %}{{ 'max-w-5xl' if session.get('username') }}{% endblock %}
@@ -352,14 +353,7 @@ Send the link and the password through different channels.
                         </li>
                     </ol>
 
-                    <button id="flow-toggle" type="button" class="flow-toggle" aria-label="Pause walkthrough">
-                        <svg data-flow-icon="pause" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path d="M6 4h3v12H6zM11 4h3v12h-3z"/>
-                        </svg>
-                        <svg data-flow-icon="play" class="h-3.5 w-3.5" hidden viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path d="M7 4.5v11l9-5.5z"/>
-                        </svg>
-                    </button>
+                    {{ play_toggle('flow-toggle', 'Pause walkthrough', playing=true, extra_class='flow-toggle') }}
                 </div>
             </div>
         </div>
