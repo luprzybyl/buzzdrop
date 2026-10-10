@@ -57,8 +57,8 @@ def test_index_anonymous_user(client, app):
     assert b'Browse the source code' in response.data
     assert b'Login to start sharing' not in response.data
     assert b'View on GitHub' not in response.data
-    assert b'https://github.com/luprzybyl/buzzdrop' in response.data
-    assert b'https://github.com/luprzybyl/buzzdrop#readme' in response.data
+    assert b'https://github.com/buzzdrop/buzzdrop' in response.data
+    assert b'https://github.com/buzzdrop/buzzdrop#readme' in response.data
     assert b'aria-label="Source code (opens in new tab)"' in response.data
     assert b'aria-label="Read the README (opens in new tab)"' in response.data
     # The repository may live anywhere SOURCE_CODE_URL points.
