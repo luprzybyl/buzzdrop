@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/brand/logo.svg" alt="Buzzdrop logo" width="140" />
+  <img src="docs/brand/logo.svg" alt="Buzzdrop Logo" width="180" />
 </p>
 
 <p align="center">
@@ -8,334 +8,114 @@
   </a>
 </p>
 
-# Buzzdrop: File Sharing That Stings—Just Once! 🐝
+# Buzzdrop
 
-**Buzzdrop** is a one-time, self-destructing file drop. Upload files or share secret text notes, get a link, and—BZZT!—they vanish after a single view. (One honest footnote: "one-time" means nobody gets a *second* read—what the recipient already saw can't be un-seen.) The crypto does the heavy lifting: everything is encrypted right in your browser, and the key itself is split in half—one half lives in your password, the other half sits in the server's vault and is handed over exactly once.
+One-time, self-destructing file and text sharing with client-side encryption. Files are encrypted in the browser before upload; each link works exactly once.
 
-## Why Buzzdrop?
+**How "one-time" works:** the ciphertext is served once and deleted. The decryption key is split — one half derives from the recipient's password, the other half (`H`) is held by the server and released exactly once, inside a single atomic transaction. A stolen ciphertext without `H` is not brute-forceable; password guessing only happens online, through a rate-limited, attempt-capped endpoint. Details: [docs/true-one-time.md](docs/true-one-time.md).
 
-- 🐝 **One-Time Download**: Each link is a mayfly—one click and it's gone!
-- 📝 **Secret Text Notes**: Share passwords, API keys, or sensitive text—no files needed!
-- 🔒 **In-Browser Encryption**: Your data is locked tight (AES-GCM + PBKDF2) before it ever leaves your device.
-- 🗝️ **Server-Gated Key Release**: The decryption key is split between the password and a server-held share that's released exactly once—leaked ciphertext alone is just noise, not a brute-force target.
-- 💥 **Auto-Delete**: Downloaded or viewed? Boom, gone.
-- 🔗 **Smart Sharing**: Generate links with embedded passwords for one-click access, or share separately for extra security.
-- ☁️ **Local or S3 Storage**: Choose your hive—local or Amazon S3.
-- 👩‍💻 **Configurable**: File types, size limits, and users—tweak in `.env`.
-- 📬 **Optional open notifications**: Ask Buzzdrop to email you when a file or secret note is opened, along with the reported decryption result.
-- 🛡️ **Security First**: PBKDF2 password hashing, security headers, rate limiting, and IP tracking for accountability.
-- 😎 **Modern UI**: Slick, responsive, and buzzing with style.
-
-## Getting Buzzing
-
-1. **Install the buzz**:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
-2. **Configure your hive** (copy `.env.example` to `.env` and customize):
-   ```bash
-   cp .env.example .env
-   # For production, set FLASK_SECRET_KEY:
-   python -c "import secrets; print(secrets.token_hex(32))"
-   # Add the output to your .env as FLASK_SECRET_KEY=<generated-key>
-   ```
-3. **Start the hive**:
-   ```bash
-   npm install
-   npm run build:css
-   python app.py
-   ```
-4. **Fly to**: [http://localhost:5000](http://localhost:5000)
-
-### Refreshing the local CSS build
-
-Buzzdrop now serves its Tailwind-based styling from a local compiled file at `static/css/app.css` rather than the browser Tailwind CDN.
-
-Whenever you change template classes or the Tailwind source file, rebuild the production CSS with:
+## Quick start
 
 ```bash
-npm install
-npm run build:css
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+npm install && npm run build:css   # compiled Tailwind CSS (committed; rebuild after changing styles)
+
+cp .env.example .env               # set FLASK_SECRET_KEY and at least one FLASK_USER_N
+python app.py
 ```
 
-The styling uses Tailwind CSS v4, which is configured in CSS: theme tokens (colours, fonts, shadows, animations) live in the `@theme` block of `static/css/tailwind.css`, and there is no `tailwind.config.js`. The editable source lives in `static/css/tailwind.css`, and the compiled output is committed so production deployments do not need Node installed at runtime.
+Open **http://127.0.0.1:5000** (Flask dev server binds to 127.0.0.1, not `localhost`).
 
----
-
-## 🐳 Dockerized Buzz (The Fastest Flight!)
-
-Want to get buzzing in a single command? Docker’s your jetpack!
+Generate a secret key:
 
 ```bash
-# Build the hive
-docker-compose build
-
-# Let the swarm fly
-docker-compose up
+python -c "import secrets; print(secrets.token_hex(32))"
+# → FLASK_SECRET_KEY=<output> in .env
 ```
 
-- Your files & database are safe—volumes are shared with your host.
-- App will buzz at [http://localhost:5000](http://localhost:5000)
-- Customize with your `.env` as usual!
-
-Stop the swarm with `docker-compose down`—no mess, no leftovers.
-
----
-
-## How to Use
-
-### For Files:
-1. Log in (buzzers only!)
-2. Select **"Upload File"** tab and choose your file.
-3. Set a strong password and optional expiry date.
-4. Get your shareable link with **two sharing modes**:
-   - **🔗 One-Click Link**: Password embedded in URL fragment (convenient, but less secure)
-   - **🔒 Separate Sharing**: Share link and password via different channels (maximum security)
-5. Recipient opens link, confirms download, enters password (or auto-filled from URL), and decrypts.
-6. First download zaps it for good—BZZT!
-7. Optionally enable **"Notify me when this is opened"** to receive a single email after the recipient attempts decryption.
-
-### For Secret Text Notes:
-1. Log in and switch to **"Share Text Note"** tab.
-2. Type or paste your secret text (passwords, API keys, confidential messages).
-3. Set a strong password and optional expiry date.
-4. Share the link—recipient views the text once, then it vanishes!
-5. Optionally enable an uploader notification email for the first open attempt.
-
-### Security Tips:
-- For maximum security, use **separate sharing**: send the link via email and password via SMS/Signal.
-- For convenience with trusted recipients, use **one-click links** (password in URL fragment).
-- Set expiry dates for time-sensitive secrets.
-- Monitor your shared files dashboard—see download timestamps and IP addresses.
-
-## Security Buzz
-
-Buzzdrop takes security seriously. Here's how we protect your secrets:
-
-### What "one-time" actually promises
-
-- **One claim, no re-reads.** The stored ciphertext is served exactly once and the key share `H` is released exactly once, inside a single atomic transaction. After that the link is spent—for the recipient, for a link thief, for everyone.
-- **It protects against re-reading, not against remembering.** Nothing takes back plaintext the recipient already saw (the analog hole is physics, not a roadmap item), and nothing stops a malicious server operator.
-- **Brute force is a separate fight.** Self-destruct was never the anti-cracking feature: a stolen ciphertext without `H` is mathematically dead, so password guessing only happens through `/release`—rate-limited per share, counted, and burned on lockout. Password *strength* still matters, which is why the generator and the strength gate exist.
-- Full threat model, including what cannot be fixed: [`docs/true-one-time.md`](docs/true-one-time.md).
-
-### Encryption & Storage:
-- **Client-Side Encryption**: AES-GCM with a key derived from your password (PBKDF2-HMAC-SHA256, 600k iterations) **and** a random 32-byte share `H` the server holds in its `file_keys` table — `file_key = HKDF(Kp ‖ H)`. Neither half decrypts alone.
-- **Server-Gated Release**: Uploads are a two-phase handshake (`POST /upload/begin` mints `H`, then `/upload` binds a password verifier `V` — only the account that began the share may finish it). On download, the client proves password knowledge via `POST /release/<id>` and gets `H` back **exactly once** — the entire read-check-count-release cycle runs in a single transaction, so racing attackers can't multiply guesses.
-- **Proof of decryption, not just a flag**: The ciphertext embeds a random 32-byte receipt; `/report_decryption` only accepts reports carrying it (the server stores `SHA-256(receipt)`), and the first valid report wins. Expiring a file destroys its key share in the same transaction — H never outlives the data.
-- **Zero-Knowledge-ish, honestly**: The server never sees your plaintext or password — it holds `V` (a verifier it can't decrypt with) and `H` (a key half that's useless without the password). The honest caveat: a malicious admin could run an offline dictionary attack against `V`, so weak passwords are still weak. Use a strong passphrase and the math does the rest.
-- **One format, no archaeology**: Only `BKV3` shares exist — `BKV3 ‖ salt(16) ‖ iv(12) ‖ AES-GCM`, plaintext `BKP-FILE ‖ receipt ‖ payload`. This is a deliberate breaking change from legacy drops (pre-production wipe accepted); old links won't decrypt, by design.
-- **Filenames stay out of email subjects**: Recipients see the real filename on the download page, but notification email subjects never carry it — subjects are not private.
-- **Unique UUIDs**: Every file has a cryptographically random identifier (no guesswork).
-- **S3 Support**: Files never exposed directly—always routed through Buzzdrop's secure backend.
-
-### Authentication & Sessions:
-- **PBKDF2-SHA256 Password Hashing**: User passwords hashed with 1M iterations and random salts.
-- **Persistent Sessions**: Secret key management for multi-worker deployments (configurable via `FLASK_SECRET_KEY`).
-- **Constant-Time Comparison**: Prevents timing attacks on password verification.
-
-### HTTP Security Headers:
-- `X-Frame-Options: DENY` - Prevents clickjacking attacks
-- `X-Content-Type-Options: nosniff` - Blocks MIME-type sniffing
-- `Content-Security-Policy` - Restricts resource loading
-- `Strict-Transport-Security` (HSTS) - Forces HTTPS in production
-- `Referrer-Policy: no-referrer` - Prevents information leakage
-
-### Subresource Integrity (SRI):
-- **Runtime Hash Verification**: All JavaScript files include SHA-384 integrity checks.
-- **Tamper Detection**: Browser verifies file integrity before execution—blocks modified or compromised scripts.
-- **Zero Trust**: Protects against CDN compromises and man-in-the-middle attacks on static assets.
-
-### Audit & Accountability:
-- **IP Tracking (`downloaded_by_ip`)**: Records the client IP that claimed the one-time download — a deliberate delivery audit trail so the sender can answer "who actually got it?". The address is stored with the file record, shown in your dashboard, and retained until that record is deleted. If your jurisdiction treats IPs as personal data (GDPR etc.), disclose this retention.
-- **Download Timestamps**: Track exactly when files were accessed.
-- **Optional uploader notifications**: A one-time email can include the share name/type, open timestamp, and whether client-side decryption was reported as successful or failed.
-- **Sanitized Logging**: No sensitive data (bucket names, file paths) exposed in logs.
-- **Dashboard status badges**: each drop on your dashboard reports exactly one state —
-  `Active` (link live, unclaimed — the only state that offers **Copy link**) · `Downloaded` (blob claimed, no decryption report arrived) · `Decrypted` (receipt-backed report: client decrypted OK) · `Locked out` (the key-release attempt counter ran out before the password was proven — a terminal never-decrypted) · `Expired` (deadline passed unclaimed).
-  The file row is kept after claim as the delivery audit trail (`downloaded_at`, `downloaded_by_ip`, `decryption_success`) until you delete it.
-
-### Rate Limiting:
-- **Implemented with Flask-Limiter**: configurable per-route limits protect `/login`, `/api/token`, `/upload` + `/upload/begin`, and public file access (`/view/<id>`, `/view/<id>/confirm`, `/download/<id>`). `/release/<id>` and `/report_decryption/<id>` are rate-limited **per file_id** (not per IP, so rotating addresses doesn't reset them) and failed verifier attempts are counted per share—lockout after `KEY_RELEASE_MAX_ATTEMPTS` (default 1 — one wrong password locks the share), with burn-on-lockout by default (`KEY_RELEASE_BURN_ON_LOCKOUT`, destroys H+V; off keeps the row but refuses releases — currently no unlock path). Pending key shares that were begun but never finished are swept after `KEY_SHARE_PENDING_TTL_SECONDS` (default 3600). A share whose key was released but whose file was never downloaded expires after `KEY_RELEASE_DOWNLOAD_TTL_SECONDS` (default 600): the download ticket is refused and the expiry sweep deletes the blob.
-- **Environment configurable**: tune `LOGIN_RATE_LIMIT`, `API_TOKEN_RATE_LIMIT`, `UPLOAD_RATE_LIMIT`, `PUBLIC_FILE_RATE_LIMIT`, `KEY_RELEASE_RATE_LIMIT`, `REPORT_DECRYPTION_RATE_LIMIT`, `RATE_LIMIT_ENABLED`, and `RATE_LIMIT_STORAGE_URI` in `.env`.
-- **Proxy safety by default**: Buzzdrop intentionally ignores `X-Forwarded-For` for rate-limit enforcement and uses the direct peer address (`request.remote_addr`) instead, so a direct client cannot spoof a new IP on every request to bypass limits.
-- **Reverse proxy caveat**: if you deploy behind nginx, Cloudflare, an ingress, or another proxy without explicit trusted-proxy handling in your stack, `request.remote_addr` may be the proxy address and multiple users behind that proxy may share one rate-limit bucket. Configure your proxy/deployment to pass and trust client IPs correctly rather than enabling blind trust in `X-Forwarded-For`.
-- Recommended: keep these app-level limits and deploy behind nginx/Cloudflare/AWS WAF for defense in depth.
-
-### Input Validation:
-- Base64 validation with size limits on encrypted uploads.
-- File type and size restrictions (configurable in `.env`).
-- Expiry date validation and automatic cleanup — expired drops are swept at startup and re-swept every `EXPIRY_SWEEP_INTERVAL_SECONDS` (default 300, `0` disables the periodic sweep), so a drop nobody ever opens is still destroyed: ciphertext and key share.
-
-### Open Notification Configuration:
-- Extend user records to optionally include an account email in `.env`: `FLASK_USER_N=username:password:is_admin[:email]`
-- Configure SMTP with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_USE_TLS`, `SMTP_USE_SSL`, and `SMTP_TIMEOUT_SECONDS`
-- Open notifications are sent only to the logged-in user's configured email (configuring it in `.env` is treated as trust — there is no separate verification step)
-- If email delivery fails, Buzzdrop logs the failure and keeps the share available in the dashboard without retrying automatically
-
-## S3? No Problem!
-
-Just fill out your `.env` with your S3 details. Buzzdrop will handle the swarm.
-
-## Upgrading from the TinyDB era
-
-Buzzdrop now stores its data in SQLite via `DATABASE_URL` (default `sqlite:///buzzdrop.db`). If you upgraded from a release that used a `db.json` file:
-
-1. Keep a backup of `db.json`, then migrate it:
-   ```bash
-   python migrate_db.py --source db.json --target buzzdrop.db
-   ```
-2. Set `DATABASE_URL=sqlite:///buzzdrop.db` in `.env` (a stale `DATABASE_PATH=db.json` now refuses to start instead of silently corrupting).
-3. Under Docker, the database and its WAL sidecars live in the mounted `./data` directory (`DATABASE_URL=sqlite:///data/buzzdrop.db`).
-
----
-
-Ready to buzz? Drop a file and watch it fly—then disappear!  
-_Powered by caffeine, code, and a little bit of sting._
-
-## `buzz` CLI — Share from the Terminal
-
-The `buzz` command-line tool lets you encrypt and upload files directly from your laptop without opening a browser.
-
-### Installation
-
-Download the latest binary from [GitHub Releases](https://github.com/buzzdrop/buzzdrop/releases) and put it on your `$PATH`:
+### Docker
 
 ```bash
+docker-compose up --build
+```
+
+App on http://localhost:5000. Uploads and the SQLite database are volume-mounted to the host.
+
+## Using it
+
+1. Log in (users are configured via `FLASK_USER_N=username:password:is_admin[:email]` in `.env`).
+2. Upload a file or write a secret text note. Set a password and optional expiry.
+3. Share the link two ways:
+   - **One-click link** — password embedded in the URL fragment (convenient)
+   - **Link + password separately** — send them over different channels (safer)
+4. The recipient opens the link, confirms, enters the password, decrypts in the browser. The drop is then gone — for everyone.
+
+Optional: enable "notify me when opened" to get one email with the decryption outcome (requires SMTP settings in `.env`).
+
+## `buzz` CLI
+
+Terminal client that speaks the same protocol — encrypts locally, uploads via API token.
+
+```bash
+# Install the binary
 curl -fsSL https://github.com/buzzdrop/buzzdrop/releases/latest/download/buzz -o ~/.local/bin/buzz
 chmod +x ~/.local/bin/buzz
-```
 
-Or run from source (requires `pip install -r requirements-cli.txt`):
-
-```bash
-ln -s $(pwd)/cli/buzz ~/.local/bin/buzz
-```
-
-### Setup
-
-1. **Get an API token** — ask an admin to generate one for your account:
-   ```bash
-   # Admin runs on the server (or via curl while logged in as admin):
-   curl -s -X POST https://your-buzzdrop.example.com/api/token \
-     -H 'Content-Type: application/json' \
-     -b 'session=<admin-session-cookie>' \
-     -d '{"username": "yourname"}' | jq -r .token
-   ```
-
-2. **Create `~/.buzz_token`**:
-   ```bash
-   echo '{"token": "PASTE_TOKEN_HERE", "server": "https://your-buzzdrop.example.com"}' \
-     > ~/.buzz_token
-   chmod 600 ~/.buzz_token
-   ```
-
-   > **Breaking change:** tokens generated before the PBKDF2-HMAC-SHA256 rollout are no longer accepted in this release. If an older token stops working, generate a replacement with `POST /api/token` and update `~/.buzz_token`.
-
-### Usage
-
-```bash
-buzz file.pdf                        # auto-generates a 6-word passphrase
-buzz file.pdf -p my-secret-pass      # use your own password
+# Configure: ~/.buzz_token → {"token": "<api-token>", "server": "https://your-host"}
+buzz file.pdf                  # generates a 6-word passphrase
+buzz file.pdf -p mypassword
 buzz file.pdf --expiry 2025-12-31T23:59
 ```
 
-Output:
-```
-Encrypting file.pdf... done
-Uploading... done
+Get an API token with `POST /api/token` (see below) — it's shown once.
 
-Share link:     https://your-buzzdrop.example.com/view/abc123
-Password:       tiger-ocean-lamp-drift-maple-ember
+## API tokens
 
-One-click link: https://your-buzzdrop.example.com/view/abc123#tiger-ocean-lamp-drift-maple-ember
-```
-
-The recipient opens the share link, enters the password (or uses the one-click link), and the file decrypts in their browser — exactly the same as a web upload. Under the hood `buzz` speaks the same `BKV3` protocol: it runs `POST /upload/begin` to fetch the server's key share, encrypts with the split key (receipt included), and binds the verifier plus `receipt_hash` on `/upload`. It requires a server that answers `/upload/begin` — against an older server without key release it aborts rather than silently downgrading. It also refuses plain-`http://` servers outside localhost unless you pass `--insecure`, because a released key share over cleartext HTTP is a self-own.
-
----
-
-## API Token Management
-
-The `/api/token` endpoint lets any logged-in user issue an API token for themselves, and lets admins issue API tokens for other users.
-
-**Generate a token** (logged-in session required; admin required only when requesting a different user):
 ```bash
-POST /api/token
-Content-Type: application/json
-
-{"username": "targetuser"}
+POST /api/token                  # any logged-in user for themselves; admins for anyone
+GET  /api/tokens                 # list your tokens
+POST /api/tokens/<id>/revoke
 ```
-Returns `{"token": "<64-char hex>", "expires_at": "<ISO-8601 timestamp>"}` — **shown once, store it immediately**.
 
-By default, tokens expire after 30 days. You can optionally pass `{"expires_in_days": 7}` when creating a token to shorten or extend that lifetime.
+Body: `{"username": "name", "expires_in_days": 30}` → `{"token": "<64-hex>"}`, shown once. Tokens are stored as PBKDF2-HMAC-SHA256 digests; the raw value is never persisted. In production `TOKEN_HASH_SECRET` is required and must differ from `FLASK_SECRET_KEY`.
 
-Tokens are stored as deterministic PBKDF2-HMAC-SHA256 digests in the database; the raw value is never persisted. In production (`FLASK_ENV=production`), `TOKEN_HASH_SECRET` is **required** and must differ from `FLASK_SECRET_KEY` — one secret must not protect both session cookies and token hashes, and startup fails loudly otherwise. In development/testing it may fall back to `FLASK_SECRET_KEY`. Configure a stable secret before issuing or validating API tokens. **Breaking change:** legacy API tokens generated before the PBKDF2 migration are no longer accepted; users must generate replacement tokens with `POST /api/token`. Logged-in users can list their active tokens with `GET /api/tokens` and revoke one with `POST /api/tokens/<token_id>/revoke`. Admins can also review and revoke active tokens for any user from the **Manage Users** page.
+## Storage and database
 
+- `STORAGE_BACKEND=local` (files in `uploads/`) or `s3` (set `S3_*` vars in `.env`).
+- `DATABASE_URL` selects the DB backend — default `sqlite:///buzzdrop.db`. Under Docker the DB lives in `./data`.
+- Migrating an old `db.json`: `python migrate_db.py --source db.json --target buzzdrop.db`.
 
-The application is built with:
-- **Flask** (Python web framework)
-- **Werkzeug** (secure password hashing and file handling)
-- **SQLite** (stdlib `sqlite3`, swappable `db/` backend package — `DATABASE_URL` selects the backend)
-- **Flask-Limiter** (rate limiting middleware)
-- **Boto3** (AWS S3 integration)
-- **Tailwind CSS** (modern responsive styling)
-- **Web Crypto API** (client-side AES-GCM encryption)
+## Security notes
 
-### Test Coverage:
-The project includes comprehensive test coverage with **200+ passing tests** (pytest suite plus JS crypto tests under `tests/js/`):
-- Unit tests for password hashing, utilities, database operations, and SRI hash generation
-- Integration tests for authentication, file uploads, downloads, text notes, and SRI attributes
-- All security features validated through automated testing
+- Everything sensitive is encrypted client-side (AES-GCM, key split between password and a one-shot server share). The server stores only a verifier `V` it can't decrypt with — though a malicious admin could dictionary-attack `V`, so weak passwords stay weak.
+- Wrong-password attempts are capped (`KEY_RELEASE_MAX_ATTEMPTS`, default 1); lockout burns the key share by default.
+- `/release` and `/report_decryption` are rate-limited per file, not per IP. Buzzdrop deliberately ignores `X-Forwarded-For` for rate limiting — configure your reverse proxy to pass real client IPs correctly.
+- Client IPs of recipients are recorded (`downloaded_by_ip`) as a delivery audit trail — disclose this if IPs are personal data in your jurisdiction.
+- All JS ships with SRI hashes; CSP, HSTS, `X-Frame-Options: DENY` and friends are set on every response.
 
-## Production Deployment
+Full protocol and threat-model documentation lives in [docs/](docs/) — especially `true-one-time.md` and `how-it-works.md`.
 
-Before deploying Buzzdrop to production, ensure you:
+## Production checklist
 
-1. **Generate a secure secret key**:
-   ```bash
-   python -c "import secrets; print(secrets.token_hex(32))"
-   # Set FLASK_SECRET_KEY in your .env with this value
-   ```
+1. Strong `FLASK_SECRET_KEY` and a separate `TOKEN_HASH_SECRET`.
+2. Real passwords in `FLASK_USER_*` entries.
+3. HTTPS via reverse proxy — HSTS assumes it; preserve real client IPs.
+4. Review rate-limit env vars; layer nginx/Cloudflare/WAF limits on top.
+5. Optional: `STORAGE_BACKEND=s3` with scoped AWS credentials.
 
-2. **Set a dedicated token hash secret**: `TOKEN_HASH_SECRET` is required in production and must differ from `FLASK_SECRET_KEY`. Session cookies ship `Secure` + `SameSite=Lax` by default (override with `SESSION_COOKIE_*` env vars if you must serve HTTP).
+## Tests
 
-3. **Reset all user passwords**: Old SHA-256 hashes are incompatible with the new PBKDF2 system. Update all `FLASK_USER_*` entries in your `.env`.
+```bash
+pytest -v                    # Python unit + integration tests
+npm run typecheck            # JSDoc type-checking of browser JS
+npm run test:dom             # DOM/JS tests
+docker build -t buzzdrop-e2e . && npx playwright test   # E2E (Playwright)
+```
 
-4. **Enable HTTPS**: Security headers like HSTS require HTTPS. Configure your reverse proxy (nginx/Apache) with valid SSL/TLS certificates.
-
-5. **Configure rate limiting**: Review the built-in Flask-Limiter settings in `.env`, make sure your reverse-proxy deployment preserves the real client IP safely, and layer nginx, Cloudflare, or AWS WAF limits on top for production-grade protection.
-
-6. **Set up S3 (optional)**: For scalable storage, configure `STORAGE_BACKEND=s3` and provide AWS credentials in `.env`.
-
-7. **Review IP tracking**: Client IP addresses are logged for accountability. Ensure compliance with your privacy policy and local regulations (GDPR, etc.).
-
-8. **Test security headers**:
-   ```bash
-   curl -I https://your-domain.com
-   # Verify X-Frame-Options, X-Content-Type-Options, CSP, etc. are present
-   ```
-
-For detailed security documentation, see `SECURITY_FIXES_SUMMARY.md` and `SECURITY_AUDIT_REPORT.md`.
+Regenerate committed JS fixtures after touching templates, `db/`, or protocol responses: `npm run fixtures`.
 
 ## License
 
-Copyright (c) 2025 Łukasz Przybył
-
-Buzzdrop is free software: you can redistribute it and/or modify it under the terms of the [GNU Affero General Public License, version 3 only](LICENSE) as published by the Free Software Foundation.
-
-If you run a modified version of Buzzdrop as a network service, the AGPL requires you to offer its users the corresponding source code.
-
-## Running Tests
-
-This project uses [pytest](https://docs.pytest.org/) for automated testing.
-
-To run the full suite of unit and integration tests, navigate to the root directory of the project and execute:
-
-```bash
-pytest -v
-```
-
-This command will automatically discover and run all tests located in the `tests/` directory. The `-v` flag provides verbose output.
+MIT
